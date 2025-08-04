@@ -1,11 +1,18 @@
-// screens/map_screen.dart
 import 'package:flutter/material.dart';
+
 import 'package:flutter_map/flutter_map.dart';
+
 import 'package:latlong2/latlong.dart';
+
 import 'package:micro_mobility_app/services/location_service.dart';
+
 import 'package:micro_mobility_app/utils/app_constants.dart';
+
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
+
 import 'package:flutter/services.dart' show rootBundle;
+
+import 'package:flutter_map/flutter_map.dart'; // Убедитесь, что импортирован flutter_map
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -16,23 +23,44 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   LatLng? _currentLocation;
+
   final LocationService _locationService = LocationService();
+
   final GeoJsonParser _geoJsonParser = GeoJsonParser();
+
   String? _almatyGeoJson;
+
+  late final MapController _mapController;
 
   @override
   void initState() {
     super.initState();
+
+    _mapController = MapController();
+
     _fetchCurrentLocation();
+
     _loadAndParseGeoJson();
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+
+    super.dispose();
   }
 
   Future<void> _fetchCurrentLocation() async {
     try {
       final position = await _locationService.determinePosition();
-      setState(() {
-        _currentLocation = LatLng(position.latitude, position.longitude);
-      });
+
+      if (mounted) {
+        setState(() {
+          _currentLocation = LatLng(position.latitude, position.longitude);
+        });
+
+        _mapController.move(_currentLocation!, _mapController.camera.zoom);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -46,10 +74,12 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final String geoJsonString =
           await rootBundle.loadString('assets/almaty_zone.geojson');
+
       _geoJsonParser.parseGeoJsonAsString(geoJsonString);
-      setState(() {
-        // Обновляем состояние, чтобы карта перерисовала слои
-      });
+
+      if (mounted) {
+        setState(() {});
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -65,64 +95,84 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(
         title: const Text('Карта'),
         centerTitle: true,
-        backgroundColor: Colors.green[700], // Зеленый AppBar для карты
+        backgroundColor: Colors.green[700],
       ),
       body: FlutterMap(
+        mapController: _mapController,
         options: MapOptions(
           initialCenter: _currentLocation ?? const LatLng(43.238949, 76.889709),
           initialZoom: AppConstants.defaultMapZoom,
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+          ),
         ),
         children: [
           TileLayer(
             urlTemplate: AppConstants.cartoDbPositronUrl,
+
             subdomains: AppConstants.cartoDbSubdomains,
+
             userAgentPackageName: AppConstants.userAgentPackageName,
+
+            tileProvider:
+                NetworkTileProvider(), // Использовать NetworkTileProvider
+
+            retinaMode:
+                RetinaMode.isHighDensity(context), // Автоматическое определение
           ),
           if (_currentLocation != null)
             MarkerLayer(
               markers: [
                 Marker(
                   point: _currentLocation!,
-                  child: const Icon(
-                    Icons.location_on,
-                    color: Colors.red,
-                    size: 40.0,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
               ],
             ),
-          PolygonLayer(
-            polygons: _geoJsonParser.polygons.map((polygon) {
-              return Polygon(
-                points: polygon.points,
-                borderColor: Colors.blue,
-                color: Colors.blueAccent.withOpacity(0.3),
-                borderStrokeWidth: 3,
-                isFilled: true,
-              );
-            }).toList(),
-          ),
-          PolylineLayer(
-            polylines: _geoJsonParser.polylines.map((polyline) {
-              return Polyline(
-                points: polyline.points,
-                color: Colors.green,
-                strokeWidth: 4,
-              );
-            }).toList(),
-          ),
-          MarkerLayer(
-            markers: _geoJsonParser.markers.map((marker) {
-              return Marker(
-                point: marker.point,
-                child: const Icon(
-                  Icons.circle,
-                  color: Colors.purple,
-                  size: 10,
-                ),
-              );
-            }).toList(),
-          ),
+          if (_geoJsonParser.polygons.isNotEmpty)
+            PolygonLayer(
+              polygons: _geoJsonParser.polygons.map((polygon) {
+                return Polygon(
+                  points: polygon.points,
+                  borderColor: Colors.blue,
+                  color: Colors.blueAccent.withOpacity(0.2),
+                  borderStrokeWidth: 2,
+                );
+              }).toList(),
+            ),
+          if (_geoJsonParser.polylines.isNotEmpty)
+            PolylineLayer(
+              polylines: _geoJsonParser.polylines.map((polyline) {
+                return Polyline(
+                  points: polyline.points,
+                  color: Colors.green,
+                  strokeWidth: 3,
+                );
+              }).toList(),
+            ),
+          if (_geoJsonParser.markers.isNotEmpty)
+            MarkerLayer(
+              markers: _geoJsonParser.markers.map((marker) {
+                return Marker(
+                  point: marker.point,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.purple,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
         ],
       ),
     );
