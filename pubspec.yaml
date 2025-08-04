@@ -1,0 +1,39 @@
+# pubspec.yaml
+name: micro_mobility_app
+description: A new Flutter project.
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+  geolocator: ^11.1.0
+  flutter_map_geojson: ^1.0.8
+  intl: ^0.18.0
+  # webview_flutter: ^4.2.2 # Эту строку нужно удалить
+
+  # НОВЫЕ ЗАВИСИМОСТИ для нативного QR-сканера
+  camera: ^0.10.5+9 # Используйте актуальную версию
+  mobile_scanner: ^3.5.5 # Используйте актуальную версию
+  shared_preferences: ^2.2.2 # Для локального хранения данных
+  share_plus: ^7.2.2 # Для функции "Поделиться"
+
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/

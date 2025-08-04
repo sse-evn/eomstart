@@ -1,0 +1,31 @@
+plugins {
+    id "com.android.application" version "8.1.0" apply false
+    id "com.android.library" version "8.1.0" apply false
+    id "org.jetbrains.kotlin.android" version "1.8.0" apply false
+    id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Указываем папку для сборки на уровне всего проекта
+rootProject.buildDir = '../build'
+
+// Для каждого подпроекта (например, app, flutter_plugin, и т.д.)
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+
+// Обеспечиваем, что проект ':app' будет оценен перед другими, если есть зависимости
+subprojects {
+    project.evaluationDependsOn(':app')
+}
+
+// Задача для очистки всей папки сборки
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}
