@@ -4,16 +4,20 @@ import 'dart:async';
 import 'map_screens.dart';
 import 'profile_screens.dart';
 import 'qr_scanner_screen.dart';
-import 'about_screen.dart';
+import 'positions_screen.dart';
+import 'zones_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'zones_screen.dart';
 
 enum SlotState {
   inactive,
+  active,
+}
+
+enum SlotSetupStep {
+  selfie,
   pickingDuration,
   pickingDetails,
-  active,
 }
 
 class ShiftData {
@@ -49,18 +53,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   SlotState _slotState = SlotState.inactive;
   String? _selectedSlotTimeRange;
-  List<String> _selectedZones = ['Алматы дивизион 3'];
-  String _employeePosition = 'Водитель';
+  String? _selectedZone;
+  String? _selectedPosition;
   File? _selfieImage;
 
   late final Map<DateTime, ShiftData> _shiftHistory;
   late DateTime _selectedCalendarDate;
 
+  String? _activeSlotStartTime;
+  int _activeSlotDurationInSeconds = 0;
+  Timer? _activeSlotTimer;
+
   @override
   void initState() {
     super.initState();
     _updateTime();
-    _startTimer();
+    _startClockTimer();
     _generateMockShiftData();
     _selectedCalendarDate = DateTime.now();
   }
@@ -105,10 +113,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _activeSlotTimer?.cancel();
     super.dispose();
   }
 
-  void _startTimer() {
+  void _startClockTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         _updateTime();
@@ -119,59 +128,84 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _updateTime() {
     setState(() {
       _currentTime = DateFormat('HH:mm:ss').format(DateTime.now());
+      if (_slotState == SlotState.active && _activeSlotStartTime != null) {
+        _updateActiveSlotTime();
+      }
     });
   }
 
-  Future<void> _takeSelfie() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.camera);
-    if (image != null) {
-      setState(() {
-        _selfieImage = File(image.path);
-      });
-      _openDurationSheet();
-    }
-  }
-
-  void _openDurationSheet() {
-    setState(() {
-      _slotState = SlotState.pickingDuration;
-    });
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return _buildSlotDurationSheet();
-      },
-    );
-  }
-
-  void _openDetailsSheet() {
-    setState(() {
-      _slotState = SlotState.pickingDetails;
-    });
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return _buildSlotDetailsSheet();
-      },
-    );
-  }
-
-  void _activateSlot() {
-    setState(() {
-      _slotState = SlotState.active;
-    });
-    Navigator.pop(context);
+  void _updateActiveSlotTime() {
+    final now = DateTime.now();
+    final startTime = DateFormat('HH:mm').parse(_activeSlotStartTime!);
+    final duration = now.difference(DateTime(
+        now.year, now.month, now.day, startTime.hour, startTime.minute));
+    _activeSlotDurationInSeconds = duration.inSeconds;
   }
 
   void _deactivateSlot() {
-    setState(() {
-      _slotState = SlotState.inactive;
-      _selectedSlotTimeRange = null;
-      _selectedZones = [];
-    });
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Завершить слот?'),
+        content: const Text(
+            'Вы уверены, что хотите завершить текущий слот? Это действие нельзя будет отменить.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              if (mounted) {
+                setState(() {
+                  _slotState = SlotState.inactive;
+                  _selectedSlotTimeRange = null;
+                  _selectedZone = null;
+                  _selectedPosition = null;
+                  _selfieImage = null;
+                });
+              }
+              _activeSlotTimer?.cancel();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Завершить'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openSlotSetupModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _SlotSetupModal(
+        initialPosition: _selectedPosition,
+        initialZone: _selectedZone,
+        onSlotActivated: (String slotTimeRange, String position, String zone,
+            File selfieImage) {
+          if (mounted) {
+            setState(() {
+              _slotState = SlotState.active;
+              _selectedSlotTimeRange = slotTimeRange;
+              _selectedPosition = position;
+              _selectedZone = zone;
+              _selfieImage = selfieImage;
+              _activeSlotStartTime = DateFormat('HH:mm').format(DateTime.now());
+              _activeSlotDurationInSeconds = 0;
+            });
+            _activeSlotTimer =
+                Timer.periodic(const Duration(seconds: 1), (timer) {
+              _updateActiveSlotTime();
+            });
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -248,6 +282,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildSlotCard() {
     if (_slotState == SlotState.active) {
+      final hours = _activeSlotDurationInSeconds ~/ 3600;
+      final minutes = (_activeSlotDurationInSeconds % 3600) ~/ 60;
+      final timeString = '${hours}ч ${minutes}мин';
+
       return Container(
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
@@ -279,7 +317,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 GestureDetector(
                   onTap: _deactivateSlot,
                   child: const Icon(
-                    Icons.pause_circle_outline,
+                    Icons.power_settings_new,
                     color: Colors.white,
                     size: 40,
                   ),
@@ -293,18 +331,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 _buildInfoBlock(
-                  'Завершить',
-                  Icons.power_settings_new,
+                  'Слот активен',
+                  '${DateFormat('HH:mm').format(DateTime.now().subtract(Duration(seconds: _activeSlotDurationInSeconds)))}-${DateFormat('HH:mm').format(DateTime.now())}',
                   Colors.white,
-                  () {
-                    _deactivateSlot();
-                  },
                 ),
                 _buildInfoBlock(
-                  'Пауза',
-                  Icons.pause,
+                  'Время работы',
+                  timeString,
                   Colors.white,
-                  () {},
                 ),
               ],
             ),
@@ -313,13 +347,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     } else {
       return GestureDetector(
-        onTap: () {
-          if (_selfieImage == null) {
-            _takeSelfie();
-          } else {
-            _openDurationSheet();
-          }
-        },
+        onTap: _openSlotSetupModal,
         child: Container(
           padding: const EdgeInsets.all(16.0),
           decoration: BoxDecoration(
@@ -361,256 +389,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Widget _buildInfoBlock(
-      String title, IconData icon, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 30),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: TextStyle(color: color, fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSlotDurationSheet() {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+  Widget _buildInfoBlock(String title, String value, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: TextStyle(color: color.withOpacity(0.7), fontSize: 14)),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+              color: color, fontSize: 18, fontWeight: FontWeight.bold),
         ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    _slotState = SlotState.inactive;
-                  });
-                },
-              ),
-              const Text('Длительность слота',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.transparent),
-                onPressed: () {},
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          _buildDurationButton('7:00 - 15:00'),
-          const SizedBox(height: 16),
-          _buildDurationButton('15:00 - 23:00'),
-          const SizedBox(height: 16),
-          _buildDurationButton('7:00 - 23:00'),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _selectedSlotTimeRange != null
-                  ? () {
-                      Navigator.pop(context);
-                      _openDetailsSheet();
-                    }
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[700],
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text('Далее'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDurationButton(String timeRange) {
-    bool isSelected = _selectedSlotTimeRange == timeRange;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedSlotTimeRange = timeRange;
-        });
-        (context as Element).markNeedsBuild();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.green[700] : Colors.grey[200],
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected ? Colors.green[700]! : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            timeRange,
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSlotDetailsSheet() {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  Navigator.pop(context);
-                  _openDurationSheet();
-                },
-              ),
-              const Text('Начать слот',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text('Алматы EOM', style: TextStyle(color: Colors.grey[700])),
-          const SizedBox(height: 20),
-          _buildDetailItem(
-            icon: Icons.person,
-            title: _employeePosition,
-            subtitle: 'Должность',
-            onTap: () {},
-          ),
-          const SizedBox(height: 10),
-          _buildDetailItem(
-            icon: Icons.location_on,
-            title: _selectedZones.isEmpty
-                ? 'Не выбраны'
-                : _selectedZones.join(', '),
-            subtitle: 'Техзоны',
-            trailingText: _selectedZones.length.toString(),
-            onTap: () async {
-              final newSelectedZones = await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) =>
-                      ZonesScreen(selectedZones: _selectedZones),
-                ),
-              );
-
-              if (newSelectedZones != null) {
-                setState(() {
-                  _selectedZones = newSelectedZones;
-                });
-              }
-              (context as Element).markNeedsBuild();
-            },
-          ),
-          const SizedBox(height: 30),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                _activateSlot();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[700],
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text('Далее'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailItem({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    String? trailingText,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.green[700], size: 30),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 4),
-                    Text(subtitle,
-                        style:
-                            const TextStyle(color: Colors.grey, fontSize: 14)),
-                  ],
-                ],
-              ),
-            ),
-            if (trailingText != null) ...[
-              const SizedBox(width: 10),
-              CircleAvatar(
-                radius: 12,
-                backgroundColor: Colors.green[700],
-                child: Text(
-                  trailingText,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ),
-            ],
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: Colors.grey),
-          ],
-        ),
-      ),
+      ],
     );
   }
 
@@ -620,9 +411,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _selectedCalendarDate = date;
-        });
+        if (mounted) {
+          setState(() {
+            _selectedCalendarDate = date;
+          });
+        }
       },
       child: Column(
         children: [
@@ -688,9 +481,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Expanded(
                   child: GestureDetector(
                     onTap: () {
-                      setState(() {
-                        _isDayModeSelected = true;
-                      });
+                      if (mounted) {
+                        setState(() {
+                          _isDayModeSelected = true;
+                        });
+                      }
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -717,9 +512,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Expanded(
                   child: GestureDetector(
                     onTap: () {
-                      setState(() {
-                        _isDayModeSelected = false;
-                      });
+                      if (mounted) {
+                        setState(() {
+                          _isDayModeSelected = false;
+                        });
+                      }
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -829,6 +626,362 @@ class _DashboardScreenState extends State<DashboardScreen> {
               style:
                   const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ],
+      ),
+    );
+  }
+}
+
+class _SlotSetupModal extends StatefulWidget {
+  final Function(String, String, String, File) onSlotActivated;
+  final String? initialPosition;
+  final String? initialZone;
+
+  const _SlotSetupModal(
+      {required this.onSlotActivated, this.initialPosition, this.initialZone});
+
+  @override
+  State<_SlotSetupModal> createState() => _SlotSetupModalState();
+}
+
+class _SlotSetupModalState extends State<_SlotSetupModal> {
+  SlotSetupStep _state = SlotSetupStep.selfie;
+  File? _selfieImage;
+  String? _selectedSlotTimeRange;
+  String? _selectedZone;
+  String? _selectedPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedPosition = widget.initialPosition;
+    _selectedZone = widget.initialZone;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _takeSelfie();
+    });
+  }
+
+  Future<void> _takeSelfie() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.camera);
+    if (image != null) {
+      if (mounted) {
+        setState(() {
+          _selfieImage = File(image.path);
+          _state = SlotSetupStep.pickingDuration;
+        });
+      }
+    } else {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    }
+  }
+
+  void _openDurationStep() {
+    if (mounted) {
+      setState(() {
+        _state = SlotSetupStep.pickingDuration;
+      });
+    }
+  }
+
+  void _openDetailsStep() {
+    if (mounted) {
+      setState(() {
+        _state = SlotSetupStep.pickingDetails;
+      });
+    }
+  }
+
+  void _finishSetup() {
+    if (_selectedSlotTimeRange != null &&
+        _selectedZone != null &&
+        _selectedPosition != null &&
+        _selfieImage != null) {
+      widget.onSlotActivated(_selectedSlotTimeRange!, _selectedPosition!,
+          _selectedZone!, _selfieImage!);
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      padding: const EdgeInsets.all(16.0),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+        ),
+      ),
+      child: _buildCurrentStateView(),
+    );
+  }
+
+  Widget _buildCurrentStateView() {
+    switch (_state) {
+      case SlotSetupStep.selfie:
+        return _buildSelfieView();
+      case SlotSetupStep.pickingDuration:
+        return _buildSlotDurationView();
+      case SlotSetupStep.pickingDetails:
+        return _buildSlotDetailsView();
+    }
+  }
+
+  Widget _buildSelfieView() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const SizedBox(width: 48),
+            const Text('Селфи для слота',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+        const Spacer(),
+        if (_selfieImage != null)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(15.0),
+            child: Image.file(
+              _selfieImage!,
+              height: 200,
+              width: 200,
+              fit: BoxFit.cover,
+            ),
+          )
+        else
+          const CircularProgressIndicator(),
+        const Spacer(),
+      ],
+    );
+  }
+
+  Widget _buildSlotDurationView() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: _takeSelfie,
+            ),
+            const Text('Длительность слота',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _buildDurationButton('7:00 - 15:00'),
+        const SizedBox(height: 16),
+        _buildDurationButton('15:00 - 23:00'),
+        const SizedBox(height: 16),
+        _buildDurationButton('7:00 - 23:00'),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _selectedSlotTimeRange != null ? _openDetailsStep : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green[700],
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Далее'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDurationButton(String timeRange) {
+    bool isSelected = _selectedSlotTimeRange == timeRange;
+    return GestureDetector(
+      onTap: () {
+        if (mounted) {
+          setState(() {
+            _selectedSlotTimeRange = timeRange;
+          });
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.green[700] : Colors.grey[200],
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? Colors.green[700]! : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            timeRange,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.black,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlotDetailsView() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: _openDurationStep,
+            ),
+            const Text('Начать слот',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Text('Jet KZ1 | Алматинский • Алматы',
+            style: TextStyle(color: Colors.grey[700])),
+        const SizedBox(height: 20),
+        _buildDetailItem(
+          icon: Icons.person,
+          title: _selectedPosition ?? 'Не выбрано',
+          subtitle: 'Должность',
+          onTap: () async {
+            final newSelectedPosition = await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) =>
+                    PositionsScreen(selectedPosition: _selectedPosition),
+              ),
+            );
+            if (newSelectedPosition != null) {
+              if (mounted) {
+                setState(() {
+                  _selectedPosition = newSelectedPosition;
+                });
+              }
+            }
+          },
+        ),
+        const SizedBox(height: 10),
+        _buildDetailItem(
+          icon: Icons.location_on,
+          title: _selectedZone ?? 'Не выбрано',
+          subtitle: 'Техзоны',
+          trailingText: _selectedZone != null ? '1' : '0',
+          onTap: () async {
+            final newSelectedZone = await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => ZonesScreen(selectedZone: _selectedZone),
+              ),
+            );
+            if (newSelectedZone != null) {
+              if (mounted) {
+                setState(() {
+                  _selectedZone = newSelectedZone;
+                });
+              }
+            }
+          },
+        ),
+        const SizedBox(height: 30),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: (_selectedZone != null && _selectedPosition != null)
+                ? _finishSetup
+                : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green[700],
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Начать'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailItem({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    String? trailingText,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.green[700], size: 30),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 4),
+                    Text(subtitle,
+                        style:
+                            const TextStyle(color: Colors.grey, fontSize: 14)),
+                  ],
+                ],
+              ),
+            ),
+            if (trailingText != null) ...[
+              const SizedBox(width: 10),
+              CircleAvatar(
+                radius: 12,
+                backgroundColor: Colors.green[700],
+                child: Text(
+                  trailingText,
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ],
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, color: Colors.grey),
+          ],
+        ),
       ),
     );
   }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 class ZonesScreen extends StatefulWidget {
-  final List<String> selectedZones;
-  const ZonesScreen({super.key, required this.selectedZones});
+  final String? selectedZone;
+  const ZonesScreen({super.key, this.selectedZone});
 
   @override
   State<ZonesScreen> createState() => _ZonesScreenState();
@@ -22,38 +22,19 @@ class _ZonesScreenState extends State<ZonesScreen> {
     'Алматы 1 - зона 10',
     'Алматы 2 - зона 1',
     'Алматы 2 - зона 3',
-    'Алматы 2 - зона 10',
-    'Алматы 2 - зона 4',
-    'Алматы 2 - зона 5',
-    'Алматы 2 - зона 6',
-    'Алматы 2 - зона 7',
-    'Алматы 2 - зона 8',
-    'Алматы 2 - зона 9',
-    'Алматы 3 - зона 1',
-    'Алматы 3 - зона 2',
-    'Алматы 3 - зона 3',
-    'Алматы 3 - зона 4',
-    'Алматы 3 - зона 5',
-    'Алматы 3 - зона 6',
-    'Алматы 3 - зона 7',
-    'Алматы 3 - зона 8',
   ];
 
-  late List<String> _currentSelectedZones;
+  String? _currentSelectedZone;
 
   @override
   void initState() {
     super.initState();
-    _currentSelectedZones = List.from(widget.selectedZones);
+    _currentSelectedZone = widget.selectedZone;
   }
 
   void _onZoneTapped(String zone) {
     setState(() {
-      if (_currentSelectedZones.contains(zone)) {
-        _currentSelectedZones.remove(zone);
-      } else {
-        _currentSelectedZones.add(zone);
-      }
+      _currentSelectedZone = zone;
     });
   }
 
@@ -65,14 +46,14 @@ class _ZonesScreenState extends State<ZonesScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            Navigator.of(context).pop();
+            Navigator.of(context).pop(_currentSelectedZone);
           },
         ),
         actions: [
           TextButton(
             onPressed: () {
               setState(() {
-                _currentSelectedZones.clear();
+                _currentSelectedZone = null;
               });
             },
             child: const Text('Сбросить'),
@@ -91,7 +72,7 @@ class _ZonesScreenState extends State<ZonesScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Выбрано ${_currentSelectedZones.length}',
+                  'Выбрано ${_currentSelectedZone != null ? '1' : '0'}',
                   style: const TextStyle(fontSize: 16),
                 ),
               ],
@@ -102,7 +83,7 @@ class _ZonesScreenState extends State<ZonesScreen> {
               itemCount: availableZones.length,
               itemBuilder: (context, index) {
                 final zone = availableZones[index];
-                final isSelected = _currentSelectedZones.contains(zone);
+                final isSelected = _currentSelectedZone == zone;
                 return _buildZoneItem(zone, isSelected);
               },
             ),
@@ -114,7 +95,7 @@ class _ZonesScreenState extends State<ZonesScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  Navigator.of(context).pop(_currentSelectedZones);
+                  Navigator.of(context).pop(_currentSelectedZone);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green[700],

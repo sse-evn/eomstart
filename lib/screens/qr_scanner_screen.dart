@@ -1,10 +1,10 @@
 // screens/qr_scanner_screen.dart
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart'; // Добавлен импорт для MobileScanner
-import 'package:shared_preferences/shared_preferences.dart'; // Добавлен импорт для SharedPreferences
-import 'package:share_plus/share_plus.dart'; // Добавлен импорт для Share.share
-import 'dart:async'; // Для Timer
-import 'package:flutter/services.dart'; // Для Clipboard
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:async';
+import 'package:flutter/services.dart';
 
 class QrScannerScreen extends StatefulWidget {
   const QrScannerScreen({super.key});
@@ -24,7 +24,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   String _scanStatus = 'Ожидание сканирования...';
   Color _scanStatusColor = Colors.blueAccent;
   String? _lastScannedCode;
-  Timer? _debounceTimer; // Для задержки сброса lastScannedCode
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -39,7 +39,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     super.dispose();
   }
 
-  /// Загружает сохраненные номера из SharedPreferences.
   Future<void> _loadScannedNumbers() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -47,13 +46,11 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     });
   }
 
-  /// Сохраняет номера в SharedPreferences.
   Future<void> _saveScannedNumbers() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('scooterScannedNumbers', _scannedNumbers);
   }
 
-  /// Извлекает номер самоката из различных форматов ссылок.
   String _extractNumberFromLink(String link) {
     // Whoosh
     RegExp whooshRegExp =
@@ -63,32 +60,37 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       return whooshMatch.group(1)!;
     }
 
-    // Urent (пример: urent.su/j/s.123456)
+    // Urent
     RegExp urentRegExp = RegExp(r'ure\.su\/j\/s\.(\d+)');
     var urentMatch = urentRegExp.firstMatch(link);
     if (urentMatch != null && urentMatch.group(1) != null) {
       return urentMatch.group(1)!;
     }
 
-    // Yandex (пример: go.yandex/scooters?number=789012)
+    // Yandex
     RegExp yandexRegExp = RegExp(r'go\.yandex\/scooters\?number=(\d+)');
     var yandexMatch = yandexRegExp.firstMatch(link);
     if (yandexMatch != null && yandexMatch.group(1) != null) {
       return yandexMatch.group(1)!;
     }
 
-    // Lite (пример: lite.app.link/scooters?id=ABCD12)
+    // Lite
     RegExp liteRegExp = RegExp(r'lite\.app\.link\/scooters\?id=([a-zA-Z0-9]+)');
     var liteMatch = liteRegExp.firstMatch(link);
     if (liteMatch != null && liteMatch.group(1) != null) {
       return liteMatch.group(1)!;
     }
 
-    // Любой другой прямой номер или обычный текст
+    // Bolt
+    RegExp boltRegExp = RegExp(r'scooters\.taxify\.eu\/qr\/([a-zA-Z0-9\-]+)');
+    var boltMatch = boltRegExp.firstMatch(link);
+    if (boltMatch != null && boltMatch.group(1) != null) {
+      return boltMatch.group(1)!;
+    }
+
     return link.trim();
   }
 
-  /// Добавляет отсканированный номер в список.
   void _addScannedNumber(String rawCode) {
     final String cleanedNumber = _extractNumberFromLink(rawCode);
 
@@ -103,7 +105,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
     if (!_scannedNumbers.contains(cleanedNumber)) {
       setState(() {
-        _scannedNumbers.insert(0, cleanedNumber); // Добавляем в начало списка
+        _scannedNumbers.insert(0, cleanedNumber);
         _scanStatus = 'Отсканирован: $cleanedNumber';
         _scanStatusColor = Colors.green;
       });
@@ -122,7 +124,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     });
   }
 
-  /// Удаляет номер из списка по индексу.
   void _removeScannedNumber(int index) {
     setState(() {
       _scannedNumbers.removeAt(index);
@@ -132,7 +133,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     _saveScannedNumbers();
   }
 
-  /// Копирует все номера в буфер обмена.
   void _copyAllNumbers() {
     if (_scannedNumbers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -142,7 +142,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       return;
     }
     final allNumbersText = _scannedNumbers.join('\n');
-    // Используем Clipboard для копирования
     Clipboard.setData(ClipboardData(text: allNumbersText)).then((_) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Все номера скопированы!')),
@@ -154,7 +153,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     });
   }
 
-  /// Очищает весь список отсканированных номеров.
   Future<void> _clearAllScannedNumbers() async {
     final bool? confirmClear = await showDialog<bool>(
       context: context,
@@ -188,7 +186,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     }
   }
 
-  /// Отправляет номера через системный диалог "Поделиться".
   void _sendToTelegram() {
     if (_scannedNumbers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -267,7 +264,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 10),
-                  // Кнопка вспышки
                   ElevatedButton.icon(
                     onPressed: () => cameraController.toggleTorch(),
                     icon: ValueListenableBuilder<TorchState>(
@@ -281,7 +277,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                             return const Icon(Icons.flash_on,
                                 color: Colors.white);
                         }
-                        // Добавлен return для обработки всех возможных состояний
                         return const Icon(Icons.flash_off, color: Colors.white);
                       },
                     ),
@@ -296,14 +291,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                             return const Text('Выключить вспышку',
                                 style: TextStyle(color: Colors.white));
                         }
-                        // Добавлен return для обработки всех возможных состояний
                         return const Text('Включить вспышку',
                             style: TextStyle(color: Colors.white));
                       },
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          Colors.orange, // Оранжевый цвет для вспышки
+                      backgroundColor: Colors.orange,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -417,8 +410,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   ElevatedButton(
                     onPressed: _scannedNumbers.isEmpty ? null : _sendToTelegram,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          Colors.blue, // Или другой цвет для Telegram
+                      backgroundColor: Colors.blue,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
