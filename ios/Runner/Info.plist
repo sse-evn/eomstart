@@ -12,6 +12,11 @@
 <string>Мы используем ваше местоположение для отображения карты.</string>
 <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 <string>Мы используем ваше местоположение для отображения карты.</string>
+<key>NSAppTransportSecurity</key>
+<dict>
+<key>NSAllowsArbitraryLoadsInWebContent</key>
+<true/>
+</dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

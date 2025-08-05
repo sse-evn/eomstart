@@ -1,34 +1,49 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:micro_mobility_app/screens/operator_home_page.dart'; // Предполагаемый главный экран
-import 'package:micro_mobility_app/settings_provider.dart'; // Импортируем наш Provider
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import 'package:micro_mobility_app/settings_provider.dart';
+import 'package:micro_mobility_app/screens/login_screen.dart';
+import 'package:micro_mobility_app/screens/operator_home_page.dart';
+import 'package:micro_mobility_app/screens/profile_screens.dart';
+import 'package:micro_mobility_app/screens/settings_screen.dart';
+import 'package:micro_mobility_app/screens/about_screen.dart';
+import 'package:micro_mobility_app/screens/map_screens.dart';
+import 'package:micro_mobility_app/screens/qr_scanner_screen.dart';
+import 'package:micro_mobility_app/screens/positions_screen.dart';
+import 'package:micro_mobility_app/screens/zones_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ru', null);
+
+  final _storage = const FlutterSecureStorage();
+  final String? token = await _storage.read(key: 'jwt_token');
+
   runApp(
-    // Оборачиваем все приложение в ChangeNotifierProvider
     ChangeNotifierProvider(
       create: (context) => SettingsProvider(),
-      child: const MicroMobilityApp(),
+      child: MicroMobilityApp(
+          initialRoute: token != null && token.isNotEmpty ? '/dashboard' : '/'),
     ),
   );
 }
 
 class MicroMobilityApp extends StatelessWidget {
-  const MicroMobilityApp({super.key});
+  final String initialRoute;
+  const MicroMobilityApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
-    // Получаем состояние из провайдера
     final settingsProvider = Provider.of<SettingsProvider>(context);
 
     return MaterialApp(
       title: 'Оператор микромобильности',
-      // Используем состояние из провайдера для определения темы
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.green,
         brightness: settingsProvider.currentBrightness,
         scaffoldBackgroundColor:
             settingsProvider.currentBrightness == Brightness.light
@@ -47,7 +62,18 @@ class MicroMobilityApp extends StatelessWidget {
         ),
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: const DashboardScreen(),
+      initialRoute: initialRoute,
+      routes: {
+        '/': (context) => const LoginScreen(),
+        '/dashboard': (context) => const DashboardScreen(),
+        '/profile': (context) => const ProfileScreen(),
+        '/settings': (context) => const SettingsScreen(),
+        '/about': (context) => const AboutScreen(),
+        '/map': (context) => const MapScreen(),
+        '/qr_scanner': (context) => const QrScannerScreen(),
+        '/positions': (context) => const PositionsScreen(),
+        '/zones': (context) => const ZonesScreen(),
+      },
     );
   }
 }

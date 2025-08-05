@@ -277,7 +277,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                             return const Icon(Icons.flash_on,
                                 color: Colors.white);
                         }
-                        return const Icon(Icons.flash_off, color: Colors.white);
                       },
                     ),
                     label: ValueListenableBuilder<TorchState>(
@@ -291,8 +290,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                             return const Text('Выключить вспышку',
                                 style: TextStyle(color: Colors.white));
                         }
-                        return const Text('Включить вспышку',
-                            style: TextStyle(color: Colors.white));
+                        // return const Text('Включить вспышку',
+                        //     style: TextStyle(color: Colors.white));
                       },
                     ),
                     style: ElevatedButton.styleFrom(

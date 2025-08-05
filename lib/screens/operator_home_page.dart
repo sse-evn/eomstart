@@ -1,13 +1,17 @@
+// lib/screens/dashboard_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
-import 'map_screens.dart';
-import 'profile_screens.dart';
-import 'qr_scanner_screen.dart';
-import 'positions_screen.dart';
-import 'zones_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+
+// Используем именованные маршруты, так что импорты экранов не нужны
+// import 'map_screens.dart';
+// import 'profile_screens.dart';
+// import 'qr_scanner_screen.dart';
+// import 'positions_screen.dart';
+// import 'zones_screen.dart';
 
 enum SlotState {
   inactive,
@@ -46,7 +50,6 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  String _currentTime = '';
   Timer? _timer;
   bool _isDayModeSelected = true;
   int _currentIndex = 0;
@@ -55,7 +58,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _selectedSlotTimeRange;
   String? _selectedZone;
   String? _selectedPosition;
-  File? _selfieImage;
 
   late final Map<DateTime, ShiftData> _shiftHistory;
   late DateTime _selectedCalendarDate;
@@ -127,7 +129,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _updateTime() {
     setState(() {
-      _currentTime = DateFormat('HH:mm:ss').format(DateTime.now());
       if (_slotState == SlotState.active && _activeSlotStartTime != null) {
         _updateActiveSlotTime();
       }
@@ -163,7 +164,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _selectedSlotTimeRange = null;
                   _selectedZone = null;
                   _selectedPosition = null;
-                  _selfieImage = null;
                 });
               }
               _activeSlotTimer?.cancel();
@@ -194,7 +194,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _selectedSlotTimeRange = slotTimeRange;
               _selectedPosition = position;
               _selectedZone = zone;
-              _selfieImage = selfieImage;
               _activeSlotStartTime = DateFormat('HH:mm').format(DateTime.now());
               _activeSlotDurationInSeconds = 0;
             });
@@ -252,20 +251,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             case 0:
               break;
             case 1:
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (context) => const MapScreen()));
+              Navigator.pushNamed(context, '/map');
               break;
             case 2:
-              Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const QrScannerScreen()));
+              Navigator.pushNamed(context, '/qr_scanner');
               break;
             case 3:
-              Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const ProfileScreen()));
+              Navigator.pushNamed(context, '/profile');
               break;
           }
         },
@@ -875,13 +867,9 @@ class _SlotSetupModalState extends State<_SlotSetupModal> {
           title: _selectedPosition ?? 'Не выбрано',
           subtitle: 'Должность',
           onTap: () async {
-            final newSelectedPosition = await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) =>
-                    PositionsScreen(selectedPosition: _selectedPosition),
-              ),
-            );
-            if (newSelectedPosition != null) {
+            final newSelectedPosition =
+                await Navigator.pushNamed(context, '/positions');
+            if (newSelectedPosition != null && newSelectedPosition is String) {
               if (mounted) {
                 setState(() {
                   _selectedPosition = newSelectedPosition;
@@ -897,12 +885,9 @@ class _SlotSetupModalState extends State<_SlotSetupModal> {
           subtitle: 'Техзоны',
           trailingText: _selectedZone != null ? '1' : '0',
           onTap: () async {
-            final newSelectedZone = await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => ZonesScreen(selectedZone: _selectedZone),
-              ),
-            );
-            if (newSelectedZone != null) {
+            final newSelectedZone =
+                await Navigator.pushNamed(context, '/zones');
+            if (newSelectedZone != null && newSelectedZone is String) {
               if (mounted) {
                 setState(() {
                   _selectedZone = newSelectedZone;

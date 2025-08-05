@@ -1,9 +1,11 @@
-import 'package:flutter/material.dart';
-import 'about_screen.dart'; // Укажите правильный путь
-import 'login_screen.dart'; // Укажите правильный путь
-import 'settings_screen.dart'; // Укажите правильный путь
+// lib/screens/profile_screen.dart
 
-// Модель для данных сотрудника
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'about_screen.dart';
+import 'login_screen.dart';
+import 'settings_screen.dart';
+
 class Employee {
   final String name;
   final String position;
@@ -30,6 +32,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _handleLogout() async {
+    final _storage = const FlutterSecureStorage();
+    await _storage.delete(key: 'jwt_token');
+
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (Route<dynamic> route) => false,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -41,7 +55,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // --- Секция профиля сотрудника ---
             FutureBuilder<Employee>(
               future: _fetchEmployeeData(),
               builder: (context, snapshot) {
@@ -103,10 +116,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }
               },
             ),
-
             const SizedBox(height: 20),
-
-            // --- Секция общих настроек ---
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0),
               child: Align(
@@ -118,36 +128,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 10),
-            // Кнопка "Настройки"
             _buildSettingsItem(
               context,
               icon: Icons.settings,
               title: 'Настройки',
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const SettingsScreen()),
-                );
+                Navigator.pushNamed(context, '/settings');
               },
             ),
-            // Кнопка "Уведомления"
             _buildSettingsItem(
               context,
               icon: Icons.notifications,
               title: 'Уведомления',
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const SettingsScreen()),
-                );
+                Navigator.pushNamed(context, '/settings');
               },
             ),
-
             const Divider(),
-
-            // --- Секция "О приложении" и выход ---
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0),
               child: Align(
@@ -159,32 +156,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 10),
-            // Кнопка "О приложении"
             _buildSettingsItem(
               context,
               icon: Icons.info,
               title: 'О приложении',
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AboutScreen()),
-                );
+                Navigator.pushNamed(context, '/about');
               },
             ),
-            // Кнопка "Выйти"
             _buildSettingsItem(
               context,
               icon: Icons.logout,
               title: 'Выйти',
               color: Colors.red,
-              onTap: () {
-                // Здесь мы не просто переходим на экран, а заменяем текущий экран
-                // на экран входа, чтобы пользователь не мог вернуться назад по кнопке "назад"
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                );
-              },
+              onTap: _handleLogout,
             ),
           ],
         ),
@@ -192,7 +177,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // Вспомогательный метод для создания элемента списка настроек
   Widget _buildSettingsItem(
     BuildContext context, {
     required IconData icon,
