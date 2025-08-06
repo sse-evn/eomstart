@@ -29,8 +29,7 @@ dependencies:
   flutter_secure_storage: ^9.2.4 # Для безопасного хранения токенов
   webview_flutter_android: ^3.16.1
   webview_flutter_wkwebview: ^3.10.2
-  win32: ^5.0.0
-
+  win32: 5.1.1
 
 
   flutter_test:
