@@ -6,15 +6,15 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:micro_mobility_app/settings_provider.dart';
-import 'package:micro_mobility_app/screens/login_screen.dart';
-import 'package:micro_mobility_app/screens/operator_home_page.dart';
+import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
+import 'package:micro_mobility_app/screens/dashboard_screen.dart';
 import 'package:micro_mobility_app/screens/profile_screens.dart';
 import 'package:micro_mobility_app/screens/settings_screen.dart';
 import 'package:micro_mobility_app/screens/about_screen.dart';
-import 'package:micro_mobility_app/screens/map_screens.dart';
-import 'package:micro_mobility_app/screens/qr_scanner_screen.dart';
+import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
+import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.dart';
 import 'package:micro_mobility_app/screens/positions_screen.dart';
-import 'package:micro_mobility_app/screens/zones_screen.dart';
+import 'package:micro_mobility_app/screens/map_screen/zones_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

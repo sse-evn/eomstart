@@ -39,10 +39,11 @@ class _AboutScreenState extends State<AboutScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const SizedBox(height: 20),
+            const SizedBox(height: 40),
             // Иконка приложения
-            Icon(Icons.directions_bike, size: 80, color: Colors.green[700]),
-            const SizedBox(height: 20),
+            Icon(Icons.bike_scooter_outlined,
+                size: 80, color: Colors.green[700]),
+            const SizedBox(height: 40),
             const Text(
               'Приложение для оператора микромобильности',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -59,7 +60,7 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
             const SizedBox(height: 40),
             const Text(
-              'Разработано командой скаутов',
+              'Разработано evn',
               style: TextStyle(fontSize: 14, color: Colors.grey),
               textAlign: TextAlign.center,
             ),

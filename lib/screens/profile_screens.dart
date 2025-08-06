@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'login_screen.dart';
+import 'auth_screen/login_screen.dart';
 
 class Employee {
   final String name;

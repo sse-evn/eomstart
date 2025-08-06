@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'zones_screen.dart';
+import 'map_screen/zones_screen.dart';
 
 enum SlotSetupState {
   selfie,

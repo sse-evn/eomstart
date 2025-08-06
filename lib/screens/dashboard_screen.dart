@@ -1,17 +1,8 @@
-// lib/screens/dashboard_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-
-// Используем именованные маршруты, так что импорты экранов не нужны
-// import 'map_screens.dart';
-// import 'profile_screens.dart';
-// import 'qr_scanner_screen.dart';
-// import 'positions_screen.dart';
-// import 'zones_screen.dart';
 
 enum SlotState {
   inactive,
