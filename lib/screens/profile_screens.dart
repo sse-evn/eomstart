@@ -1,17 +1,8 @@
-// lib/screens/profile_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
+import 'package:micro_mobility_app/services/api_service.dart';
 import 'auth_screen/login_screen.dart';
-
-class Employee {
-  final String name;
-  final String position;
-  final String imageUrl;
-
-  Employee(
-      {required this.name, required this.position, required this.imageUrl});
-}
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -21,25 +12,55 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  Future<Employee> _fetchEmployeeData() async {
-    await Future.delayed(const Duration(seconds: 2));
-    return Employee(
-      name: 'Иван Иванов',
-      position: 'Скаут',
-      imageUrl: 'https://cdn-icons-png.flaticon.com/512/149/149071.png',
-    );
+  final ApiService _apiService = ApiService();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  late Future<Map<String, dynamic>> _userDataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _userDataFuture = _fetchUserData();
   }
 
-  void _handleLogout() async {
-    final _storage = const FlutterSecureStorage();
-    await _storage.delete(key: 'jwt_token');
-
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-        (Route<dynamic> route) => false,
-      );
+  Future<Map<String, dynamic>> _fetchUserData() async {
+    try {
+      final token = await _storage.read(key: 'jwt_token');
+      if (token == null) throw Exception('No auth token');
+      return await _apiService.getUserProfile(token);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка загрузки профиля: $e')),
+        );
+      }
+      return {};
     }
+  }
+
+  Future<void> _handleLogout() async {
+    try {
+      final token = await _storage.read(key: 'jwt_token');
+      if (token != null) await _apiService.logout(token);
+      await _storage.delete(key: 'jwt_token');
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (Route<dynamic> route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ошибка при выходе')),
+        );
+      }
+    }
+  }
+
+  Future<void> _refreshData() async {
+    setState(() {
+      _userDataFuture = _fetchUserData();
+    });
   }
 
   @override
@@ -49,129 +70,155 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Профиль'),
         centerTitle: true,
         backgroundColor: Colors.green[700],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshData,
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            FutureBuilder<Employee>(
-              future: _fetchEmployeeData(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 40.0),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                } else if (snapshot.hasError) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 40.0),
-                    child: Center(
-                      child: Text('Ошибка загрузки данных',
-                          style: TextStyle(color: Colors.red)),
-                    ),
-                  );
-                } else if (snapshot.hasData) {
-                  final employee = snapshot.data!;
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 40.0, horizontal: 24.0),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(30),
-                        bottomRight: Radius.circular(30),
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              FutureBuilder<Map<String, dynamic>>(
+                future: _userDataFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  } else if (snapshot.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40.0),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            const Text('Ошибка загрузки данных',
+                                style: TextStyle(color: Colors.red)),
+                            ElevatedButton(
+                              onPressed: _refreshData,
+                              child: const Text('Повторить'),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 60,
-                          backgroundImage: NetworkImage(employee.imageUrl),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          employee.name,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          employee.position,
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.green[700],
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                } else {
-                  return const SizedBox.shrink();
-                }
-              },
-            ),
-            const SizedBox(height: 20),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Настройки',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
+                    );
+                  }
+                  return _buildProfileHeader(snapshot.data ?? {});
+                },
               ),
-            ),
-            const SizedBox(height: 10),
-            _buildSettingsItem(
-              context,
-              icon: Icons.settings,
-              title: 'Настройки',
-              onTap: () {
-                Navigator.pushNamed(context, '/settings');
-              },
-            ),
-            _buildSettingsItem(
-              context,
-              icon: Icons.notifications,
-              title: 'Уведомления',
-              onTap: () {
-                Navigator.pushNamed(context, '/settings');
-              },
-            ),
-            const Divider(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Другое',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            _buildSettingsItem(
-              context,
-              icon: Icons.info,
-              title: 'О приложении',
-              onTap: () {
-                Navigator.pushNamed(context, '/about');
-              },
-            ),
-            _buildSettingsItem(
-              context,
-              icon: Icons.logout,
-              title: 'Выйти',
-              color: Colors.red,
-              onTap: _handleLogout,
-            ),
-          ],
+              _buildSettingsSection(context),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildProfileHeader(Map<String, dynamic> userData) {
+    final fullName = userData['fullName']?.toString().trim() ?? 'Не указано';
+    final position =
+        userData['position']?.toString().trim() ?? 'Должность не указана';
+    final avatarUrl = userData['avatarUrl']?.toString();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 24.0),
+      decoration: BoxDecoration(
+        color: Colors.green[50],
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
+        ),
+      ),
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 60,
+            backgroundImage: (avatarUrl == null || avatarUrl.isEmpty)
+                ? const AssetImage('assets/telegram.png') as ImageProvider
+                : NetworkImage(avatarUrl),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            fullName,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            position,
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.green[700],
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsSection(BuildContext context) {
+    return Column(
+      children: [
+        const SizedBox(height: 20),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16.0),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Настройки',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildSettingsItem(
+          context,
+          icon: Icons.settings,
+          title: 'Настройки',
+          onTap: () => Navigator.pushNamed(context, '/settings'),
+        ),
+        _buildSettingsItem(
+          context,
+          icon: Icons.notifications,
+          title: 'Уведомления',
+          onTap: () => Navigator.pushNamed(context, '/notifications'),
+        ),
+        const Divider(),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16.0),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Другое',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildSettingsItem(
+          context,
+          icon: Icons.info,
+          title: 'О приложении',
+          onTap: () => Navigator.pushNamed(context, '/about'),
+        ),
+        _buildSettingsItem(
+          context,
+          icon: Icons.logout,
+          title: 'Выйти',
+          color: Colors.red,
+          onTap: _handleLogout,
+        ),
+      ],
     );
   }
 
