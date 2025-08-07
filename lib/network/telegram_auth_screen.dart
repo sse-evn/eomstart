@@ -1,44 +1,48 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-class TelegramAuthScreen extends StatefulWidget {
-  final Function(String)? onAuthSuccess;
-  final Function(String)? onError;
-
-  const TelegramAuthScreen({
-    super.key,
-    this.onAuthSuccess,
-    this.onError,
-  });
-
-  @override
-  State<TelegramAuthScreen> createState() => _TelegramAuthScreenState();
+class AppConfig {
+  static const String backendUrl = 'https://eom-sharing.duckdns.org';
+  static const String botUsername = 'eom_auth_bot';
 }
 
-class _TelegramAuthScreenState extends State<TelegramAuthScreen> {
-  late final WebViewController _controller;
-  bool _isLoading = true;
-  bool _hasError = false;
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
-  // Конфигурация
-  static const String _botUsername = "eom_auth_bot";
-  static const String _backendUrl = "https://eom-sharing.duckdns.org";
-  static const String _callbackPath = "/auth/telegram/callback";
-  static const String _authEndpoint = "/auth/telegram";
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  late final WebViewController _tgController;
+  final _storage = const FlutterSecureStorage();
 
   @override
   void initState() {
     super.initState();
-    _initWebViewController();
+    _checkTokenAndNavigate();
+    _initTelegramWebView();
   }
 
-  void _initWebViewController() {
-    late final PlatformWebViewControllerCreationParams params;
+  Future<void> _checkTokenAndNavigate() async {
+    final String? token = await _storage.read(key: 'jwt_token');
+    if (mounted && token != null && token.isNotEmpty) {
+      Navigator.pushReplacementNamed(context, '/dashboard');
+    }
+  }
 
+  void _initTelegramWebView() {
+    late final PlatformWebViewControllerCreationParams params;
     if (WebViewPlatform.instance is WebKitWebViewPlatform) {
       params = WebKitWebViewControllerCreationParams(
         allowsInlineMediaPlayback: true,
@@ -50,197 +54,363 @@ class _TelegramAuthScreenState extends State<TelegramAuthScreen> {
 
     final controller = WebViewController.fromPlatformCreationParams(params);
 
+    final telegramWidgetHtml = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Войти через Telegram</h2>
+        <script async src="https://telegram.org/js/telegram-widget.js?22"
+                data-telegram-login="${AppConfig.botUsername}"
+                data-size="large"
+                data-onauth="onTelegramAuth(user)"
+                data-request-access="write">
+        </script>
+    </div>
+    <script>
+        function onTelegramAuth(user) {
+            const params = new URLSearchParams();
+            Object.keys(user).forEach(key => {
+                params.append(key, user[key]);
+            });
+            window.location.href = '${AppConfig.backendUrl}/auth_callback?' + params.toString();
+        }
+    </script>
+</body>
+</html>
+    ''';
+
     controller
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onProgress: (int progress) => _handleLoadingProgress(progress),
-          onPageStarted: (_) => _handlePageStart(),
-          onPageFinished: (_) => _handlePageFinish(),
-          onWebResourceError: (error) => _handleWebError(error),
-          onNavigationRequest: (request) => _handleNavigation(request),
+          onNavigationRequest: (request) {
+            if (request.url.contains('${AppConfig.backendUrl}/auth_callback')) {
+              _handleTelegramAuth(request.url);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
         ),
       )
-      ..loadRequest(Uri.parse(_authUrl));
+      ..loadHtmlString(telegramWidgetHtml);
 
     if (controller.platform is AndroidWebViewController) {
       (controller.platform as AndroidWebViewController)
           .setMediaPlaybackRequiresUserGesture(false);
     }
 
-    _controller = controller;
+    _tgController = controller;
   }
 
-  // URL helpers
-  String get _authUrl => "https://oauth.telegram.org/auth?"
-      "bot_id=$_botUsername&"
-      "origin=${Uri.encodeComponent(_backendUrl)}&"
-      "embed=1&"
-      "request_access=write&"
-      "return_to=${Uri.encodeComponent(_callbackUrl)}";
-
-  String get _callbackUrl => "$_backendUrl$_callbackPath";
-  String get _apiUrl => "$_backendUrl$_authEndpoint";
-
-  // WebView handlers
-  void _handleLoadingProgress(int progress) {
-    if (progress == 100) {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _handlePageStart() {
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-    });
-  }
-
-  void _handlePageFinish() {
-    setState(() => _isLoading = false);
-  }
-
-  void _handleWebError(WebResourceError error) {
-    setState(() => _hasError = true);
-    _reportError('Ошибка загрузки: ${error.description}');
-  }
-
-  NavigationDecision _handleNavigation(NavigationRequest request) {
-    if (request.url.startsWith(_callbackUrl)) {
-      _handleAuthCallback(request.url);
-      return NavigationDecision.prevent;
-    }
-    return NavigationDecision.navigate;
-  }
-
-  // Auth callback processing
-  Future<void> _handleAuthCallback(String url) async {
+  Future<void> _handleTelegramAuth(String url) async {
+    setState(() => _isLoading = true);
     try {
       final uri = Uri.parse(url);
-      final params = uri.queryParameters;
+      Map<String, String> authData = {};
+      uri.queryParameters.forEach((key, value) {
+        if (value.isNotEmpty) {
+          authData[key] = value;
+        }
+      });
 
-      if (!_validateAuthParams(params)) {
+      if (!authData.containsKey('id') || !authData.containsKey('hash')) {
         throw Exception('Недостаточно данных для авторизации');
       }
 
       final response = await http.post(
-        Uri.parse(_apiUrl),
+        Uri.parse('${AppConfig.backendUrl}/api/auth/telegram'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'id': params['id'],
-          'first_name': params['first_name'],
-          'username': params['username'],
-          'auth_date': params['auth_date'],
-          'hash': params['hash'],
-          'bot_username': _botUsername,
-        }),
+        body: jsonEncode(authData),
       );
 
+      final responseData = jsonDecode(response.body);
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        _handleSuccess(data['token']);
+        final String token = responseData['token'];
+        _navigateToDashboard(token);
       } else {
-        throw Exception('Ошибка сервера: ${response.statusCode}');
+        _showSnackBar(
+            responseData['error'] ?? 'Ошибка авторизации', Colors.red);
       }
     } catch (e) {
-      _reportError(e.toString());
+      _showSnackBar('Ошибка: ${e.toString()}', Colors.red);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        Navigator.pop(context);
+      }
     }
   }
 
-  bool _validateAuthParams(Map<String, String?> params) {
-    const requiredParams = ['id', 'first_name', 'auth_date', 'hash'];
-    return requiredParams.every((param) => params[param]?.isNotEmpty ?? false);
-  }
-
-  // Result handlers
-  void _handleSuccess(String token) {
-    if (widget.onAuthSuccess != null) {
-      widget.onAuthSuccess!(token);
-    } else {
-      Navigator.pop(context, token);
-    }
-  }
-
-  void _reportError(String message) {
-    debugPrint('TelegramAuth Error: $message');
-    if (widget.onError != null) {
-      widget.onError!(message);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-        ),
+  Future<void> _handleRegularLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConfig.backendUrl}/api/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'username': _usernameController.text,
+          'password': _passwordController.text,
+        }),
       );
-      if (mounted) Navigator.pop(context);
+      final responseData = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        final String token = responseData['token'];
+        _navigateToDashboard(token);
+      } else {
+        _showSnackBar(
+          responseData['error'] ?? 'Ошибка авторизации',
+          Colors.red,
+        );
+      }
+    } catch (e) {
+      _showSnackBar('Ошибка: ${e.toString()}', Colors.red);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  // UI
-  @override
-  Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        if (_isLoading) {
-          _reportError('Авторизация отменена');
-          return true;
-        }
-        return true;
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Вход через Telegram'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(context),
+  Future<void> _navigateToDashboard(String token) async {
+    await _storage.write(key: 'jwt_token', value: token);
+    if (mounted) {
+      Navigator.pushNamedAndRemoveUntil(
+          context, '/dashboard', (route) => false);
+    }
+  }
+
+  void _showSnackBar(String message, Color color) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: color),
+      );
+    }
+  }
+
+  void _showTelegramAuthDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: !_isLoading,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Вход через Telegram',
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green[700]),
+              ),
+            ),
+            SizedBox(
+              height: 400,
+              width: MediaQuery.of(context).size.width * 0.8,
+              child: WebViewWidget(controller: _tgController),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextButton(
+                onPressed: _isLoading ? null : () => Navigator.pop(context),
+                child: const Text('ЗАКРЫТЬ'),
+              ),
             ),
           ],
         ),
-        body: _buildBody(),
       ),
     );
   }
 
-  Widget _buildBody() {
-    if (_hasError) {
-      return _buildErrorView();
-    }
-
-    return Stack(
-      children: [
-        WebViewWidget(controller: _controller),
-        if (_isLoading) const Center(child: CircularProgressIndicator()),
-      ],
-    );
-  }
-
-  Widget _buildErrorView() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.red),
-          const SizedBox(height: 16),
-          const Text('Ошибка загрузки', style: TextStyle(fontSize: 18)),
-          const SizedBox(height: 8),
-          const Text('Проверьте подключение к интернету'),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _retryLoading,
-            child: const Text('Повторить попытку'),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SvgPicture.asset('assets/eom.svg', height: 140),
+                const SizedBox(height: 32),
+                Card(
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          Text(
+                            'Вход в систему',
+                            style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green[800]),
+                          ),
+                          const SizedBox(height: 32),
+                          _buildTextField(
+                            controller: _usernameController,
+                            label: 'Имя пользователя',
+                            icon: Icons.person_outline,
+                            enabled: !_isLoading,
+                          ),
+                          const SizedBox(height: 20),
+                          _buildTextField(
+                            controller: _passwordController,
+                            label: 'Пароль',
+                            icon: Icons.lock_outline,
+                            obscureText: true,
+                            enabled: !_isLoading,
+                          ),
+                          const SizedBox(height: 32),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 55,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green[700],
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                                elevation: 4,
+                              ),
+                              onPressed:
+                                  _isLoading ? null : _handleRegularLogin,
+                              child: _isLoading
+                                  ? const CircularProgressIndicator(
+                                      color: Colors.white)
+                                  : const Text(
+                                      'ВОЙТИ',
+                                      style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              const Expanded(
+                                  child: Divider(
+                                      color: Colors.grey, thickness: 1)),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text('или',
+                                    style: TextStyle(color: Colors.grey[700])),
+                              ),
+                              const Expanded(
+                                  child: Divider(
+                                      color: Colors.grey, thickness: 1)),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 55,
+                            child: OutlinedButton.icon(
+                              icon: SvgPicture.asset('assets/telegram.svg',
+                                  height: 26, color: Colors.blue[400]),
+                              label: Text(
+                                'Войти через Telegram',
+                                style: TextStyle(
+                                    color: Colors.blue[400],
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: Colors.blue[400]!),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                              ),
+                              onPressed:
+                                  _isLoading ? null : _showTelegramAuthDialog,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  void _retryLoading() {
-    setState(() {
-      _hasError = false;
-      _isLoading = true;
-    });
-    _controller.reload();
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool obscureText = false,
+    bool enabled = true,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      enabled: enabled,
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Поле не может быть пустым';
+        }
+        return null;
+      },
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.green[700]),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey[400]!)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.green[700]!, width: 2)),
+        errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.red, width: 2)),
+        focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.red, width: 2)),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+      ),
+    );
   }
 }

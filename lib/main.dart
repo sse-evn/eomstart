@@ -19,7 +19,6 @@ import 'package:micro_mobility_app/screens/map_screen/zones_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ru', null);
-
   final _storage = const FlutterSecureStorage();
   final String? token = await _storage.read(key: 'jwt_token');
 
@@ -72,7 +71,9 @@ class MicroMobilityApp extends StatelessWidget {
         '/map': (context) => const MapScreen(),
         '/qr_scanner': (context) => const QrScannerScreen(),
         '/positions': (context) => const PositionsScreen(),
-        '/zones': (context) => const ZonesScreen(),
+        '/zones': (context) => ZonesScreen(
+              onZoneSelected: (zone) {},
+            ),
       },
     );
   }

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 
 class ZonesScreen extends StatefulWidget {
   final String? selectedZone;
-  const ZonesScreen({super.key, this.selectedZone});
+  const ZonesScreen(
+      {super.key,
+      this.selectedZone,
+      required Null Function(dynamic zone) onZoneSelected});
 
   @override
   State<ZonesScreen> createState() => _ZonesScreenState();
