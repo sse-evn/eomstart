@@ -1,4 +1,3 @@
-// android/app/build.gradle
 
 plugins {
     id "com.android.application"
@@ -19,13 +18,13 @@ def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '
 
 android {
     namespace "com.example.eomstart"
-    compileSdkVersion 34
+    compileSdkVersion 35
     ndkVersion flutter.ndkVersion
 
     defaultConfig {
         applicationId "com.example.eomstart"
         minSdkVersion 21
-        targetSdkVersion 34
+        targetSdkVersion 35
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         multiDexEnabled true

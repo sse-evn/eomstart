@@ -34,11 +34,9 @@ class _LoginScreenState extends State<LoginScreen> {
     _initTelegramWebView();
   }
 
-  // Проверка наличия токена при запуске экрана
   Future<void> _checkTokenAndNavigate() async {
     final String? token = await _storage.read(key: 'jwt_token');
     if (mounted && token != null && token.isNotEmpty) {
-      // Если токен есть, сразу переходим на дашборд
       Navigator.pushReplacementNamed(context, '/dashboard');
     }
   }
@@ -57,6 +55,59 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final controller = WebViewController.fromPlatformCreationParams(params);
 
+    final telegramWidgetHtml = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Войти через Telegram</h2>
+        <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                data-telegram-login="${AppConfig.botUsername}" 
+                data-size="large" 
+                data-onauth="onTelegramAuth(user)" 
+                data-request-access="write">
+        </script>
+    </div>
+    <script>
+        function onTelegramAuth(user) {
+            const params = new URLSearchParams();
+            Object.keys(user).forEach(key => {
+                params.append(key, user[key]);
+            });
+            window.location.href = '${AppConfig.backendUrl}/auth_callback?' + params.toString();
+        }
+    </script>
+</body>
+</html>
+    ''';
+
     controller
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
@@ -70,12 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
           },
         ),
       )
-      ..loadRequest(Uri.parse('https://oauth.telegram.org/auth?'
-          'bot_id=${AppConfig.botUsername}&'
-          'origin=${AppConfig.backendUrl}&'
-          'embed=1&'
-          'request_access=write&'
-          'return_to=${AppConfig.backendUrl}/auth_callback'));
+      ..loadHtmlString(telegramWidgetHtml);
 
     if (controller.platform is AndroidWebViewController) {
       (controller.platform as AndroidWebViewController)
@@ -90,14 +136,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final uri = Uri.parse(url);
+
+      Map<String, String> authData = {};
+
+      uri.queryParameters.forEach((key, value) {
+        if (value.isNotEmpty) {
+          authData[key] = value;
+        }
+      });
+
+      if (!authData.containsKey('id') || !authData.containsKey('hash')) {
+        throw Exception('Недостаточно данных для авторизации');
+      }
+
       final response = await http.post(
         Uri.parse('${AppConfig.backendUrl}/api/auth/telegram'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'id': uri.queryParameters['id'],
-          'first_name': uri.queryParameters['first_name'],
-          'username': uri.queryParameters['username'],
-        }),
+        body: jsonEncode(authData),
       );
 
       final responseData = jsonDecode(response.body);
@@ -106,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _navigateToDashboard(token);
       } else {
         _showSnackBar(
-            responseData['message'] ?? 'Ошибка авторизации', Colors.red);
+            responseData['error'] ?? 'Ошибка авторизации', Colors.red);
       }
     } catch (e) {
       _showSnackBar('Ошибка: ${e.toString()}', Colors.red);
@@ -141,10 +196,10 @@ class _LoginScreenState extends State<LoginScreen> {
         _navigateToDashboard(token);
       } else if (response.statusCode == 401) {
         _showSnackBar(
-            responseData['message'] ?? 'Неверное имя пользователя или пароль',
+            responseData['error'] ?? 'Неверное имя пользователя или пароль',
             Colors.red);
       } else {
-        _showSnackBar(responseData['message'] ?? 'Ошибка сервера', Colors.red);
+        _showSnackBar(responseData['error'] ?? 'Ошибка сервера', Colors.red);
       }
     } catch (e) {
       _showSnackBar('Ошибка: ${e.toString()}', Colors.red);
@@ -201,9 +256,12 @@ class _LoginScreenState extends State<LoginScreen> {
               width: MediaQuery.of(context).size.width * 0.8,
               child: WebViewWidget(controller: _tgController),
             ),
-            TextButton(
-              onPressed: _isLoading ? null : () => Navigator.pop(context),
-              child: const Text('ЗАКРЫТЬ'),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextButton(
+                onPressed: _isLoading ? null : () => Navigator.pop(context),
+                child: const Text('ЗАКРЫТЬ'),
+              ),
             ),
           ],
         ),
@@ -228,12 +286,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 32),
                 Card(
-                  elevation: 8, // Увеличиваем тень для красоты
+                  elevation: 8,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20), // Больший радиус
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(32), // Увеличиваем отступы
+                    padding: const EdgeInsets.all(32),
                     child: Form(
                       key: _formKey,
                       child: Column(
