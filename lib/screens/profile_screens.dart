@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 import 'package:http/http.dart' as http;
+
 import 'package:micro_mobility_app/services/api_service.dart';
+
 import 'auth_screen/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -13,19 +17,24 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final ApiService _apiService = ApiService();
+
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
   late Future<Map<String, dynamic>> _userDataFuture;
 
   @override
   void initState() {
     super.initState();
+
     _userDataFuture = _fetchUserData();
   }
 
   Future<Map<String, dynamic>> _fetchUserData() async {
     try {
       final token = await _storage.read(key: 'jwt_token');
+
       if (token == null) throw Exception('No auth token');
+
       return await _apiService.getUserProfile(token);
     } catch (e) {
       if (mounted) {
@@ -33,6 +42,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           SnackBar(content: Text('Ошибка загрузки профиля: $e')),
         );
       }
+
       return {};
     }
   }
@@ -40,8 +50,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _handleLogout() async {
     try {
       final token = await _storage.read(key: 'jwt_token');
+
       if (token != null) await _apiService.logout(token);
+
       await _storage.delete(key: 'jwt_token');
+
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -108,6 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     );
                   }
+
                   return _buildProfileHeader(snapshot.data ?? {});
                 },
               ),
@@ -121,8 +135,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildProfileHeader(Map<String, dynamic> userData) {
     final fullName = userData['fullName']?.toString().trim() ?? 'Не указано';
+
     final position =
         userData['position']?.toString().trim() ?? 'Должность не указана';
+
     final avatarUrl = userData['avatarUrl']?.toString();
 
     return Container(

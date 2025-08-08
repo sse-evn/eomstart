@@ -10,6 +10,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class AppConfig {
   static const String backendUrl = 'https://eom-sharing.duckdns.org';
   static const String botUsername = 'eom_auth_bot';
+  static const String telegramLoginUrl = '$backendUrl/telegram-login.html';
 }
 
 class LoginScreen extends StatefulWidget {
@@ -43,7 +44,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _initTelegramWebView() {
     late final PlatformWebViewControllerCreationParams params;
-
     if (WebViewPlatform.instance is WebKitWebViewPlatform) {
       params = WebKitWebViewControllerCreationParams(
         allowsInlineMediaPlayback: true,
@@ -54,59 +54,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final controller = WebViewController.fromPlatformCreationParams(params);
-
-    final telegramWidgetHtml = '''
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Login</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background-color: #f5f5f5;
-        }
-        .container {
-            text-align: center;
-            padding: 20px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h2 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2>Войти через Telegram</h2>
-        <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                data-telegram-login="${AppConfig.botUsername}" 
-                data-size="large" 
-                data-onauth="onTelegramAuth(user)" 
-                data-request-access="write">
-        </script>
-    </div>
-    <script>
-        function onTelegramAuth(user) {
-            const params = new URLSearchParams();
-            Object.keys(user).forEach(key => {
-                params.append(key, user[key]);
-            });
-            window.location.href = '${AppConfig.backendUrl}/auth_callback?' + params.toString();
-        }
-    </script>
-</body>
-</html>
-    ''';
 
     controller
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -121,7 +68,8 @@ class _LoginScreenState extends State<LoginScreen> {
           },
         ),
       )
-      ..loadHtmlString(telegramWidgetHtml);
+      // Загружаем HTML-файл с сервера
+      ..loadRequest(Uri.parse(AppConfig.telegramLoginUrl));
 
     if (controller.platform is AndroidWebViewController) {
       (controller.platform as AndroidWebViewController)
@@ -133,12 +81,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleTelegramAuth(String url) async {
     setState(() => _isLoading = true);
-
     try {
       final uri = Uri.parse(url);
-
       Map<String, String> authData = {};
-
       uri.queryParameters.forEach((key, value) {
         if (value.isNotEmpty) {
           authData[key] = value;
@@ -174,12 +119,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleRegularLogin() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-
     try {
       final response = await http.post(
         Uri.parse('${AppConfig.backendUrl}/api/auth/login'),
@@ -189,17 +130,15 @@ class _LoginScreenState extends State<LoginScreen> {
           'password': _passwordController.text,
         }),
       );
-
       final responseData = jsonDecode(response.body);
       if (response.statusCode == 200) {
         final String token = responseData['token'];
         _navigateToDashboard(token);
-      } else if (response.statusCode == 401) {
-        _showSnackBar(
-            responseData['error'] ?? 'Неверное имя пользователя или пароль',
-            Colors.red);
       } else {
-        _showSnackBar(responseData['error'] ?? 'Ошибка сервера', Colors.red);
+        _showSnackBar(
+          responseData['error'] ?? 'Ошибка авторизации',
+          Colors.red,
+        );
       }
     } catch (e) {
       _showSnackBar('Ошибка: ${e.toString()}', Colors.red);
@@ -221,10 +160,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showSnackBar(String message, Color color) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: color,
-        ),
+        SnackBar(content: Text(message), backgroundColor: color),
       );
     }
   }
@@ -234,9 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       barrierDismissible: !_isLoading,
       builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -245,10 +179,9 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Text(
                 'Вход через Telegram',
                 style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green[700],
-                ),
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green[700]),
               ),
             ),
             SizedBox(
@@ -280,16 +213,12 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SvgPicture.asset(
-                  'assets/eom.svg',
-                  height: 140,
-                ),
+                SvgPicture.asset('assets/eom.svg', height: 140),
                 const SizedBox(height: 32),
                 Card(
                   elevation: 8,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                      borderRadius: BorderRadius.circular(20)),
                   child: Padding(
                     padding: const EdgeInsets.all(32),
                     child: Form(
@@ -299,10 +228,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text(
                             'Вход в систему',
                             style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green[800],
-                            ),
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green[800]),
                           ),
                           const SizedBox(height: 32),
                           _buildTextField(
@@ -327,23 +255,20 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.green[700],
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
+                                    borderRadius: BorderRadius.circular(16)),
                                 elevation: 4,
                               ),
                               onPressed:
                                   _isLoading ? null : _handleRegularLogin,
                               child: _isLoading
                                   ? const CircularProgressIndicator(
-                                      color: Colors.white,
-                                    )
+                                      color: Colors.white)
                                   : const Text(
                                       'ВОЙТИ',
                                       style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white),
                                     ),
                             ),
                           ),
@@ -356,10 +281,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               Padding(
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 12),
-                                child: Text(
-                                  'или',
-                                  style: TextStyle(color: Colors.grey[700]),
-                                ),
+                                child: Text('или',
+                                    style: TextStyle(color: Colors.grey[700])),
                               ),
                               const Expanded(
                                   child: Divider(
@@ -371,24 +294,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             width: double.infinity,
                             height: 55,
                             child: OutlinedButton.icon(
-                              icon: SvgPicture.asset(
-                                'assets/telegram.svg',
-                                height: 26,
-                                color: Colors.blue[400],
-                              ),
+                              icon: SvgPicture.asset('assets/telegram.svg',
+                                  height: 26, color: Colors.blue[400]),
                               label: Text(
                                 'Войти через Telegram',
                                 style: TextStyle(
-                                  color: Colors.blue[400],
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                    color: Colors.blue[400],
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold),
                               ),
                               style: OutlinedButton.styleFrom(
                                 side: BorderSide(color: Colors.blue[400]!),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
+                                    borderRadius: BorderRadius.circular(16)),
                               ),
                               onPressed:
                                   _isLoading ? null : _showTelegramAuthDialog,
@@ -428,21 +346,17 @@ class _LoginScreenState extends State<LoginScreen> {
         labelText: label,
         prefixIcon: Icon(icon, color: Colors.green[700]),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.grey[400]!),
-        ),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey[400]!)),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.green[700]!, width: 2),
-        ),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.green[700]!, width: 2)),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Colors.red, width: 2),
-        ),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.red, width: 2)),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Colors.red, width: 2),
-        ),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.red, width: 2)),
         contentPadding:
             const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
       ),
