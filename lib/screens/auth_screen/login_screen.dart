@@ -68,7 +68,6 @@ class _LoginScreenState extends State<LoginScreen> {
           },
         ),
       )
-      // Загружаем HTML-файл с сервера
       ..loadRequest(Uri.parse(AppConfig.telegramLoginUrl));
 
     if (controller.platform is AndroidWebViewController) {
@@ -172,6 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
+          // mainAxisSize is now important to allow the Expanded widget to work
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
@@ -184,10 +184,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: Colors.green[700]),
               ),
             ),
-            SizedBox(
-              height: 400,
-              width: MediaQuery.of(context).size.width * 0.8,
-              child: WebViewWidget(controller: _tgController),
+            // The fix: wrap the WebViewWidget in Expanded to prevent overflow
+            Expanded(
+              child: SizedBox(
+                // Use a constrained height/width on the Expanded child as needed
+                height: 400,
+                width: MediaQuery.of(context).size.width * 0.8,
+                child: WebViewWidget(controller: _tgController),
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(16),
