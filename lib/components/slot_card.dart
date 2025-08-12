@@ -184,37 +184,71 @@ class _SlotCardState extends State<SlotCard> {
 
   Widget _buildInactiveSlot(BuildContext context, ShiftProvider provider) {
     final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
 
     return InkWell(
       onTap: () => _openSlotSetupModal(context),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
+      borderRadius: BorderRadius.circular(16),
+      hoverColor: Colors.green.withOpacity(0.1),
+      splashColor: Colors.green.withOpacity(0.2),
+      highlightColor: Colors.transparent,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.green[50],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.green[100]!),
+          color: isDarkMode
+              ? Colors.green[900]?.withOpacity(0.3)
+              : Colors.green[50],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDarkMode ? Colors.green[700]! : Colors.green[100]!,
+            width: 1.5,
+          ),
+          boxShadow: [
+            if (!isDarkMode)
+              BoxShadow(
+                color: Colors.green.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+          ],
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.play_circle_fill,
-              color: Colors.green[700],
-              size: 32,
-            ),
-            const SizedBox(width: 16),
-            Text(
-              'Начать новую смену',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.green[800],
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isDarkMode ? Colors.green[800] : Colors.green[100],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.play_circle_fill,
+                color: isDarkMode ? Colors.green[300] : Colors.green[700],
+                size: 32,
               ),
             ),
-            const Spacer(),
-            Icon(
-              Icons.chevron_right,
-              color: Colors.green[400],
-              size: 28,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                'Начать новую смену',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.green[100] : Colors.green[800],
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: isDarkMode ? Colors.green[800] : Colors.green[100],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.chevron_right,
+                color: isDarkMode ? Colors.green[300] : Colors.green[600],
+                size: 24,
+              ),
             ),
           ],
         ),
