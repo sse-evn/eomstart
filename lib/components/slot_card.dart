@@ -1,4 +1,3 @@
-// lib/screens/dashboard/components/slot_card.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -10,7 +9,6 @@ class SlotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Только нужные поля — не перестраиваем весь экран
     final slotState = context.select((ShiftProvider p) => p.slotState);
     final activeDuration =
         context.select((ShiftProvider p) => p.activeDuration);
@@ -19,50 +17,54 @@ class SlotCard extends StatelessWidget {
       final startTime =
           DateTime.now().subtract(Duration(seconds: activeDuration));
       final timeString = _formatDuration(activeDuration);
-
       return Container(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.green[700],
-          borderRadius: BorderRadius.circular(15.0),
+          gradient: LinearGradient(
+            colors: [Colors.green[700]!, Colors.green[500]!],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.green.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 5)),
+          ],
         ),
         child: Column(
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Активный слот',
-                        style:
-                            TextStyle(color: Colors.green[100], fontSize: 16)),
-                    const SizedBox(height: 4),
-                    Text('Слот активен',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold)),
-                  ],
-                ),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Активный слот',
+                      style: TextStyle(color: Colors.white70, fontSize: 16)),
+                  const SizedBox(height: 4),
+                  const Text('Слот активен',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold)),
+                ]),
                 GestureDetector(
                   onTap: () => _confirmEndSlot(context),
-                  child: const Icon(Icons.power_settings_new,
-                      color: Colors.white, size: 40),
+                  child: const CircleAvatar(
+                    backgroundColor: Colors.red,
+                    radius: 24,
+                    child: Icon(Icons.power_settings_new, color: Colors.white),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            const Divider(color: Colors.white54),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildInfo(
-                    'Слот активен',
-                    '${DateFormat('HH:mm').format(startTime)} – сейчас',
-                    Colors.white),
-                _buildInfo('Время работы', timeString, Colors.white),
+                _buildInfo('Слот активен',
+                    '${DateFormat('HH:mm').format(startTime)} – сейчас'),
+                _buildInfo('Время работы', timeString),
               ],
             ),
           ],
@@ -72,32 +74,25 @@ class SlotCard extends StatelessWidget {
       return GestureDetector(
         onTap: () => _openSlotSetupModal(context),
         child: Container(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(15.0),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
-              BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
-                  spreadRadius: 1,
-                  blurRadius: 5,
-                  offset: Offset(0, 3)),
+              BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 8)
             ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.access_time, color: Colors.green[700]),
-                  const SizedBox(width: 10),
-                  Text('Начать слот',
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green[700])),
-                ],
-              ),
+              Row(children: [
+                Icon(Icons.play_circle_fill,
+                    color: Colors.green[700], size: 32),
+                const SizedBox(width: 12),
+                const Text('Начать слот',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ]),
               const Icon(Icons.chevron_right, color: Colors.grey),
             ],
           ),
@@ -106,16 +101,18 @@ class SlotCard extends StatelessWidget {
     }
   }
 
-  Widget _buildInfo(String title, String value, Color color) {
+  Widget _buildInfo(String title, String value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title,
-            style: TextStyle(color: color.withOpacity(0.7), fontSize: 14)),
+            style: const TextStyle(color: Colors.white70, fontSize: 14)),
         const SizedBox(height: 4),
         Text(value,
-            style: TextStyle(
-                color: color, fontSize: 18, fontWeight: FontWeight.bold)),
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold)),
       ],
     );
   }
@@ -131,7 +128,7 @@ class SlotCard extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Завершить слот?'),
-        content: const Text('Вы уверены? Это действие нельзя отменить.'),
+        content: const Text('Вы уверены?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),

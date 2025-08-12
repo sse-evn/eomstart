@@ -109,7 +109,6 @@ class ReportCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          InfoRow(label: 'Водитель', value: data.transportStatus),
           const Divider(),
           InfoRow(label: 'По задачнику ТС', value: data.newTasks.toString()),
           InfoRow(label: 'Выбранный слот', value: data.selectedSlot),
