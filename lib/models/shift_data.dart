@@ -1,3 +1,4 @@
+// lib/models/shift_data.dart
 class ShiftData {
   final DateTime date;
   final String selectedSlot;
@@ -18,11 +19,11 @@ class ShiftData {
   factory ShiftData.fromJson(Map<String, dynamic> json) {
     return ShiftData(
       date: DateTime.parse(json['date']),
-      selectedSlot: json['selected_slot'],
-      workedTime: json['worked_time'],
-      workPeriod: json['work_period'],
-      transportStatus: json['transport_status'],
-      newTasks: json['new_tasks'],
+      selectedSlot: json['selected_slot'] ?? '',
+      workedTime: json['worked_time'] ?? '',
+      workPeriod: json['work_period'] ?? '',
+      transportStatus: json['transport_status'] ?? 'Транспорт не указан',
+      newTasks: json['new_tasks'] ?? 0,
     );
   }
 }

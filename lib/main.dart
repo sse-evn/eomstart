@@ -1,10 +1,11 @@
+// main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:micro_mobility_app/settings_provider.dart';
-import 'package:micro_mobility_app/services/api_service.dart'; // Импортируем ApiService
+import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/screens/auth_screen/pending_screen.dart';
 import 'package:micro_mobility_app/screens/dashboard_screen.dart';
@@ -15,77 +16,89 @@ import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
 import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.dart';
 import 'package:micro_mobility_app/screens/positions_screen.dart';
 import 'package:micro_mobility_app/screens/map_screen/zones_screen.dart';
-import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart'; // Импортируем AdminPanelScreen
+import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
+
+import 'providers/shift_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ru', null);
+
   final _storage = const FlutterSecureStorage();
-  final _apiService = ApiService(); // Инициализируем ApiService
-  String initialRoute = '/'; // По умолчанию на экран входа
+  final _apiService = ApiService();
+  String initialRoute = '/';
+  String?
+      initialToken; // Переименовал, чтобы избежать конфликта с 'token' в MyApp
 
-  final String? token = await _storage.read(key: 'jwt_token');
+  final String? storedToken = await _storage.read(key: 'jwt_token');
 
-  if (token != null && token.isNotEmpty) {
+  if (storedToken != null && storedToken.isNotEmpty) {
+    initialToken = storedToken; // Сохраняем токен для передачи в MyApp
     try {
-      final profile = await _apiService.getUserProfile(token);
+      final profile = await _apiService.getUserProfile(storedToken);
       final role = (profile['role'] ?? 'user').toString().toLowerCase();
-      final isActive = (profile['is_active'] as bool? ??
-          false); // Получаем статус активности
+      final isActive = (profile['is_active'] as bool?) ?? false;
 
       if (isActive) {
-        // Если пользователь активен, проверяем роль для перенаправления
         if (role == 'superadmin') {
-          initialRoute = '/admin'; // Переход на админ-панель
+          initialRoute = '/admin';
         } else {
-          initialRoute =
-              '/dashboard'; // Переход на дашборд для обычных пользователей
+          initialRoute = '/dashboard';
         }
       } else {
-        initialRoute = '/pending'; // Если неактивен, на экран ожидания
+        initialRoute = '/pending';
       }
     } catch (e) {
-      // Если токен недействителен, срок его действия истек или есть ошибка при получении профиля
-      debugPrint('Ошибка получения профиля при запуске: $e');
-      // Остаемся на LoginScreen, чтобы пользователь мог войти заново
+      debugPrint('Ошибка получения профиля при старте: $e');
+      // Если токен невалиден или ошибка сети, сбрасываем маршрут на логин
       initialRoute = '/';
+      await _storage.delete(key: 'jwt_token'); // Удаляем невалидный токен
     }
   }
 
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => SettingsProvider(),
-      child: MicroMobilityApp(initialRoute: initialRoute),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        // Передаем ApiService и FlutterSecureStorage в ShiftProvider
+        ChangeNotifierProvider(
+            create: (_) => ShiftProvider(
+                  apiService:
+                      _apiService, // Передаем существующий экземпляр ApiService
+                  storage:
+                      _storage, // Передаем существующий экземпляр FlutterSecureStorage
+                  initialToken: initialToken, // Передаем загруженный токен
+                )),
+      ],
+      child: MyApp(initialRoute: initialRoute, token: initialToken),
     ),
   );
 }
 
-class MicroMobilityApp extends StatelessWidget {
+class MyApp extends StatelessWidget {
   final String initialRoute;
-  const MicroMobilityApp({super.key, required this.initialRoute});
+  final String? token;
+
+  const MyApp({super.key, required this.initialRoute, this.token});
 
   @override
   Widget build(BuildContext context) {
-    final settingsProvider = Provider.of<SettingsProvider>(context);
+    // ✅ Удаляем этот блок. ShiftProvider теперь сам инициализируется с токеном.
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   if (token != null) {
+    //     context.read<ShiftProvider>().setToken(token!);
+    //     print('✅ Токен передан в ShiftProvider: $token');
+    //   }
+    // });
 
     return MaterialApp(
       title: 'Оператор микромобильности',
       theme: ThemeData(
         primarySwatch: Colors.green,
-        brightness: settingsProvider.currentBrightness,
-        scaffoldBackgroundColor:
-            settingsProvider.currentBrightness == Brightness.light
-                ? Colors.grey[100]
-                : Colors.grey[900],
-        appBarTheme: AppBarTheme(
-          backgroundColor:
-              settingsProvider.currentBrightness == Brightness.light
-                  ? Colors.white
-                  : Colors.grey[800],
-          foregroundColor:
-              settingsProvider.currentBrightness == Brightness.light
-                  ? Colors.black
-                  : Colors.white,
+        scaffoldBackgroundColor: Colors.grey[100],
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
           elevation: 0,
         ),
         visualDensity: VisualDensity.adaptivePlatformDensity,
