@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/services/api_service.dart' show ApiService;
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
@@ -9,7 +10,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AppConfig {
   static const String backendUrl = 'https://eom-sharing.duckdns.org';
-  static const String botUsername = 'eom_auth_bot';
   static const String telegramLoginUrl = '$backendUrl/telegram-login.html';
 }
 
@@ -27,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   late final WebViewController _tgController;
   final _storage = const FlutterSecureStorage();
+  final ApiService _apiService = ApiService();
 
   @override
   void initState() {
@@ -38,7 +39,17 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _checkTokenAndNavigate() async {
     final String? token = await _storage.read(key: 'jwt_token');
     if (mounted && token != null && token.isNotEmpty) {
-      Navigator.pushReplacementNamed(context, '/dashboard');
+      final profile = await _apiService.getUserProfile(token);
+      final status = profile['status']?.toString();
+      final role = profile['role']?.toString().toLowerCase();
+
+      if (status == 'pending' && role != 'superadmin') {
+        Navigator.pushNamedAndRemoveUntil(
+            context, '/pending', (route) => false);
+      } else {
+        Navigator.pushNamedAndRemoveUntil(
+            context, '/dashboard', (route) => false);
+      }
     }
   }
 
@@ -59,9 +70,9 @@ class _LoginScreenState extends State<LoginScreen> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onNavigationRequest: (request) {
+          onNavigationRequest: (request) async {
             if (request.url.contains('${AppConfig.backendUrl}/auth_callback')) {
-              _handleTelegramAuth(request.url);
+              await _handleTelegramAuth(request.url);
               return NavigationDecision.prevent;
             }
             return NavigationDecision.navigate;
@@ -90,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       if (!authData.containsKey('id') || !authData.containsKey('hash')) {
-        throw Exception('Недостаточно данных для авторизации');
+        throw Exception('Недостаточно данных');
       }
 
       final response = await http.post(
@@ -102,22 +113,34 @@ class _LoginScreenState extends State<LoginScreen> {
       final responseData = jsonDecode(response.body);
       if (response.statusCode == 200) {
         final String token = responseData['token'];
-        _navigateToDashboard(token);
+        await _storage.write(key: 'jwt_token', value: token);
+
+        final profile = await _apiService.getUserProfile(token);
+        final status = profile['status']?.toString();
+        final role = profile['role']?.toString().toLowerCase();
+
+        if (mounted) {
+          if (status == 'pending' && role != 'superadmin') {
+            Navigator.pushNamedAndRemoveUntil(
+                context, '/pending', (route) => false);
+          } else {
+            Navigator.pushNamedAndRemoveUntil(
+                context, '/dashboard', (route) => false);
+          }
+        }
       } else {
-        _showSnackBar(
-            responseData['error'] ?? 'Ошибка авторизации', Colors.red);
+        _showSnackBar(responseData['error'] ?? 'Ошибка', Colors.red);
       }
     } catch (e) {
       _showSnackBar('Ошибка: ${e.toString()}', Colors.red);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
-        Navigator.pop(context);
       }
     }
   }
 
-  Future<void> _handleRegularLogin() async {
+  void _handleRegularLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
@@ -132,12 +155,23 @@ class _LoginScreenState extends State<LoginScreen> {
       final responseData = jsonDecode(response.body);
       if (response.statusCode == 200) {
         final String token = responseData['token'];
-        _navigateToDashboard(token);
+        await _storage.write(key: 'jwt_token', value: token);
+
+        final profile = await _apiService.getUserProfile(token);
+        final status = profile['status']?.toString();
+        final role = profile['role']?.toString().toLowerCase();
+
+        if (mounted) {
+          if (status == 'pending' && role != 'superadmin') {
+            Navigator.pushNamedAndRemoveUntil(
+                context, '/pending', (route) => false);
+          } else {
+            Navigator.pushNamedAndRemoveUntil(
+                context, '/dashboard', (route) => false);
+          }
+        }
       } else {
-        _showSnackBar(
-          responseData['error'] ?? 'Ошибка авторизации',
-          Colors.red,
-        );
+        _showSnackBar(responseData['error'] ?? 'Ошибка', Colors.red);
       }
     } catch (e) {
       _showSnackBar('Ошибка: ${e.toString()}', Colors.red);
@@ -145,14 +179,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  Future<void> _navigateToDashboard(String token) async {
-    await _storage.write(key: 'jwt_token', value: token);
-    if (mounted) {
-      Navigator.pushNamedAndRemoveUntil(
-          context, '/dashboard', (route) => false);
     }
   }
 
@@ -170,37 +196,31 @@ class _LoginScreenState extends State<LoginScreen> {
       barrierDismissible: !_isLoading,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          // mainAxisSize is now important to allow the Expanded widget to work
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Вход через Telegram',
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green[700]),
+        child: SizedBox(
+          height: 500,
+          width: MediaQuery.of(context).size.width * 0.9,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Вход через Telegram',
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green[700]),
+                ),
               ),
-            ),
-            // The fix: wrap the WebViewWidget in Expanded to prevent overflow
-            Expanded(
-              child: SizedBox(
-                // Use a constrained height/width on the Expanded child as needed
-                height: 400,
-                width: MediaQuery.of(context).size.width * 0.8,
-                child: WebViewWidget(controller: _tgController),
+              Expanded(child: WebViewWidget(controller: _tgController)),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextButton(
+                  onPressed: _isLoading ? null : () => Navigator.pop(context),
+                  child: const Text('ЗАКРЫТЬ'),
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: TextButton(
-                onPressed: _isLoading ? null : () => Navigator.pop(context),
-                child: const Text('ЗАКРЫТЬ'),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -350,17 +370,21 @@ class _LoginScreenState extends State<LoginScreen> {
         labelText: label,
         prefixIcon: Icon(icon, color: Colors.green[700]),
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.grey[400]!)),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey[400]!),
+        ),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.green[700]!, width: 2)),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.green[700]!, width: 2),
+        ),
         errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.red, width: 2)),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+        ),
         focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.red, width: 2)),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+        ),
         contentPadding:
             const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
       ),

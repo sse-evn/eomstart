@@ -1,12 +1,12 @@
-// lib/main.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:micro_mobility_app/settings_provider.dart';
+import 'package:micro_mobility_app/services/api_service.dart'; // Импортируем ApiService
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
+import 'package:micro_mobility_app/screens/auth_screen/pending_screen.dart';
 import 'package:micro_mobility_app/screens/dashboard_screen.dart';
 import 'package:micro_mobility_app/screens/profile_screens.dart';
 import 'package:micro_mobility_app/screens/settings_screen.dart';
@@ -15,18 +15,47 @@ import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
 import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.dart';
 import 'package:micro_mobility_app/screens/positions_screen.dart';
 import 'package:micro_mobility_app/screens/map_screen/zones_screen.dart';
+import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart'; // Импортируем AdminPanelScreen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ru', null);
   final _storage = const FlutterSecureStorage();
+  final _apiService = ApiService(); // Инициализируем ApiService
+  String initialRoute = '/'; // По умолчанию на экран входа
+
   final String? token = await _storage.read(key: 'jwt_token');
+
+  if (token != null && token.isNotEmpty) {
+    try {
+      final profile = await _apiService.getUserProfile(token);
+      final role = (profile['role'] ?? 'user').toString().toLowerCase();
+      final isActive = (profile['is_active'] as bool? ??
+          false); // Получаем статус активности
+
+      if (isActive) {
+        // Если пользователь активен, проверяем роль для перенаправления
+        if (role == 'superadmin') {
+          initialRoute = '/admin'; // Переход на админ-панель
+        } else {
+          initialRoute =
+              '/dashboard'; // Переход на дашборд для обычных пользователей
+        }
+      } else {
+        initialRoute = '/pending'; // Если неактивен, на экран ожидания
+      }
+    } catch (e) {
+      // Если токен недействителен, срок его действия истек или есть ошибка при получении профиля
+      debugPrint('Ошибка получения профиля при запуске: $e');
+      // Остаемся на LoginScreen, чтобы пользователь мог войти заново
+      initialRoute = '/';
+    }
+  }
 
   runApp(
     ChangeNotifierProvider(
       create: (context) => SettingsProvider(),
-      child: MicroMobilityApp(
-          initialRoute: token != null && token.isNotEmpty ? '/dashboard' : '/'),
+      child: MicroMobilityApp(initialRoute: initialRoute),
     ),
   );
 }
@@ -71,9 +100,9 @@ class MicroMobilityApp extends StatelessWidget {
         '/map': (context) => const MapScreen(),
         '/qr_scanner': (context) => const QrScannerScreen(),
         '/positions': (context) => const PositionsScreen(),
-        '/zones': (context) => ZonesScreen(
-              onZoneSelected: (zone) {},
-            ),
+        '/zones': (context) => ZonesScreen(onZoneSelected: (zone) {}),
+        '/admin': (context) => const AdminPanelScreen(),
+        '/pending': (context) => const PendingApprovalScreen(),
       },
     );
   }

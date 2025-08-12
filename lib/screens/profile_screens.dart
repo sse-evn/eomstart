@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
-import 'package:http/http.dart' as http;
-
 import 'package:micro_mobility_app/services/api_service.dart';
-
 import 'auth_screen/login_screen.dart';
+import 'admin/admin_panel_screen.dart';
+import 'package:micro_mobility_app/services/api_service.dart';
+import 'auth_screen/login_screen.dart'; // ← Импортирует и ApiService тоже
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,63 +15,72 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final ApiService _apiService = ApiService();
-
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  late Future<Map<String, dynamic>> _userDataFuture;
+  late Future<Map<String, dynamic>> _profileFuture;
+  String _userRole = 'user';
 
   @override
   void initState() {
     super.initState();
-
-    _userDataFuture = _fetchUserData();
+    _profileFuture = _loadProfile();
   }
 
-  Future<Map<String, dynamic>> _fetchUserData() async {
+  Future<Map<String, dynamic>> _loadProfile() async {
     try {
       final token = await _storage.read(key: 'jwt_token');
+      if (token == null) throw Exception('Токен не найден');
 
-      if (token == null) throw Exception('No auth token');
+      final profile = await _apiService.getUserProfile(token);
 
-      return await _apiService.getUserProfile(token);
+      // Сохраняем роль для UI
+      final role = (profile['role'] ?? 'user').toString().toLowerCase();
+      if (mounted) {
+        setState(() {
+          _userRole = role;
+        });
+      }
+
+      return profile;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки профиля: $e')),
+          SnackBar(content: Text('Ошибка: $e')),
         );
       }
-
       return {};
     }
   }
 
-  Future<void> _handleLogout() async {
+  Future<void> _refresh() async {
+    if (mounted) {
+      setState(() {
+        _profileFuture = _loadProfile();
+      });
+    }
+  }
+
+  Future<void> _logout() async {
     try {
       final token = await _storage.read(key: 'jwt_token');
-
-      if (token != null) await _apiService.logout(token);
-
+      if (token != null) {
+        await _apiService.logout(token);
+      }
       await _storage.delete(key: 'jwt_token');
 
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
+        Navigator.pushAndRemoveUntil(
+          context,
           MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
+          (route) => false,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ошибка при выходе')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Ошибка выхода')));
       }
     }
-  }
-
-  Future<void> _refreshData() async {
-    setState(() {
-      _userDataFuture = _fetchUserData();
-    });
   }
 
   @override
@@ -86,64 +93,117 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _refreshData,
+            onPressed: _refresh,
+            tooltip: 'Обновить',
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _refreshData,
+        onRefresh: _refresh,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             children: [
+              // === Заголовок профиля ===
               FutureBuilder<Map<String, dynamic>>(
-                future: _userDataFuture,
+                future: _profileFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40.0),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  } else if (snapshot.hasError) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 40.0),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            const Text('Ошибка загрузки данных',
-                                style: TextStyle(color: Colors.red)),
-                            ElevatedButton(
-                              onPressed: _refreshData,
-                              child: const Text('Повторить'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
+                    return const _ProfileHeaderShimmer();
                   }
 
-                  return _buildProfileHeader(snapshot.data ?? {});
+                  if (snapshot.hasError ||
+                      !snapshot.hasData ||
+                      snapshot.data!.isEmpty) {
+                    return const _ProfileErrorCard();
+                  }
+
+                  return _ProfileHeader(user: snapshot.data!);
                 },
               ),
-              _buildSettingsSection(context),
+
+              // === Настройки ===
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Настройки',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const _SettingsItem(
+                icon: Icons.settings,
+                title: 'Настройки',
+                route: '/settings',
+              ),
+
+              const Divider(),
+
+              // === Другое ===
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Другое',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const _SettingsItem(
+                icon: Icons.info,
+                title: 'О приложении',
+                route: '/about',
+              ),
+
+              // === Админ-панель (только для superadmin) ===
+              if (_userRole == 'superadmin')
+                const _SettingsItem(
+                  icon: Icons.admin_panel_settings,
+                  title: 'Админ-панель',
+                  route: '/admin',
+                ),
+
+              _SettingsItem(
+                icon: Icons.logout,
+                title: 'Выйти',
+                color: Colors.red,
+                onTap: _logout,
+              ),
+
+              const SizedBox(height: 20),
             ],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildProfileHeader(Map<String, dynamic> userData) {
-    final fullName = userData['fullName']?.toString().trim() ?? 'Не указано';
+// === Заголовок профиля ===
+class _ProfileHeader extends StatelessWidget {
+  final Map<String, dynamic> user;
 
-    final position =
-        userData['position']?.toString().trim() ?? 'Должность не указана';
+  const _ProfileHeader({required this.user});
 
-    final avatarUrl = userData['avatarUrl']?.toString();
+  @override
+  Widget build(BuildContext context) {
+    final firstName = _safeString(user['firstName'] ?? user['first_name']);
+    final lastName = _safeString(user['lastName'] ?? user['last_name']);
+    final username = _safeString(user['username']);
+    final role = _safeString(user['role']).toLowerCase();
+
+    final fullName = (lastName.isNotEmpty || firstName.isNotEmpty)
+        ? '$lastName $firstName'.trim()
+        : (username.isNotEmpty ? username : 'Пользователь');
+
+    final avatarUrl = _safeString(user['avatarUrl']);
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 24.0),
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
       decoration: BoxDecoration(
         color: Colors.green[50],
         borderRadius: const BorderRadius.only(
@@ -155,9 +215,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           CircleAvatar(
             radius: 60,
-            backgroundImage: (avatarUrl == null || avatarUrl.isEmpty)
-                ? const AssetImage('assets/telegram.png') as ImageProvider
-                : NetworkImage(avatarUrl),
+            backgroundColor: Colors.white,
+            backgroundImage:
+                avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+            child: avatarUrl.isEmpty
+                ? const Icon(Icons.person, size: 60, color: Colors.grey)
+                : null,
           ),
           const SizedBox(height: 16),
           Text(
@@ -170,10 +233,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            position,
-            style: TextStyle(
+            _formatRole(role),
+            style: const TextStyle(
               fontSize: 18,
-              color: Colors.green[700],
+              color: Colors.green,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -182,74 +245,115 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildSettingsSection(BuildContext context) {
-    return Column(
-      children: [
-        const SizedBox(height: 20),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16.0),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Настройки',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        _buildSettingsItem(
-          context,
-          icon: Icons.settings,
-          title: 'Настройки',
-          onTap: () => Navigator.pushNamed(context, '/settings'),
-        ),
-        _buildSettingsItem(
-          context,
-          icon: Icons.notifications,
-          title: 'Уведомления',
-          onTap: () => Navigator.pushNamed(context, '/notifications'),
-        ),
-        const Divider(),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16.0),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Другое',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        _buildSettingsItem(
-          context,
-          icon: Icons.info,
-          title: 'О приложении',
-          onTap: () => Navigator.pushNamed(context, '/about'),
-        ),
-        _buildSettingsItem(
-          context,
-          icon: Icons.logout,
-          title: 'Выйти',
-          color: Colors.red,
-          onTap: _handleLogout,
-        ),
-      ],
-    );
+  String _safeString(dynamic value) {
+    if (value == null) return '';
+    return value.toString().trim();
   }
 
-  Widget _buildSettingsItem(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    Color? color,
-    required VoidCallback onTap,
-  }) {
+  String _formatRole(String role) {
+    return {
+          'user': 'Пользователь',
+          'scout': 'Скаут',
+          'supervisor': 'Супервайзер',
+          'coordinator': 'Координатор',
+          'superadmin': 'Суперадмин',
+        }[role] ??
+        role.toUpperCase();
+  }
+}
+
+// === Заглушка при загрузке ===
+class _ProfileHeaderShimmer extends StatelessWidget {
+  const _ProfileHeaderShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+      color: Colors.green[50],
+      child: Column(
+        children: [
+          const CircleAvatar(radius: 60, child: Icon(Icons.person, size: 60)),
+          const SizedBox(height: 16),
+          Container(
+            width: 150,
+            height: 20,
+            color: Colors.white,
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: 100,
+            height: 16,
+            color: Colors.white,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// === Ошибка загрузки ===
+class _ProfileErrorCard extends StatelessWidget {
+  const _ProfileErrorCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 60),
+      color: Colors.red[50],
+      child: Column(
+        children: [
+          const Icon(Icons.error, color: Colors.red, size: 48),
+          const SizedBox(height: 8),
+          const Text(
+            'Не удалось загрузить профиль',
+            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Повторяем...')),
+              );
+            },
+            child: const Text('Повторить'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// === Пункт меню ===
+class _SettingsItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color? color;
+  final String? route;
+  final VoidCallback? onTap;
+
+  const _SettingsItem({
+    required this.icon,
+    required this.title,
+    this.color,
+    this.route,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return ListTile(
       leading: Icon(icon, color: color ?? Colors.grey[700]),
       title: Text(title, style: TextStyle(color: color ?? Colors.black87)),
       trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-      onTap: onTap,
+      onTap: onTap ??
+          (route != null
+              ? () {
+                  Navigator.pushNamed(context, route!);
+                }
+              : null),
     );
   }
 }
