@@ -2,9 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
+import 'package:micro_mobility_app/models/active_shift.dart';
+import 'package:micro_mobility_app/models/shift_data.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/shift_provider.dart';
-import '../../../models/active_shift.dart';
 
 class SlotSetupModal extends StatefulWidget {
   const SlotSetupModal({super.key});
@@ -29,12 +30,9 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
   Future<void> _checkActiveShift() async {
     try {
-      final provider = context.read<ShiftProvider>();
-      await provider.loadShifts();
+      final activeShift = await _fetchActiveShift();
       if (mounted) {
-        setState(() {
-          _hasActiveShift = provider.slotState == SlotState.active;
-        });
+        setState(() => _hasActiveShift = activeShift != null);
       }
     } catch (e) {
       if (mounted) {
@@ -42,6 +40,16 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           SnackBar(content: Text('Ошибка проверки смены: $e')),
         );
       }
+    }
+  }
+
+  Future<ShiftData?> _fetchActiveShift() async {
+    try {
+      final provider = context.read<ShiftProvider>();
+      await provider.loadShifts();
+      return provider.shiftHistory.lastWhereOrNull((s) => s.isActive);
+    } catch (e) {
+      return null;
     }
   }
 
@@ -60,6 +68,50 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
   }
 
+  Future<void> _finish() async {
+    if (_hasActiveShift) {
+      _showActiveShiftError();
+      return;
+    }
+
+    if (_selectedTime == null || _selfie == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните все поля')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final compressedFile = await _compressImage(File(_selfie!.path));
+      await _startShift(compressedFile);
+      if (mounted) Navigator.pop(context, true);
+    } on ActiveShiftException catch (e) {
+      if (mounted) {
+        setState(() => _hasActiveShift = true);
+        _showActiveShiftError();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showActiveShiftError() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('У вас уже есть активная смена'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   Future<File> _compressImage(File imageFile) async {
     try {
       final bytes = await imageFile.readAsBytes();
@@ -76,43 +128,19 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
   }
 
-  Future<void> _finish() async {
-    if (_hasActiveShift) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('У вас уже есть активная смена')),
-      );
-      return;
-    }
-
-    if (_selectedTime == null || _selfie == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Заполните все поля')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
+  Future<void> _startShift(File compressedFile) async {
     try {
-      final compressedFile = await _compressImage(File(_selfie!.path));
-      final compressedXFile = XFile(compressedFile.path);
-
       await context.read<ShiftProvider>().startSlot(
             slotTimeRange: _selectedTime!,
             position: _position,
             zone: _zone,
-            selfie: compressedXFile,
+            selfie: XFile(compressedFile.path),
           );
-
-      if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: ${e.toString()}')),
-        );
+      if (e.toString().contains('Slot already active')) {
+        throw ActiveShiftException();
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      rethrow;
     }
   }
 
@@ -121,92 +149,59 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     return Container(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 16,
+        right: 16,
+        top: 16,
       ),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Начать новую смену',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
-              if (_selfie != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.file(
-                    File(_selfie!.path),
-                    height: 120,
-                    width: 120,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _hasActiveShift || _isLoading ? null : _takeSelfie,
-                icon: const Icon(Icons.camera_alt),
-                label: const Text('Сделать селфи'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[700],
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 24),
-              ..._buildTimeSlots(),
-              const SizedBox(height: 24),
-              _buildDropdown(
-                value: _position,
-                items: ['Курьер', 'Оператор', 'Менеджер'],
-                onChanged: (v) => setState(() => _position = v!),
-                hint: 'Должность',
-              ),
-              const SizedBox(height: 16),
-              _buildDropdown(
-                value: _zone,
-                items: ['Центр', 'Север', 'Юг', 'Запад', 'Восток'],
-                onChanged: (v) => setState(() => _zone = v!),
-                hint: 'Зона',
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _hasActiveShift ||
-                          _isLoading ||
-                          _selectedTime == null ||
-                          _selfie == null
-                      ? null
-                      : _finish,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        _hasActiveShift ? Colors.grey : Colors.green[700],
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : Text(
-                          _hasActiveShift
-                              ? 'Смена уже активна'
-                              : 'Начать смену',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                ),
-              ),
-            ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Начать новую смену',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
-        ),
+          const SizedBox(height: 20),
+          if (_selfie != null) _buildSelfiePreview(),
+          _buildSelfieButton(),
+          const SizedBox(height: 24),
+          ..._buildTimeSlots(),
+          const SizedBox(height: 24),
+          _buildPositionDropdown(),
+          const SizedBox(height: 16),
+          _buildZoneDropdown(),
+          const SizedBox(height: 24),
+          _buildSubmitButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelfiePreview() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.file(
+        File(_selfie!.path),
+        height: 120,
+        width: 120,
+        fit: BoxFit.cover,
+      ),
+    );
+  }
+
+  Widget _buildSelfieButton() {
+    return ElevatedButton.icon(
+      onPressed: _hasActiveShift || _isLoading ? null : _takeSelfie,
+      icon: const Icon(Icons.camera_alt),
+      label: const Text('Сделать селфи'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.blue[700],
+        padding: const EdgeInsets.symmetric(vertical: 12),
       ),
     );
   }
 
   List<Widget> _buildTimeSlots() {
-    const slots = [
-      '7:00 - 15:00',
-      '15:00 - 23:00',
-      '7:00 - 23:00',
-    ];
+    const slots = ['7:00 - 15:00', '15:00 - 23:00', '7:00 - 23:00'];
 
     return slots.map((slot) {
       final isSelected = _selectedTime == slot;
@@ -241,6 +236,24 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }).toList();
   }
 
+  Widget _buildPositionDropdown() {
+    return _buildDropdown(
+      value: _position,
+      items: ['Курьер', 'Оператор', 'Менеджер'],
+      onChanged: (v) => setState(() => _position = v!),
+      hint: 'Должность',
+    );
+  }
+
+  Widget _buildZoneDropdown() {
+    return _buildDropdown(
+      value: _zone,
+      items: ['Центр', 'Север', 'Юг', 'Запад', 'Восток'],
+      onChanged: (v) => setState(() => _zone = v!),
+      hint: 'Зона',
+    );
+  }
+
   Widget _buildDropdown({
     required String value,
     required List<String> items,
@@ -264,4 +277,30 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       ),
     );
   }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _hasActiveShift ||
+                _isLoading ||
+                _selectedTime == null ||
+                _selfie == null
+            ? null
+            : _finish,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _hasActiveShift ? Colors.grey : Colors.green[700],
+          padding: const EdgeInsets.symmetric(vertical: 16),
+        ),
+        child: _isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : Text(
+                _hasActiveShift ? 'Смена уже активна' : 'Начать смену',
+                style: const TextStyle(fontSize: 16),
+              ),
+      ),
+    );
+  }
 }
+
+class ActiveShiftException implements Exception {}
