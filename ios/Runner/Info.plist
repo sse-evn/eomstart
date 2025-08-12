@@ -17,6 +17,8 @@
 <key>NSAllowsArbitraryLoadsInWebContent</key>
 <true/>
 </dict>
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Нужна геолокация для начала слота</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

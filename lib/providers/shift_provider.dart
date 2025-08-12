@@ -3,100 +3,127 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // Импортируем Secure Storage
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/shift_data.dart';
 import '../services/api_service.dart';
 
 class ShiftProvider with ChangeNotifier {
-  final ApiService _apiService; // Теперь final
-  final FlutterSecureStorage _storage; // Добавляем Secure Storage
+  final ApiService _apiService;
+  final FlutterSecureStorage _storage;
+  final SharedPreferences _prefs;
 
   String? _token;
   SlotState _slotState = SlotState.inactive;
   List<ShiftData> _shiftHistory = [];
   DateTime _selectedDate = DateTime.now();
-  int _activeDurationInSeconds = 0;
   Timer? _timer;
+  DateTime? _startTime; // Время начала активного слота
 
-  // ✅ ИСПРАВЛЕНИЕ: Изменяем конструктор, чтобы принимать ApiService, FlutterSecureStorage
-  // и initialToken как именованные и обязательные параметры.
   ShiftProvider({
     required ApiService apiService,
     required FlutterSecureStorage storage,
-    String? initialToken, // Токен, переданный из main.dart
+    required SharedPreferences prefs,
+    String? initialToken,
   })  : _apiService = apiService,
-        _storage = storage {
-    _token = initialToken; // Устанавливаем токен здесь
-    _initializeShiftProvider(); // Инициализируем провайдер после установки токена
+        _storage = storage,
+        _prefs = prefs {
+    _token = initialToken;
+    _initializeShiftProvider();
   }
 
   Future<void> _initializeShiftProvider() async {
     print('✅ ShiftProvider: Инициализация...');
-    // Токен уже должен быть установлен через конструктор
-    // но на всякий случай, если бы мы вызывали этот метод отдельно:
-    // _token = await _storage.read(key: 'jwt_token');
 
-    final String? storedSlotState = await _storage.read(key: 'slot_state');
-    if (storedSlotState == 'active') {
+    if (_token == null) {
+      _token = await _storage.read(key: 'jwt_token');
+    }
+
+    // Восстанавливаем startTime из SharedPreferences
+    final String? savedStartTime = _prefs.getString('active_slot_start_time');
+    final String? storedState = await _storage.read(key: 'slot_state');
+
+    if (storedState == 'active' && savedStartTime != null) {
       _slotState = SlotState.active;
-      // Если слот был активен, нужно восстановить duration.
-      // Это может быть сделано через API-запрос к серверу,
-      // или если сервер возвращает время начала активного слота.
-      // Для простоты здесь мы пока не восстанавливаем точное время,
-      // но в реальном приложении это важно.
-      // Например, можно сохранить startTime в storage и потом вычитать.
-      print('✅ ShiftProvider: Восстановлено активное состояние слота.');
+      _startTime = DateTime.parse(savedStartTime);
+      print(
+          '✅ ShiftProvider: Восстановлено активное состояние. Начало: $_startTime');
     } else {
       _slotState = SlotState.inactive;
+      _startTime = null;
     }
-    await loadShifts(); // Загружаем смены после инициализации
-    notifyListeners();
-    // Запускаем таймер только если слот действительно активен
+
+    // Загружаем смены и проверяем активный слот на сервере
+    await loadShifts();
+
+    // Запускаем таймер, если слот активен
     if (_slotState == SlotState.active) {
       _startTimer();
     }
   }
 
-  // Метод setToken теперь сохраняет токен и загружает данные
-  // Его логика изменена, чтобы соответствовать новому потоку инициализации
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      notifyListeners(); // Обновляем UI каждую секунду
+    });
+  }
+
   Future<void> setToken(String token) async {
     _token = token;
-    await _storage.write(key: 'jwt_token', value: token); // Сохраняем токен
-    print('✅ ShiftProvider: Токен установлен и сохранен: $token');
-    await _initializeShiftProvider(); // Переинициализируем провайдер с новым токеном
+    await _storage.write(key: 'jwt_token', value: token);
+    print('✅ Токен сохранён');
+    await _initializeShiftProvider();
   }
 
   SlotState get slotState => _slotState;
   List<ShiftData> get shiftHistory => _shiftHistory;
   DateTime get selectedDate => _selectedDate;
-  int get activeDuration => _activeDurationInSeconds;
+  DateTime? get startTime => _startTime;
 
   String get formattedWorkTime {
-    final h = _activeDurationInSeconds ~/ 3600;
-    final m = (_activeDurationInSeconds % 3600) ~/ 60;
+    if (_startTime == null) return '0ч 0мин';
+    final duration = DateTime.now().difference(_startTime!);
+    final h = duration.inHours;
+    final m = (duration.inMinutes % 60);
     return '${h}ч ${m}мин';
-  }
-
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _activeDurationInSeconds++;
-      if (_activeDurationInSeconds % 10 == 0) {
-        // Обновляем UI только каждые 10 секунд
-        notifyListeners();
-      }
-    });
   }
 
   Future<void> loadShifts() async {
     if (_token == null) {
-      print('❌ ShiftProvider: Токен не установлен, не могу загрузить смены');
+      print('❌ ShiftProvider: Токен не установлен');
       return;
     }
     try {
       print('✅ Загружаю смены...');
       _shiftHistory = await _apiService.getShifts(_token!);
       print('✅ Смены загружены: ${_shiftHistory.length} записей');
+
+      // 🔍 Проверяем, есть ли активный слот на сервере
+      final activeShift = _shiftHistory.lastWhereOrNull((s) => s.isActive);
+      if (activeShift != null) {
+        if (_slotState != SlotState.active) {
+          _slotState = SlotState.active;
+          _startTime = DateTime.parse(activeShift.startTime);
+
+          // Сохраняем локально
+          await _storage.write(key: 'slot_state', value: 'active');
+          await _prefs.setString(
+              'active_slot_start_time', _startTime!.toIso8601String());
+
+          _startTimer();
+          print('✅ Восстановлен активный слот с сервера: $_startTime');
+        }
+      } else {
+        // Если на сервере нет активного слота, но у нас был — сбросим
+        if (_slotState == SlotState.active) {
+          _slotState = SlotState.inactive;
+          _startTime = null;
+          await _storage.write(key: 'slot_state', value: 'inactive');
+          await _prefs.remove('active_slot_start_time');
+        }
+      }
+
       notifyListeners();
     } catch (e) {
       print('❌ Ошибка загрузки смен: $e');
@@ -114,9 +141,10 @@ class ShiftProvider with ChangeNotifier {
     required String zone,
     required XFile selfie,
   }) async {
-    print('✅ ShiftProvider.startSlot вызван');
-    print(
-        'Slot: $slotTimeRange, Pos: $position, Zone: $zone, Selfie: ${selfie.path}');
+    if (_slotState == SlotState.active) {
+      print('⚠️ Слот уже активен. Отмена повторного запуска.');
+      return;
+    }
 
     if (_token == null) {
       print('❌ Ошибка: Токен не установлен');
@@ -132,17 +160,20 @@ class ShiftProvider with ChangeNotifier {
         zone: zone,
         selfieImage: imageFile,
       );
-      print('✅ API: Слот успешно начат');
 
+      _startTime = DateTime.now();
       _slotState = SlotState.active;
-      _activeDurationInSeconds = 0;
-      //_startTimer(); // Таймер запускается в _initializeShiftProvider
-      await _storage.write(
-          key: 'slot_state', value: 'active'); // Сохраняем состояние слота
+
+      // Сохраняем
+      await _storage.write(key: 'slot_state', value: 'active');
+      await _prefs.setString(
+          'active_slot_start_time', _startTime!.toIso8601String());
+
+      _startTimer();
       await loadShifts();
       notifyListeners();
-      // Перезапускаем таймер после успешного старта
-      _startTimer();
+
+      print('✅ Слот успешно начат');
     } catch (e) {
       print('❌ Ошибка при старте слота: $e');
       rethrow;
@@ -151,17 +182,24 @@ class ShiftProvider with ChangeNotifier {
 
   Future<void> endSlot() async {
     if (_token == null) throw Exception('Токен не установлен');
+    if (_slotState != SlotState.active) return;
+
     try {
       await _apiService.endSlot(_token!);
+
       _slotState = SlotState.inactive;
       _timer?.cancel();
-      _activeDurationInSeconds = 0;
-      await _storage.write(
-          key: 'slot_state', value: 'inactive'); // Сохраняем состояние слота
+      _startTime = null;
+
+      await _storage.write(key: 'slot_state', value: 'inactive');
+      await _prefs.remove('active_slot_start_time');
+
       await loadShifts();
       notifyListeners();
+
+      print('✅ Слот завершён');
     } catch (e) {
-      print('❌ Ошибка при завершении слота: $e'); // Добавил вывод ошибки
+      print('❌ Ошибка при завершении слота: $e');
       rethrow;
     }
   }
@@ -174,3 +212,14 @@ class ShiftProvider with ChangeNotifier {
 }
 
 enum SlotState { inactive, active }
+
+// ✅ Расширение для безопасного поиска
+extension IterableFirstOrNull<T> on Iterable<T> {
+  T? lastWhereOrNull(bool Function(T) test) {
+    T? result;
+    for (final item in this) {
+      if (test(item)) result = item;
+    }
+    return result;
+  }
+}

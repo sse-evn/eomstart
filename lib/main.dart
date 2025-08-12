@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:micro_mobility_app/settings_provider.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
@@ -24,16 +25,18 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ru', null);
 
+  // Инициализация всех зависимостей
   final _storage = const FlutterSecureStorage();
   final _apiService = ApiService();
+  final _prefs = await SharedPreferences.getInstance();
+
   String initialRoute = '/';
-  String?
-      initialToken; // Переименовал, чтобы избежать конфликта с 'token' в MyApp
+  String? initialToken;
 
   final String? storedToken = await _storage.read(key: 'jwt_token');
 
   if (storedToken != null && storedToken.isNotEmpty) {
-    initialToken = storedToken; // Сохраняем токен для передачи в MyApp
+    initialToken = storedToken;
     try {
       final profile = await _apiService.getUserProfile(storedToken);
       final role = (profile['role'] ?? 'user').toString().toLowerCase();
@@ -50,9 +53,8 @@ void main() async {
       }
     } catch (e) {
       debugPrint('Ошибка получения профиля при старте: $e');
-      // Если токен невалиден или ошибка сети, сбрасываем маршрут на логин
       initialRoute = '/';
-      await _storage.delete(key: 'jwt_token'); // Удаляем невалидный токен
+      await _storage.delete(key: 'jwt_token');
     }
   }
 
@@ -60,37 +62,66 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        // Передаем ApiService и FlutterSecureStorage в ShiftProvider
         ChangeNotifierProvider(
-            create: (_) => ShiftProvider(
-                  apiService:
-                      _apiService, // Передаем существующий экземпляр ApiService
-                  storage:
-                      _storage, // Передаем существующий экземпляр FlutterSecureStorage
-                  initialToken: initialToken, // Передаем загруженный токен
-                )),
+          create: (_) => ShiftProvider(
+            apiService: _apiService,
+            storage: _storage,
+            prefs: _prefs,
+            initialToken: initialToken,
+          ),
+        ),
       ],
-      child: MyApp(initialRoute: initialRoute, token: initialToken),
+      child: MyApp(
+        initialRoute: initialRoute,
+        token: initialToken,
+      ),
     ),
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final String initialRoute;
   final String? token;
 
   const MyApp({super.key, required this.initialRoute, this.token});
 
   @override
-  Widget build(BuildContext context) {
-    // ✅ Удаляем этот блок. ShiftProvider теперь сам инициализируется с токеном.
-    // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //   if (token != null) {
-    //     context.read<ShiftProvider>().setToken(token!);
-    //     print('✅ Токен передан в ShiftProvider: $token');
-    //   }
-    // });
+  State<MyApp> createState() => _MyAppState();
+}
 
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  late ShiftProvider _shiftProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Получаем ShiftProvider после инициализации
+    _shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // При возвращении из фона — обновляем данные
+      print('✅ Приложение вернулось из фона — обновляем смены');
+      _shiftProvider.loadShifts();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Оператор микромобильности',
       theme: ThemeData(
@@ -103,7 +134,7 @@ class MyApp extends StatelessWidget {
         ),
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      initialRoute: initialRoute,
+      initialRoute: widget.initialRoute,
       routes: {
         '/': (context) => const LoginScreen(),
         '/dashboard': (context) => const DashboardScreen(),

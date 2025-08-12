@@ -1,4 +1,3 @@
-// lib/models/shift_data.dart
 class ShiftData {
   final DateTime date;
   final String selectedSlot;
@@ -6,6 +5,8 @@ class ShiftData {
   final String workPeriod;
   final String transportStatus;
   final int newTasks;
+  final bool isActive; // ✅ Добавлено
+  final String startTime; // ✅ Добавлено (в виде строки ISO)
 
   ShiftData({
     required this.date,
@@ -14,6 +15,8 @@ class ShiftData {
     required this.workPeriod,
     required this.transportStatus,
     required this.newTasks,
+    required this.isActive,
+    required this.startTime,
   });
 
   factory ShiftData.fromJson(Map<String, dynamic> json) {
@@ -24,6 +27,9 @@ class ShiftData {
       workPeriod: json['work_period'] ?? '',
       transportStatus: json['transport_status'] ?? 'Транспорт не указан',
       newTasks: json['new_tasks'] ?? 0,
+      isActive: json['is_active'] as bool? ?? false,
+      startTime:
+          json['start_time'] as String? ?? DateTime.now().toIso8601String(),
     );
   }
 }

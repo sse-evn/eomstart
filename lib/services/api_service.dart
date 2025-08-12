@@ -3,17 +3,18 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:micro_mobility_app/models/active_shift.dart';
 import '../models/shift_data.dart';
 
 class ApiService {
-  // ✅ Убраны пробелы!
-  static const String _baseUrl = 'https://eom-sharing.duckdns.org/api';
+  // ✅ Исправлено: убраны пробелы, переименовано в публичное
+  static const String baseUrl = 'https://eom-sharing.duckdns.org/api';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   Future<Map<String, dynamic>> getUserProfile(String token) async {
     final response = await http.get(
-      Uri.parse('$_baseUrl/profile'),
+      Uri.parse('$baseUrl/profile'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -30,7 +31,7 @@ class ApiService {
 
   Future<void> logout(String token) async {
     await http.post(
-      Uri.parse('$_baseUrl/logout'),
+      Uri.parse('$baseUrl/logout'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -40,7 +41,7 @@ class ApiService {
 
   Future<List<dynamic>> getAdminUsers(String token) async {
     final response = await http.get(
-      Uri.parse('$_baseUrl/admin/users'),
+      Uri.parse('$baseUrl/admin/users'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -57,7 +58,7 @@ class ApiService {
 
   Future<void> updateUserRole(String token, int userId, String newRole) async {
     final response = await http.patch(
-      Uri.parse('$_baseUrl/admin/users/$userId/role'),
+      Uri.parse('$baseUrl/admin/users/$userId/role'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -74,7 +75,7 @@ class ApiService {
   Future<void> createUser(
       String token, String username, String firstName) async {
     final response = await http.post(
-      Uri.parse('$_baseUrl/admin/users'),
+      Uri.parse('$baseUrl/admin/users'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -93,7 +94,7 @@ class ApiService {
 
   Future<void> deleteUser(String token, int userId) async {
     final response = await http.delete(
-      Uri.parse('$_baseUrl/admin/users/$userId'),
+      Uri.parse('$baseUrl/admin/users/$userId'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -108,7 +109,7 @@ class ApiService {
 
   Future<void> activateUser(String token, int userId) async {
     final response = await http.patch(
-      Uri.parse('$_baseUrl/admin/users/$userId/status'),
+      Uri.parse('$baseUrl/admin/users/$userId/status'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -123,7 +124,7 @@ class ApiService {
 
   Future<void> deactivateUser(String token, int userId) async {
     final response = await http.patch(
-      Uri.parse('$_baseUrl/admin/users/$userId/status'),
+      Uri.parse('$baseUrl/admin/users/$userId/status'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -136,11 +137,9 @@ class ApiService {
     }
   }
 
-  // === НОВЫЕ МЕТОДЫ ===
-
   Future<List<ShiftData>> getShifts(String token) async {
     final response = await http.get(
-      Uri.parse('$_baseUrl/shifts'),
+      Uri.parse('$baseUrl/shifts'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -165,23 +164,20 @@ class ApiService {
   }) async {
     final request = http.MultipartRequest(
       'POST',
-      Uri.parse('$_baseUrl/slot/start'),
+      Uri.parse('$baseUrl/slot/start'),
     );
 
-    // ✅ Заголовок Authorization добавлен
     request.headers['Authorization'] = 'Bearer $token';
     request.fields['slot_time_range'] = slotTimeRange;
     request.fields['position'] = position;
     request.fields['zone'] = zone;
-
-    // ✅ Фото
     request.files
         .add(await http.MultipartFile.fromPath('selfie', selfieImage.path));
 
     final response = await request.send();
     final resp = await http.Response.fromStream(response);
 
-    if (response.statusCode != 200 && response.statusCode != 201) {
+    if (resp.statusCode != 200 && resp.statusCode != 201) {
       throw Exception(
           'Failed to start slot: ${resp.reasonPhrase} - ${utf8.decode(resp.bodyBytes)}');
     }
@@ -189,7 +185,7 @@ class ApiService {
 
   Future<void> endSlot(String token) async {
     final response = await http.post(
-      Uri.parse('$_baseUrl/slot/end'),
+      Uri.parse('$baseUrl/slot/end'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -199,6 +195,25 @@ class ApiService {
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(
           'Failed to end slot: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+    }
+  }
+
+  // ✅ Исправлено: правильный URL и обработка ошибок
+  Future<List<ActiveShift>> getActiveShifts(String token) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/shifts/active'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> jsonList = jsonDecode(response.body);
+      return jsonList.map((json) => ActiveShift.fromJson(json)).toList();
+    } else {
+      throw Exception(
+          'Failed to load active shifts: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
     }
   }
 }
