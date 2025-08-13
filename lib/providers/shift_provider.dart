@@ -3,8 +3,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:micro_mobility_app/models/active_shift.dart' show ActiveShift;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/shift_data.dart';
+import '../models/shift_data.dart' as shift_data;
 import '../services/api_service.dart';
 
 class ShiftProvider with ChangeNotifier {
@@ -14,7 +15,7 @@ class ShiftProvider with ChangeNotifier {
 
   String? _token;
   SlotState _slotState = SlotState.inactive;
-  List<ShiftData> _shiftHistory = [];
+  List<shift_data.ShiftData> _shiftHistory = [];
   DateTime _selectedDate = DateTime.now();
   Timer? _timer;
   DateTime? _startTime;
@@ -36,29 +37,37 @@ class ShiftProvider with ChangeNotifier {
       _token = await _storage.read(key: 'jwt_token');
     }
 
-    final String? savedStartTime = _prefs.getString('active_slot_start_time');
-    final String? storedState = await _storage.read(key: 'slot_state');
+    final savedStartTime = _prefs.getString('active_slot_start_time');
+    final storedState = await _storage.read(key: 'slot_state');
 
     if (storedState == 'active' && savedStartTime != null) {
-      _slotState = SlotState.active;
-      _startTime = DateTime.parse(savedStartTime);
+      try {
+        _slotState = SlotState.active;
+        _startTime = DateTime.parse(savedStartTime);
+      } catch (_) {
+        _slotState = SlotState.inactive;
+        _startTime = null;
+        await _storage.write(key: 'slot_state', value: 'inactive');
+        await _prefs.remove('active_slot_start_time');
+      }
     } else {
       _slotState = SlotState.inactive;
       _startTime = null;
     }
 
     await loadShifts();
-
-    if (_slotState == SlotState.active) {
+    if (_slotState == SlotState.active && _startTime != null) {
       _startTimer();
     }
   }
 
   void _startTimer() {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      notifyListeners();
-    });
+    if (_startTime != null) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        notifyListeners();
+      });
+    }
   }
 
   Future<void> setToken(String token) async {
@@ -68,16 +77,14 @@ class ShiftProvider with ChangeNotifier {
   }
 
   SlotState get slotState => _slotState;
-  List<ShiftData> get shiftHistory => _shiftHistory;
+  List<shift_data.ShiftData> get shiftHistory => _shiftHistory;
   DateTime get selectedDate => _selectedDate;
   DateTime? get startTime => _startTime;
 
   String get formattedWorkTime {
     if (_startTime == null) return '0ч 0мин';
     final duration = DateTime.now().difference(_startTime!);
-    final h = duration.inHours;
-    final m = (duration.inMinutes % 60);
-    return '${h}ч ${m}мин';
+    return '${duration.inHours}ч ${duration.inMinutes % 60}мин';
   }
 
   Future<void> loadShifts() async {
@@ -85,11 +92,11 @@ class ShiftProvider with ChangeNotifier {
 
     try {
       _shiftHistory = await _apiService.getShifts(_token!);
-
       final activeShift = await _apiService.getActiveShift(_token!);
 
-      if (activeShift != null) {
-        if (_slotState != SlotState.active) {
+      if (activeShift != null && activeShift.startTime != null) {
+        if (_slotState != SlotState.active ||
+            _startTime != activeShift.startTime) {
           _slotState = SlotState.active;
           _startTime = activeShift.startTime;
           await _storage.write(key: 'slot_state', value: 'active');
@@ -97,26 +104,24 @@ class ShiftProvider with ChangeNotifier {
               'active_slot_start_time', _startTime!.toIso8601String());
           _startTimer();
         }
-      } else {
-        if (_slotState == SlotState.active) {
-          _slotState = SlotState.inactive;
-          _startTime = null;
-          await _storage.write(key: 'slot_state', value: 'inactive');
-          await _prefs.remove('active_slot_start_time');
-          _timer?.cancel();
-        }
+      } else if (_slotState == SlotState.active) {
+        _slotState = SlotState.inactive;
+        _startTime = null;
+        await _storage.write(key: 'slot_state', value: 'inactive');
+        await _prefs.remove('active_slot_start_time');
+        _timer?.cancel();
       }
 
       notifyListeners();
-    } catch (e) {
+    } catch (_) {
       if (_slotState == SlotState.active) {
         _slotState = SlotState.inactive;
         _startTime = null;
         await _storage.write(key: 'slot_state', value: 'inactive');
         await _prefs.remove('active_slot_start_time');
         _timer?.cancel();
-        notifyListeners();
       }
+      notifyListeners();
     }
   }
 
@@ -134,63 +139,50 @@ class ShiftProvider with ChangeNotifier {
     if (_slotState == SlotState.active) return;
     if (_token == null) throw Exception('Токен не установлен');
 
-    final File imageFile = File(selfie.path);
-    try {
-      await _apiService.startSlot(
-        token: _token!,
-        slotTimeRange: slotTimeRange,
-        position: position,
-        zone: zone,
-        selfieImage: imageFile,
-      );
+    final imageFile = File(selfie.path);
+    await _apiService.startSlot(
+      token: _token!,
+      slotTimeRange: slotTimeRange,
+      position: position,
+      zone: zone,
+      selfieImage: imageFile,
+    );
 
-      _startTime = DateTime.now();
-      _slotState = SlotState.active;
-
-      await _storage.write(key: 'slot_state', value: 'active');
-      await _prefs.setString(
-          'active_slot_start_time', _startTime!.toIso8601String());
-
-      _startTimer();
-      await loadShifts();
-      notifyListeners();
-    } catch (e) {
-      rethrow;
-    }
+    _startTime = DateTime.now();
+    _slotState = SlotState.active;
+    await _storage.write(key: 'slot_state', value: 'active');
+    await _prefs.setString(
+        'active_slot_start_time', _startTime!.toIso8601String());
+    _startTimer();
+    await loadShifts();
+    notifyListeners();
   }
 
   Future<void> endSlot() async {
     if (_token == null) throw Exception('Токен не установлен');
     if (_slotState != SlotState.active) return;
 
-    try {
-      await _apiService.endSlot(_token!);
-
-      _slotState = SlotState.inactive;
-      _timer?.cancel();
-      _startTime = null;
-
-      await _storage.write(key: 'slot_state', value: 'inactive');
-      await _prefs.remove('active_slot_start_time');
-
-      await loadShifts();
-      notifyListeners();
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// Новый метод — устанавливает активную смену вручную
-  void setActiveShift(ShiftData activeShift) {
-    _slotState = SlotState.active;
-    _startTime = activeShift.startTime as DateTime?;
-    _storage.write(key: 'slot_state', value: 'active');
-    _prefs.setString('active_slot_start_time', _startTime!.toIso8601String());
-    _startTimer();
+    await _apiService.endSlot(_token!);
+    _slotState = SlotState.inactive;
+    _timer?.cancel();
+    _startTime = null;
+    await _storage.write(key: 'slot_state', value: 'inactive');
+    await _prefs.remove('active_slot_start_time');
+    await loadShifts();
     notifyListeners();
   }
 
-  /// Новый метод — сбрасывает активную смену
+  void setActiveShift(ActiveShift activeShift) {
+    if (activeShift.startTime != null) {
+      _slotState = SlotState.active;
+      _startTime = activeShift.startTime;
+      _storage.write(key: 'slot_state', value: 'active');
+      _prefs.setString('active_slot_start_time', _startTime!.toIso8601String());
+      _startTimer();
+    }
+    notifyListeners();
+  }
+
   void clearActiveShift() {
     _slotState = SlotState.inactive;
     _startTime = null;

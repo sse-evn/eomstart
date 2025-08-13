@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:micro_mobility_app/models/active_shift.dart';
-import '../models/shift_data.dart';
+import 'package:micro_mobility_app/models/active_shift.dart' as active_shift;
+import '../models/shift_data.dart' as shift_data;
 
 class ApiService {
   static const String baseUrl = 'https://eom-sharing.duckdns.org/api';
@@ -63,7 +63,11 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body) as List<dynamic>;
+      final dynamic body = jsonDecode(response.body);
+      if (body is List) {
+        return body;
+      }
+      return [];
     } else {
       throw Exception(
           'Failed to load users: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
@@ -150,21 +154,43 @@ class ApiService {
     }
   }
 
-  Future<List<ShiftData>> getShifts(String token) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/shifts'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+  Future<List<shift_data.ShiftData>> getShifts(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/shifts'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
-    if (response.statusCode == 200) {
-      final List<dynamic> jsonList = jsonDecode(response.body);
-      return jsonList.map((json) => ShiftData.fromJson(json)).toList();
-    } else {
-      throw Exception(
-          'Failed to load shifts: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      if (response.statusCode == 200) {
+        final dynamic body = jsonDecode(response.body);
+
+        // Более безопасная обработка данных
+        if (body is List) {
+          List<shift_data.ShiftData> shifts = [];
+          for (var item in body) {
+            try {
+              if (item is Map<String, dynamic>) {
+                shifts.add(shift_data.ShiftData.fromJson(item));
+              }
+            } catch (e) {
+              print('Error parsing shift item: $e');
+              continue;
+            }
+          }
+          return shifts;
+        }
+        return [];
+      } else {
+        print('Shifts API error: ${response.statusCode} - ${response.body}');
+        throw Exception(
+            'Failed to load shifts: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      }
+    } catch (e) {
+      print('Network error in getShifts: $e');
+      rethrow;
     }
   }
 
@@ -175,43 +201,66 @@ class ApiService {
     required String zone,
     required File selfieImage,
   }) async {
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$baseUrl/slot/start'),
-    );
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/slot/start'),
+      );
 
-    request.headers['Authorization'] = 'Bearer $token';
-    request.fields['slot_time_range'] = slotTimeRange;
-    request.fields['position'] = position;
-    request.fields['zone'] = zone;
-    request.files
-        .add(await http.MultipartFile.fromPath('selfie', selfieImage.path));
+      request.headers['Authorization'] = 'Bearer $token';
+      request.fields['slot_time_range'] = slotTimeRange;
+      request.fields['position'] = position;
+      request.fields['zone'] = zone;
 
-    final response = await request.send();
-    final resp = await http.Response.fromStream(response);
+      // Проверяем существование файла перед добавлением
+      if (await selfieImage.exists()) {
+        request.files
+            .add(await http.MultipartFile.fromPath('selfie', selfieImage.path));
+      } else {
+        throw Exception('Selfie file does not exist');
+      }
 
-    if (resp.statusCode != 200 && resp.statusCode != 201) {
-      throw Exception(
-          'Failed to start slot: ${resp.reasonPhrase} - ${utf8.decode(resp.bodyBytes)}');
+      final response = await request.send();
+      final resp = await http.Response.fromStream(response);
+      print(
+          'Start slot response: ${resp.statusCode} - ${utf8.decode(resp.bodyBytes)}');
+
+      if (resp.statusCode != 200 && resp.statusCode != 201) {
+        throw Exception(
+            'Failed to start slot: ${resp.reasonPhrase} - ${utf8.decode(resp.bodyBytes)}');
+      }
+    } catch (e) {
+      print('Error in startSlot: $e');
+      rethrow;
     }
   }
 
   Future<void> endSlot(String token) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/slot/end'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/slot/end'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
-    if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception(
-          'Failed to end slot: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw Exception(
+            'Failed to end slot: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      }
+    } catch (e) {
+      print('Error in endSlot: $e');
+      rethrow;
     }
   }
 
-  Future<ActiveShift?> getActiveShift(String token) async {
+  Future<active_shift.ActiveShift?> getActiveShift(String token) async {
+    final shifts = await getActiveShifts(token);
+    return shifts.isNotEmpty ? shifts.first : null;
+  }
+
+  Future<List<active_shift.ActiveShift>> getActiveShifts(String token) async {
     final response = await http.get(
       Uri.parse('$baseUrl/shifts/active'),
       headers: {
@@ -221,16 +270,50 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data == null) return null;
-      if (data is Map<String, dynamic>) {
-        return ActiveShift.fromJson(data);
+      if (response.body == 'null' || response.body.isEmpty) {
+        return [];
       }
-      throw Exception('Invalid response format: expected object or null');
+
+      final dynamic body = jsonDecode(response.body);
+      if (body is List) {
+        List<active_shift.ActiveShift> shifts = [];
+        for (var item in body) {
+          try {
+            if (item is Map<String, dynamic>) {
+              shifts.add(active_shift.ActiveShift.fromJson(item));
+            }
+          } catch (e) {
+            print('Error parsing active shift item: $e');
+            continue;
+          }
+        }
+        return shifts;
+      }
+      return [];
     } else {
       throw Exception(
-        'Failed to load active shift: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}',
-      );
+          'Failed to load active shifts: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+    }
+  }
+
+  Future<List<String>> getAvailablePositions(String token) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/slots/positions'), // предполагаемый эндпоинт
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final dynamic body = jsonDecode(response.body);
+      if (body is List) {
+        return body.map((e) => e.toString()).toList();
+      }
+      return [];
+    } else {
+      throw Exception(
+          'Failed to load positions: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
     }
   }
 
@@ -244,52 +327,14 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      final body = jsonDecode(response.body);
-      final list = (body as List?) ?? [];
-      return list.map((e) => e.toString()).toList();
+      final dynamic body = jsonDecode(response.body);
+      if (body is List) {
+        return body.map((e) => e.toString()).toList();
+      }
+      return [];
     } else {
       throw Exception(
-        'Failed to load time slots: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}',
-      );
-    }
-  }
-
-  Future<List<ActiveShift>> getActiveShifts(String token) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/shifts/active'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final body = jsonDecode(response.body);
-      final list = (body as List?) ?? [];
-      return list.map((e) => ActiveShift.fromJson(e)).toList();
-    } else {
-      throw Exception(
-        'Failed to load active shifts: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}',
-      );
-    }
-  }
-
-  Future<List<String>> getAvailablePositions(String token) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/slots/positions'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final List<dynamic> body = jsonDecode(response.body);
-      return body.map((e) => e.toString()).toList();
-    } else {
-      throw Exception(
-        'Failed to load positions: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}',
-      );
+          'Failed to load time slots: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
     }
   }
 
@@ -303,12 +348,14 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      final List<dynamic> body = jsonDecode(response.body);
-      return body.map((e) => e.toString()).toList();
+      final dynamic body = jsonDecode(response.body);
+      if (body is List) {
+        return body.map((e) => e.toString()).toList();
+      }
+      return [];
     } else {
       throw Exception(
-        'Failed to load zones: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}',
-      );
+          'Failed to load zones: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
     }
   }
 }

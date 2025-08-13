@@ -1,5 +1,3 @@
-// lib/modals/slot_setup_modal.dart
-
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -18,24 +16,28 @@ class SlotSetupModal extends StatefulWidget {
   State<SlotSetupModal> createState() => _SlotSetupModalState();
 }
 
-class _SlotSetupModalState extends State<SlotSetupModal> {
+class _SlotSetupModalState extends State<SlotSetupModal>
+    with TickerProviderStateMixin {
   final _storage = const FlutterSecureStorage();
   final _picker = ImagePicker();
   final _apiService = ApiService();
   String? _selectedTime;
-  String? _position; // Теперь может быть null до загрузки
-  String _zone = 'Центр';
+  String? _position;
+  String? _zone;
   XFile? _selfie;
   bool _isLoading = false;
   bool _hasActiveShift = false;
   bool _backendConflict = false;
+  bool _hasError = false;
+  String _errorMessage = '';
   List<String> _timeSlots = [];
   List<String> _positions = [];
   List<String> _zones = [];
   String? _token;
   Timer? _syncTimer;
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
 
-  // Маппинг ролей на понятные названия
   static final Map<String, String> _roleLabels = {
     'scout': 'Скаут',
     'supervisor': 'Супервайзер',
@@ -49,6 +51,14 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _scaleAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
     _initializeData();
     _startSyncTimer();
   }
@@ -56,6 +66,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   @override
   void dispose() {
     _syncTimer?.cancel();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -66,65 +77,79 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   }
 
   Future<void> _initializeData() async {
-    setState(() => _isLoading = true);
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
+    });
+
     try {
       _token = await _storage.read(key: 'jwt_token');
-      if (_token == null) throw Exception('Требуется авторизация');
-
-      // Получаем профиль и устанавливаем должность
-      final profile = await _apiService.getUserProfile(_token!);
-      debugPrint('✅ Профиль загружен: $profile');
-
-      final role = (profile['role'] ?? '').toString().toLowerCase();
-      final displayName = _roleLabels[role] ?? role.capitalize();
-
-      // Получаем доступные позиции с бэкенда
-      final positions = await _apiService.getAvailablePositions(_token!);
-      if (positions.isEmpty) {
-        positions.addAll(_roleLabels.values.toList());
+      if (_token == null) {
+        throw Exception('Требуется авторизация');
       }
 
-      if (mounted) {
-        setState(() {
-          _positions = positions;
-          // Если пользовательская роль есть в доступных позициях — выбираем её
-          _position =
-              positions.contains(displayName) ? displayName : positions.first;
-        });
-      }
-
-      // Остальные данные
-      await _syncWithServer();
       await Future.wait([
+        _loadUserProfile(),
         _loadTimeSlots(),
         _loadZones(),
+        _syncWithServer(),
       ]);
     } catch (e) {
-      debugPrint('❌ Ошибка инициализации: $e');
-      if (mounted) {
-        setState(() {
-          _positions = ['Курьер', 'Оператор', 'Менеджер', 'Скаут'];
-          _position = _positions.first;
-        });
-      }
-      _showError('Ошибка загрузки данных: ${e.toString()}');
+      _handleInitializationError(e);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _syncWithServer() async {
+  Future<void> _loadUserProfile() async {
     try {
-      final activeShift = await _apiService.getActiveShift(_token!);
+      final profile = await _apiService.getUserProfile(_token!);
+      final role = (profile['role'] ?? '').toString().toLowerCase();
+      final displayName = _roleLabels[role] ?? role.capitalize();
+
+      final positions = await _apiService.getAvailablePositions(_token!);
+
       if (mounted) {
         setState(() {
-          _hasActiveShift = activeShift != null;
-          _backendConflict = false;
+          _positions = positions;
+          _position = _positions.contains(displayName)
+              ? displayName
+              : _positions.isNotEmpty
+                  ? _positions.first
+                  : null;
         });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _positions = [];
+          _position = null;
+        });
+      }
+      throw e;
+    }
+  }
+
+  Future<void> _syncWithServer() async {
+    if (_token == null) return;
+
+    try {
+      final activeShift = await _apiService.getActiveShift(_token!);
+
+      if (mounted) {
+        final hasActiveShift = activeShift != null;
+        if (this._hasActiveShift != hasActiveShift) {
+          setState(() {
+            _hasActiveShift = hasActiveShift;
+            _backendConflict = false;
+          });
+        }
 
         final provider = Provider.of<ShiftProvider>(context, listen: false);
         if (activeShift != null) {
-          provider.setActiveShift(activeShift as ShiftData);
+          provider.setActiveShift(activeShift);
         } else {
           provider.clearActiveShift();
         }
@@ -140,12 +165,20 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   Future<void> _loadTimeSlots() async {
     try {
       final slots = await _apiService.getAvailableTimeSlots(_token!);
-      if (mounted) setState(() => _timeSlots = slots);
+      if (mounted) {
+        setState(() {
+          _timeSlots = slots;
+          _selectedTime = _timeSlots.isNotEmpty ? _timeSlots.first : null;
+        });
+      }
     } catch (e) {
       if (mounted) {
-        setState(() =>
-            _timeSlots = ['7:00 - 15:00', '15:00 - 23:00', '7:00 - 23:00']);
+        setState(() {
+          _timeSlots = [];
+          _selectedTime = null;
+        });
       }
+      throw e;
     }
   }
 
@@ -155,16 +188,17 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       if (mounted) {
         setState(() {
           _zones = zones;
-          if (zones.isNotEmpty) _zone = zones.first;
+          _zone = _zones.isNotEmpty ? _zones.first : null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _zones = ['Центр', 'Север', 'Юг', 'Запад', 'Восток'];
-          _zone = _zones.first;
+          _zones = [];
+          _zone = null;
         });
       }
+      throw e;
     }
   }
 
@@ -189,50 +223,40 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       return;
     }
 
-    await _syncWithServer();
-    if (_hasActiveShift) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Завершить текущую смену?'),
-          content: const Text(
-              'На сервере обнаружена активная смена. Завершить её перед началом новой?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Завершить'),
-            ),
-          ],
-        ),
-      );
-
-      if (confirmed == true) {
-        try {
-          await Provider.of<ShiftProvider>(context, listen: false).endSlot();
-          await _syncWithServer();
-          if (!_hasActiveShift) {
-            _showSuccess('Предыдущая смена завершена. Можно начинать новую.');
-          } else {
-            _showError('Не удалось завершить предыдущую смену.');
-            return;
-          }
-        } catch (e) {
-          _showError('Ошибка завершения: $e');
-          return;
-        }
-      } else {
-        return;
-      }
+    if (_selectedTime == null) {
+      _showError('Выберите время смены');
+      return;
     }
 
-    if (_selectedTime == null || _selfie == null || _position == null) {
-      _showError('Заполните все поля');
+    if (_position == null) {
+      _showError('Выберите должность');
       return;
+    }
+
+    if (_selfie == null) {
+      _showError('Сделайте селфи');
+      return;
+    }
+
+    await _syncWithServer();
+    if (_hasActiveShift) {
+      final confirmed = await _showActiveShiftDialog();
+      if (confirmed != true) return;
+
+      try {
+        await Provider.of<ShiftProvider>(context, listen: false).endSlot();
+        await _syncWithServer();
+
+        if (_hasActiveShift) {
+          _showError('Не удалось завершить предыдущую смену.');
+          return;
+        }
+
+        _showSuccess('Предыдущая смена завершена. Можно начинать новую.');
+      } catch (e) {
+        _showError('Ошибка завершения: $e');
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -242,10 +266,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       await _startShift(compressedFile);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (e.toString().contains('active')) {
-        setState(() => _backendConflict = true);
-      }
-      _showError('Не удалось начать смену: $e');
+      _handleShiftStartError(e);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -276,7 +297,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       await provider.startSlot(
         slotTimeRange: _selectedTime!,
         position: _position!,
-        zone: _zone,
+        zone: _zone!,
         selfie: XFile(compressedFile.path),
       );
       setState(() => _hasActiveShift = true);
@@ -287,6 +308,47 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       }
       rethrow;
     }
+  }
+
+  void _handleInitializationError(Object error) {
+    if (mounted) {
+      setState(() {
+        _hasError = true;
+        _errorMessage = error.toString();
+      });
+      _showError('Ошибка загрузки данных: ${error.toString()}');
+    }
+  }
+
+  void _handleShiftStartError(Object error) {
+    if (error.toString().contains('active')) {
+      setState(() => _backendConflict = true);
+      _showError('На сервере уже есть активная смена');
+    } else {
+      _showError('Не удалось начать смену: ${error.toString()}');
+    }
+  }
+
+  Future<bool?> _showActiveShiftDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Завершить текущую смену?'),
+        content: const Text(
+            'На сервере обнаружена активная смена. Завершить её перед началом новой?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Завершить'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showError(String message) {
@@ -319,7 +381,23 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    final isBlocked = _hasActiveShift || _backendConflict;
+    final hasActiveShift = _hasActiveShift || _backendConflict;
+
+    if (_hasError) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Ошибка: $_errorMessage'),
+            ElevatedButton(
+              onPressed: _initializeData,
+              child: const Text('Повторить'),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       padding: EdgeInsets.only(
@@ -332,8 +410,13 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         color: isDarkMode ? Colors.grey[900] : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: _isLoading && _timeSlots.isEmpty
-          ? const Center(child: CircularProgressIndicator())
+      child: _isLoading
+          ? Center(
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: const CircularProgressIndicator(),
+              ),
+            )
           : SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -345,19 +428,25 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                       fontWeight: FontWeight.bold,
                       color: isDarkMode ? Colors.white : Colors.green[800],
                     ),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
-                  if (_selfie != null) _buildSelfiePreview(),
-                  _buildSelfieButton(isDarkMode, isBlocked),
+                  if (_selfie != null)
+                    _buildSelfiePreview()
+                  else
+                    _buildSelfiePlaceholder(isDarkMode),
+                  _buildSelfieButton(isDarkMode, hasActiveShift),
                   const SizedBox(height: 24),
-                  ..._buildTimeSlots(isDarkMode, isBlocked),
+                  if (_timeSlots.isNotEmpty)
+                    ..._buildTimeSlots(isDarkMode, hasActiveShift),
                   const SizedBox(height: 24),
                   if (_positions.isNotEmpty)
-                    _buildPositionDropdown(isDarkMode, isBlocked),
+                    _buildPositionDropdown(isDarkMode, hasActiveShift),
                   const SizedBox(height: 16),
-                  _buildZoneDropdown(isDarkMode, isBlocked),
+                  if (_zones.isNotEmpty)
+                    _buildZoneDropdown(isDarkMode, hasActiveShift),
                   const SizedBox(height: 24),
-                  _buildSubmitButton(),
+                  _buildSubmitButton(hasActiveShift),
                   if (_backendConflict) _buildConflictWarning(),
                 ],
               ),
@@ -366,28 +455,31 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   }
 
   Widget _buildConflictWarning() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.only(top: 12),
-      decoration: BoxDecoration(
-        color: Colors.orange[100],
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.warning, color: Colors.orange[800]),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Обнаружен конфликт состояний. Попробуйте обновить данные.',
-              style: TextStyle(color: Colors.orange[800]),
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.only(top: 12),
+        decoration: BoxDecoration(
+          color: Colors.orange[100],
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange[800]),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Обнаружен конфликт состояний. Попробуйте обновить данные.',
+                style: TextStyle(color: Colors.orange[800]),
+              ),
             ),
-          ),
-          IconButton(
-            icon: Icon(Icons.refresh, color: Colors.orange[800]),
-            onPressed: _initializeData,
-          ),
-        ],
+            IconButton(
+              icon: Icon(Icons.refresh, color: Colors.orange[800]),
+              onPressed: _initializeData,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -423,6 +515,26 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     );
   }
 
+  Widget _buildSelfiePlaceholder(bool isDarkMode) {
+    return Container(
+      height: 150,
+      width: 150,
+      decoration: BoxDecoration(
+        color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+          width: 2,
+        ),
+      ),
+      child: Icon(
+        Icons.person,
+        size: 60,
+        color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
+      ),
+    );
+  }
+
   Widget _buildSelfieButton(bool isDarkMode, bool isBlocked) {
     return ElevatedButton.icon(
       onPressed: isBlocked || _isLoading ? null : _takeSelfie,
@@ -437,6 +549,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
+        disabledBackgroundColor: Colors.grey[400],
       ),
     );
   }
@@ -451,7 +564,9 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
               ? null
               : () => setState(() => _selectedTime = slot),
           borderRadius: BorderRadius.circular(10),
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
             padding: const EdgeInsets.symmetric(vertical: 14),
             decoration: BoxDecoration(
               color: isSelected
@@ -581,27 +696,31 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     );
   }
 
-  Widget _buildSubmitButton() {
-    final isBlocked = _hasActiveShift || _backendConflict;
+  Widget _buildSubmitButton(bool isBlocked) {
     final isDisabled = isBlocked ||
         _isLoading ||
         _selectedTime == null ||
         _selfie == null ||
-        _position == null;
+        _position == null ||
+        _zone == null;
 
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         onPressed: isDisabled ? null : _finish,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isBlocked ? Colors.grey : Colors.green[700],
+          backgroundColor: isDisabled ? Colors.grey : Colors.green[700],
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
+          disabledBackgroundColor: Colors.grey[400],
         ),
         child: _isLoading
-            ? const CircularProgressIndicator(color: Colors.white)
+            ? ScaleTransition(
+                scale: _scaleAnimation,
+                child: const CircularProgressIndicator(color: Colors.white),
+              )
             : Text(
                 isBlocked ? 'Смена уже активна' : 'Начать смену',
                 style: const TextStyle(
@@ -615,7 +734,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   }
 }
 
-// Расширение для капитализации строк
 extension StringExtension on String {
   String capitalize() {
     if (isEmpty) return this;

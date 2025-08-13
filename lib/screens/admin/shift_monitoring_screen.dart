@@ -36,7 +36,8 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> jsonList = jsonDecode(response.body);
+        final dynamic jsonResponse = jsonDecode(response.body);
+        final List<dynamic> jsonList = jsonResponse is List ? jsonResponse : [];
         return jsonList.map((json) => ActiveShift.fromJson(json)).toList();
       } else {
         throw Exception('Ошибка загрузки: ${utf8.decode(response.bodyBytes)}');

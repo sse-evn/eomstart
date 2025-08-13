@@ -1,11 +1,9 @@
-// lib/components/slot_card.dart
-
-import 'dart:async'; // ✅ Обязательно импортируем async для Timer
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/shift_provider.dart';
-import '../modals/slot_setup_modal.dart'; // Убедитесь, что путь правильный
+import '../modals/slot_setup_modal.dart';
 
 class SlotCard extends StatefulWidget {
   const SlotCard({super.key});
@@ -14,137 +12,147 @@ class SlotCard extends StatefulWidget {
   State<SlotCard> createState() => _SlotCardState();
 }
 
-class _SlotCardState extends State<SlotCard> {
-  Timer? _timer; // ✅ Добавлено: объявление таймера
+class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
+  Timer? _timer;
   bool _isLoading = false;
   bool _showError = false;
   String _errorMessage = '';
+  bool _isDataLoaded = false;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+    _loadInitialData();
     _startTimer();
   }
 
+  Future<void> _loadInitialData() async {
+    try {
+      final provider = Provider.of<ShiftProvider>(context, listen: false);
+      await provider.loadShifts();
+      setState(() => _isDataLoaded = true);
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Ошибка загрузки данных: ${e.toString()}';
+        _showError = true;
+      });
+    }
+  }
+
   void _startTimer() {
-    _timer?.cancel(); // Теперь _timer определён
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       if (mounted) {
-        setState(() {}); // Обновляем UI каждую секунду
+        try {
+          final provider = Provider.of<ShiftProvider>(context, listen: false);
+          await provider.loadShifts();
+          setState(() {});
+        } catch (e) {
+          setState(() {
+            _errorMessage = 'Ошибка синхронизации: ${e.toString()}';
+            _showError = true;
+          });
+        }
       }
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel(); // Отменяем таймер при уничтожении виджета
+    _timer?.cancel();
+    _animationController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<ShiftProvider>(context);
-    final theme = Theme.of(context);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDarkMode = theme.brightness == Brightness.dark;
+    return Consumer<ShiftProvider>(
+      builder: (context, provider, child) {
+        final theme = Theme.of(context);
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isDarkMode = theme.brightness == Brightness.dark;
 
-    final bool hasActiveShift = provider.slotState == SlotState.active;
-    final DateTime? startTime = provider.startTime;
+        final bool hasActiveShift = provider.slotState == SlotState.active;
+        final DateTime? startTime = provider.startTime;
 
+        if (!_isDataLoaded) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    return Column(
-      children: [
-        if (_showError) _buildErrorBanner(context),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            gradient: hasActiveShift
-                ? LinearGradient(
-                    colors: isDarkMode
-                        ? [Colors.green[900]!, Colors.green[800]!]
-                        : [Color(0xFF4CAF50), Color(0xFF2E7D32)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
-            borderRadius: BorderRadius.circular(20),
-            border: hasActiveShift
-                ? Border.all(color: Colors.green[700]!, width: 2)
-                : null,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
-                  spreadRadius: 1,
-                  blurRadius: 5,
-                  offset: Offset(0, 3),
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          if (_showError) _buildErrorBanner(),
-          Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Container(
-              width: screenWidth * 0.9,
-              decoration: BoxDecoration(
-                gradient: hasActiveShift
-                    ? LinearGradient(
-                        colors: isDarkMode
-                            ? [Colors.green[900]!, Colors.green[800]!]
-                            : [
-                                const Color(0xFF4CAF50),
-                                const Color(0xFF2E7D32)
-                              ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                borderRadius: BorderRadius.circular(20),
-                border: hasActiveShift
-                    ? Border.all(color: Colors.green[700]!, width: 2)
-                    : null,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  children: [
-                    if (hasActiveShift)
-                      _buildActiveShiftUI(startTime, theme, isDarkMode)
-                    else
-                      _buildInactiveShiftUI(context, theme, isDarkMode),
-                    const SizedBox(height: 20),
-                    _buildShiftReport(provider, theme, isDarkMode),
-                  ],
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              if (_showError) _buildErrorBanner(),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                child: Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Container(
+                    width: screenWidth * 0.9,
+                    decoration: BoxDecoration(
+                      gradient: hasActiveShift
+                          ? LinearGradient(
+                              colors: isDarkMode
+                                  ? [Colors.green[900]!, Colors.green[800]!]
+                                  : [
+                                      const Color(0xFF4CAF50),
+                                      const Color(0xFF2E7D32)
+                                    ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      borderRadius: BorderRadius.circular(20),
+                      border: hasActiveShift
+                          ? Border.all(color: Colors.green[700]!, width: 2)
+                          : null,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        children: [
+                          if (hasActiveShift)
+                            _buildActiveShiftUI(startTime, theme, isDarkMode)
+                          else
+                            _buildInactiveShiftUI(context, theme, isDarkMode),
+                          const SizedBox(height: 20),
+                          _buildShiftReport(provider, theme, isDarkMode),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ]
+              ),
+            ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              children: [
-                if (hasActiveShift)
-                  _buildActiveShiftUI(startTime, theme, isDarkMode)
-                else
-                  _buildInactiveShiftUI(context, theme, isDarkMode),
-                const SizedBox(height: 20),
-                _buildCalendarWeek(theme, isDarkMode),
-                const SizedBox(height: 20),
-                _buildShiftReport(provider, theme, isDarkMode),
-              ],
-            ),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 
   Widget _buildActiveShiftUI(
       DateTime? startTime, ThemeData theme, bool isDarkMode) {
-    if (startTime == null) return const SizedBox();
+    if (startTime == null) {
+      return const Text(
+        'Ошибка: Время начала смены не определено',
+        style: TextStyle(color: Colors.red),
+      );
+    }
 
     final duration = DateTime.now().difference(startTime);
     final hours = duration.inHours;
@@ -179,6 +187,7 @@ class _SlotCardState extends State<SlotCard> {
             FloatingActionButton(
               backgroundColor: Colors.red[400],
               mini: true,
+              tooltip: 'Завершить смену',
               child: _isLoading
                   ? const CircularProgressIndicator(color: Colors.white)
                   : const Icon(Icons.power_settings_new, color: Colors.white),
@@ -321,29 +330,32 @@ class _SlotCardState extends State<SlotCard> {
   }
 
   Widget _buildErrorBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.red[400],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: Colors.white),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _errorMessage,
-              style: const TextStyle(color: Colors.white),
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: Colors.red[400],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _errorMessage,
+                style: const TextStyle(color: Colors.white),
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.white, size: 20),
-            onPressed: () => setState(() => _showError = false),
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 20),
+              onPressed: () => setState(() => _showError = false),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -372,6 +384,7 @@ class _SlotCardState extends State<SlotCard> {
       setState(() => _isLoading = true);
       try {
         await Provider.of<ShiftProvider>(context, listen: false).endSlot();
+        await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
       } catch (e) {
         setState(() {
           _errorMessage = 'Ошибка при завершении смены: ${e.toString()}';
@@ -394,6 +407,7 @@ class _SlotCardState extends State<SlotCard> {
       if (result == true && mounted) {
         final provider = Provider.of<ShiftProvider>(context, listen: false);
         await provider.loadShifts();
+        setState(() {});
       }
     } catch (e) {
       setState(() {

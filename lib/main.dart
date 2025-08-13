@@ -15,7 +15,6 @@ import 'package:micro_mobility_app/screens/settings_screen.dart';
 import 'package:micro_mobility_app/screens/about_screen.dart';
 import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
 import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.dart';
-import 'package:micro_mobility_app/screens/positions_screen.dart';
 import 'package:micro_mobility_app/screens/map_screen/zones_screen.dart';
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 
@@ -34,6 +33,13 @@ void main() async {
   String? initialToken;
 
   final String? storedToken = await _storage.read(key: 'jwt_token');
+
+  // 🔹 DEBUG: Печатаем токен для curl
+  if (storedToken != null) {
+    debugPrint('🔑 JWT Token: $storedToken');
+  } else {
+    debugPrint('⚠️ Токен не найден в SecureStorage');
+  }
 
   if (storedToken != null && storedToken.isNotEmpty) {
     initialToken = storedToken;
