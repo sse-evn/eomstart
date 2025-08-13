@@ -51,6 +51,33 @@ class _SlotCardState extends State<SlotCard> {
     final bool hasActiveShift = provider.slotState == SlotState.active;
     final DateTime? startTime = provider.startTime;
 
+
+    return Column(
+      children: [
+        if (_showError) _buildErrorBanner(context),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            gradient: hasActiveShift
+                ? LinearGradient(
+                    colors: isDarkMode
+                        ? [Colors.green[900]!, Colors.green[800]!]
+                        : [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(20),
+            border: hasActiveShift
+                ? Border.all(color: Colors.green[700]!, width: 2)
+                : null,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 5,
+                  offset: Offset(0, 3),
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -93,11 +120,25 @@ class _SlotCardState extends State<SlotCard> {
                     _buildShiftReport(provider, theme, isDarkMode),
                   ],
                 ),
-              ),
+              ]
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                if (hasActiveShift)
+                  _buildActiveShiftUI(startTime, theme, isDarkMode)
+                else
+                  _buildInactiveShiftUI(context, theme, isDarkMode),
+                const SizedBox(height: 20),
+                _buildCalendarWeek(theme, isDarkMode),
+                const SizedBox(height: 20),
+                _buildShiftReport(provider, theme, isDarkMode),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

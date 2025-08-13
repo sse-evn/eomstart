@@ -41,14 +41,14 @@ class ReportCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _buildToggleMode(),
-          const SizedBox(height: 20),
-          CalendarWidget(
-            days: calendarDays,
-            selectedDate: provider.selectedDate,
-            onDateSelected: provider.selectDate,
-          ),
-          const SizedBox(height: 20),
+          // _buildToggleMode(),
+          // const SizedBox(height: 20),
+          // CalendarWidget(
+          //   days: calendarDays,
+          //   selectedDate: provider.selectedDate,
+          //   onDateSelected: provider.selectDate,
+          // ),
+          // const SizedBox(height: 20),
           shiftData != null ? _buildShiftDetails(shiftData) : _buildNoData(),
         ],
       ),

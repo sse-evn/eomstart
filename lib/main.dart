@@ -30,7 +30,7 @@ void main() async {
   final _apiService = ApiService();
   final _prefs = await SharedPreferences.getInstance();
 
-  String initialRoute = '/';
+  String initialRoute = '/dashboard';
   String? initialToken;
 
   final String? storedToken = await _storage.read(key: 'jwt_token');
@@ -135,6 +135,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       initialRoute: widget.initialRoute,
+      debugShowCheckedModeBanner: false,
       routes: {
         '/': (context) => const LoginScreen(),
         '/dashboard': (context) => const DashboardScreen(),

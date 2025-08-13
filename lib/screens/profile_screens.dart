@@ -90,6 +90,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Профиль'),
         centerTitle: true,
         backgroundColor: Colors.green[700],
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

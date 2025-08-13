@@ -51,3 +51,4 @@ flutter:
     - assets/
     - assets/geojson/
     - assets/almaty_zone.geojson
+    - assets/icons/

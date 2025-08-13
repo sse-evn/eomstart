@@ -206,6 +206,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         title: const Text('Сканер QR-кодов'),
         centerTitle: true,
         backgroundColor: Colors.green[700],
+        automaticallyImplyLeading: false,
       ),
       body: Column(
         children: [

@@ -124,9 +124,15 @@ class _MapScreenState extends State<MapScreen> {
         title: const Text('Карта зон'),
         centerTitle: true,
         backgroundColor: Colors.green[700],
+        automaticallyImplyLeading: false,
+
       ),
       body: Stack(
         children: [
+
+
+
+
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(

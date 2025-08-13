@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:micro_mobility_app/utils/app_icons.dart';
 import 'package:provider/provider.dart';
 import '../../providers/shift_provider.dart';
 import '../components/slot_card.dart';
@@ -28,39 +30,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Главная'),
-        actions: [
-          IconButton(icon: const Icon(Icons.notifications), onPressed: () {}),
-          GestureDetector(
-            onTap: () => Navigator.pushNamed(context, '/profile'),
-            child: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: CircleAvatar(
-                backgroundColor: const Color.fromARGB(255, 15, 145, 10),
-                child: const Text('EOM', style: TextStyle(color: Colors.white)),
-              ),
-            ),
-          ),
-        ],
-      ),
       body: _screens[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         selectedItemColor: Colors.green[700],
+        selectedFontSize: 13,
         unselectedItemColor: Colors.grey[600],
         onTap: (index) {
           setState(() {
             _currentIndex = index;
           });
         },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Главная'),
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Карта'),
+        items: [
           BottomNavigationBarItem(
-              icon: Icon(Icons.qr_code_scanner), label: 'QR'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Профиль'),
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) =>
+                  FadeTransition(opacity: animation, child: child),
+              child: SvgPicture.asset(
+                _currentIndex == 0 ? AppIcons.home : AppIcons.home2,
+                key: ValueKey<int>(_currentIndex), // важно для анимации
+                color: _currentIndex == 0 ? Colors.green[700] : Colors.grey,
+              ),
+            ),
+            label: 'Главная',
+          ),
+          BottomNavigationBarItem(
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) =>
+                  FadeTransition(opacity: animation, child: child),
+              child: SvgPicture.asset(
+                _currentIndex == 1 ? AppIcons.map2 : AppIcons.map,
+                key: ValueKey<int>(_currentIndex),
+                color: _currentIndex == 1 ? Colors.green[700] : Colors.grey,
+              ),
+            ),
+            label: 'Карта',
+          ),
+          BottomNavigationBarItem(
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) =>
+                  FadeTransition(opacity: animation, child: child),
+              child: SvgPicture.asset(
+                _currentIndex == 2 ? AppIcons.qr2 : AppIcons.qr,
+                key: ValueKey<int>(_currentIndex),
+                color: _currentIndex == 2 ? Colors.green[700] : Colors.grey,
+              ),
+            ),
+            label: 'QR',
+          ),
+          BottomNavigationBarItem(
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) =>
+                  FadeTransition(opacity: animation, child: child),
+              child: SvgPicture.asset(
+                _currentIndex == 3 ? AppIcons.profile : AppIcons.profile2,
+                key: ValueKey<int>(_currentIndex),
+                color: _currentIndex == 3 ? Colors.green[700] : Colors.grey,
+              ),
+            ),
+            label: 'Профиль',
+          ),
         ],
+        type: BottomNavigationBarType.fixed,
       ),
     );
   }
@@ -73,18 +108,28 @@ class _DashboardHome extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = Provider.of<ShiftProvider>(context);
 
-    return RefreshIndicator(
-      onRefresh: () => provider.loadShifts(),
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            const SlotCard(),
-            const SizedBox(height: 20),
-            const SizedBox(height: 20),
-            const ReportCard(),
-          ],
+    return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+    
+        title: const Text('Главная'),
+        actions: [
+          IconButton(icon: SvgPicture.asset(AppIcons.notification, color: Colors.black87,), onPressed: () {}),
+        ],
+    ),
+      body: RefreshIndicator(
+        onRefresh: () => provider.loadShifts(),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              const SlotCard(),
+              // const SizedBox(height: 20),
+              const SizedBox(height: 20),
+              const ReportCard(),
+            ],
+          ),
         ),
       ),
     );
