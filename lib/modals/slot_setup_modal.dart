@@ -1,3 +1,5 @@
+// lib/modals/slot_setup_modal.dart
+
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -6,8 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:micro_mobility_app/models/shift_data.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../../providers/shift_provider.dart';
-import '../../../services/api_service.dart';
+import '../../providers/shift_provider.dart';
+import '../../services/api_service.dart';
 
 class SlotSetupModal extends StatefulWidget {
   const SlotSetupModal({super.key});
@@ -21,7 +23,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   final _picker = ImagePicker();
   final _apiService = ApiService();
   String? _selectedTime;
-  String _position = 'Курьер';
+  String? _position; // Теперь может быть null до загрузки
   String _zone = 'Центр';
   XFile? _selfie;
   bool _isLoading = false;
@@ -32,6 +34,17 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   List<String> _zones = [];
   String? _token;
   Timer? _syncTimer;
+
+  // Маппинг ролей на понятные названия
+  static final Map<String, String> _roleLabels = {
+    'scout': 'Скаут',
+    'supervisor': 'Супервайзер',
+    'coordinator': 'Координатор',
+    'superadmin': 'Суперадмин',
+    'courier': 'Курьер',
+    'operator': 'Оператор',
+    'manager': 'Менеджер',
+  };
 
   @override
   void initState() {
@@ -52,30 +65,54 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     });
   }
 
-  /// Инициализация: получаем токен и синхронизируем с сервером
   Future<void> _initializeData() async {
     setState(() => _isLoading = true);
     try {
       _token = await _storage.read(key: 'jwt_token');
       if (_token == null) throw Exception('Требуется авторизация');
 
-      // Сначала синхронизируем с сервером
-      await _syncWithServer();
+      // Получаем профиль и устанавливаем должность
+      final profile = await _apiService.getUserProfile(_token!);
+      debugPrint('✅ Профиль загружен: $profile');
 
-      // Загружаем доступные опции
+      final role = (profile['role'] ?? '').toString().toLowerCase();
+      final displayName = _roleLabels[role] ?? role.capitalize();
+
+      // Получаем доступные позиции с бэкенда
+      final positions = await _apiService.getAvailablePositions(_token!);
+      if (positions.isEmpty) {
+        positions.addAll(_roleLabels.values.toList());
+      }
+
+      if (mounted) {
+        setState(() {
+          _positions = positions;
+          // Если пользовательская роль есть в доступных позициях — выбираем её
+          _position =
+              positions.contains(displayName) ? displayName : positions.first;
+        });
+      }
+
+      // Остальные данные
+      await _syncWithServer();
       await Future.wait([
         _loadTimeSlots(),
-        _loadPositions(),
         _loadZones(),
       ]);
     } catch (e) {
-      _showError('Ошибка инициализации: ${e.toString()}');
+      debugPrint('❌ Ошибка инициализации: $e');
+      if (mounted) {
+        setState(() {
+          _positions = ['Курьер', 'Оператор', 'Менеджер', 'Скаут'];
+          _position = _positions.first;
+        });
+      }
+      _showError('Ошибка загрузки данных: ${e.toString()}');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  /// 🔁 Принудительная синхронизация с сервером
   Future<void> _syncWithServer() async {
     try {
       final activeShift = await _apiService.getActiveShift(_token!);
@@ -85,7 +122,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           _backendConflict = false;
         });
 
-        // Обновляем провайдер
         final provider = Provider.of<ShiftProvider>(context, listen: false);
         if (activeShift != null) {
           provider.setActiveShift(activeShift as ShiftData);
@@ -113,25 +149,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
   }
 
-  Future<void> _loadPositions() async {
-    try {
-      final positions = await _apiService.getAvailablePositions(_token!);
-      if (mounted) {
-        setState(() {
-          _positions = positions;
-          if (positions.isNotEmpty) _position = positions.first;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _positions = ['Курьер', 'Оператор', 'Менеджер'];
-          _position = _positions.first;
-        });
-      }
-    }
-  }
-
   Future<void> _loadZones() async {
     try {
       final zones = await _apiService.getAvailableZones(_token!);
@@ -151,7 +168,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
   }
 
-  /// 📸 Сделать селфи
   Future<void> _takeSelfie() async {
     try {
       final image = await _picker.pickImage(
@@ -167,22 +183,54 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
   }
 
-  /// ✅ Завершить и начать смену
   Future<void> _finish() async {
     if (_token == null) {
       _showError('Требуется авторизация');
       return;
     }
 
-    // ⚠️ Перед стартом — снова проверяем сервер
     await _syncWithServer();
     if (_hasActiveShift) {
-      setState(() => _backendConflict = true);
-      _showError('Смена уже активна на сервере');
-      return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Завершить текущую смену?'),
+          content: const Text(
+              'На сервере обнаружена активная смена. Завершить её перед началом новой?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Завершить'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        try {
+          await Provider.of<ShiftProvider>(context, listen: false).endSlot();
+          await _syncWithServer();
+          if (!_hasActiveShift) {
+            _showSuccess('Предыдущая смена завершена. Можно начинать новую.');
+          } else {
+            _showError('Не удалось завершить предыдущую смену.');
+            return;
+          }
+        } catch (e) {
+          _showError('Ошибка завершения: $e');
+          return;
+        }
+      } else {
+        return;
+      }
     }
 
-    if (_selectedTime == null || _selfie == null) {
+    if (_selectedTime == null || _selfie == null || _position == null) {
       _showError('Заполните все поля');
       return;
     }
@@ -203,7 +251,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
   }
 
-  /// 🖼️ Улучшенное сжатие с обработкой ориентации
   Future<File> _compressImage(File imageFile) async {
     try {
       final bytes = await imageFile.readAsBytes();
@@ -211,13 +258,10 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       if (original == null)
         throw Exception("Не удалось декодировать изображение");
 
-      // Правильная ориентация по EXIF
       final oriented = img.bakeOrientation(original);
-      // Масштабируем
       final resized = img.copyResize(oriented, width: 800);
       final jpeg = img.encodeJpg(resized, quality: 80);
 
-      // Уникальное имя
       final tempFile = File(
           '${imageFile.path}_compressed_${DateTime.now().millisecondsSinceEpoch}.jpg');
       return await tempFile.writeAsBytes(jpeg);
@@ -226,13 +270,12 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
   }
 
-  /// 🚀 Запуск смены через провайдер
   Future<void> _startShift(File compressedFile) async {
     try {
       final provider = Provider.of<ShiftProvider>(context, listen: false);
       await provider.startSlot(
         slotTimeRange: _selectedTime!,
-        position: _position,
+        position: _position!,
         zone: _zone,
         selfie: XFile(compressedFile.path),
       );
@@ -240,7 +283,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     } catch (e) {
       if (e.toString().contains('active')) {
         setState(() => _backendConflict = true);
-        await _syncWithServer(); // Обновляем состояние
+        await _syncWithServer();
       }
       rethrow;
     }
@@ -251,6 +294,20 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _showSuccess(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.green,
           duration: const Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,
         ),
@@ -276,7 +333,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: _isLoading && _timeSlots.isEmpty
-          ? _buildLoadingIndicator()
+          ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -295,7 +352,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                   const SizedBox(height: 24),
                   ..._buildTimeSlots(isDarkMode, isBlocked),
                   const SizedBox(height: 24),
-                  _buildPositionDropdown(isDarkMode, isBlocked),
+                  if (_positions.isNotEmpty)
+                    _buildPositionDropdown(isDarkMode, isBlocked),
                   const SizedBox(height: 16),
                   _buildZoneDropdown(isDarkMode, isBlocked),
                   const SizedBox(height: 24),
@@ -330,15 +388,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             onPressed: _initializeData,
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildLoadingIndicator() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 40),
-      child: Center(
-        child: CircularProgressIndicator(),
       ),
     );
   }
@@ -441,14 +490,13 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       value: _position,
       items: _positions.map((item) {
         return DropdownMenuItem(
-          value: item,
-          child: Text(
-            item,
-            style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.black,
-            ),
-          ),
-        );
+            value: item,
+            child: Text(
+              item,
+              style: TextStyle(
+                color: isDarkMode ? Colors.white : Colors.black,
+              ),
+            ));
       }).toList(),
       onChanged: isBlocked || _isLoading
           ? null
@@ -490,14 +538,13 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       value: _zone,
       items: _zones.map((item) {
         return DropdownMenuItem(
-          value: item,
-          child: Text(
-            item,
-            style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.black,
-            ),
-          ),
-        );
+            value: item,
+            child: Text(
+              item,
+              style: TextStyle(
+                color: isDarkMode ? Colors.white : Colors.black,
+              ),
+            ));
       }).toList(),
       onChanged: isBlocked || _isLoading
           ? null
@@ -536,8 +583,11 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
   Widget _buildSubmitButton() {
     final isBlocked = _hasActiveShift || _backendConflict;
-    final isDisabled =
-        isBlocked || _isLoading || _selectedTime == null || _selfie == null;
+    final isDisabled = isBlocked ||
+        _isLoading ||
+        _selectedTime == null ||
+        _selfie == null ||
+        _position == null;
 
     return SizedBox(
       width: double.infinity,
@@ -562,5 +612,13 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
               ),
       ),
     );
+  }
+}
+
+// Расширение для капитализации строк
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return this[0].toUpperCase() + substring(1).toLowerCase();
   }
 }

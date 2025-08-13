@@ -1,11 +1,9 @@
-// lib/screens/admin/shift_monitoring_screen.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
-import 'package:micro_mobility_app/screens/admin/shifts_list/shift_details_screen.dart'; // Убедись, что путь верный
+import 'package:micro_mobility_app/screens/admin/shifts_list/shift_details_screen.dart';
 
 class ShiftMonitoringScreen extends StatefulWidget {
   const ShiftMonitoringScreen({super.key});
@@ -55,25 +53,19 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
     });
   }
 
-  // Группировка смен по дате
   Map<String, List<ActiveShift>> _groupShiftsByDate(List<ActiveShift> shifts) {
     final Map<String, List<ActiveShift>> grouped = {};
-
     for (final shift in shifts) {
-      final dateKey =
-          shift.startTime.toIso8601String().split('T').first; // YYYY-MM-DD
+      final dateKey = shift.startTime.toIso8601String().split('T').first;
       grouped.putIfAbsent(dateKey, () => []);
       grouped[dateKey]!.add(shift);
     }
-
     return grouped;
   }
 
-  // Форматирование даты: Сегодня, Вчера или ДД.ММ.ГГГГ
   String _formatDate(String isoDate) {
     final date = DateTime.parse(isoDate);
     final now = DateTime.now();
-
     if (date.year == now.year &&
         date.month == now.month &&
         date.day == now.day) {
@@ -105,7 +97,7 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
               return Center(
                 child: Text(
                   'Ошибка: ${snapshot.error}',
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: Colors.red),
                 ),
               );
             }
@@ -125,7 +117,6 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Заголовок дня
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 8),
@@ -138,8 +129,6 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
                         ),
                       ),
                     ),
-
-                    // Карточки смен
                     ...shiftsForDay.map((shift) {
                       return InkWell(
                         onTap: () {
@@ -162,7 +151,6 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
                             padding: const EdgeInsets.all(12),
                             child: Row(
                               children: [
-                                // Фото (селфи)
                                 ClipOval(
                                   child: shift.selfie.isNotEmpty
                                       ? Image.network(
@@ -188,8 +176,6 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
                                         ),
                                 ),
                                 const SizedBox(width: 12),
-
-                                // Информация о смене
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -219,15 +205,13 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
                                             color: Colors.grey, fontSize: 14),
                                       ),
                                       Text(
-                                        'Начало: ${shift.startTime.formatTimeDate()}',
+                                        'Начало: ${TimeFormat(shift.startTime).formatTimeDate()}',
                                         style: const TextStyle(
                                             color: Colors.green, fontSize: 14),
                                       ),
                                     ],
                                   ),
                                 ),
-
-                                // Статус активной смены
                                 const Icon(Icons.circle,
                                     color: Colors.green, size: 12),
                               ],
@@ -247,7 +231,6 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
   }
 }
 
-// Расширение для форматирования даты и времени
 extension TimeFormat on DateTime {
   String formatTimeDate() {
     final date =

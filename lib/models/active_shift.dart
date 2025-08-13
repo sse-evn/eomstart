@@ -1,5 +1,7 @@
 class ActiveShift {
   final int id;
+  final int userId; // ← Добавлено!
+
   final String username;
   final String slotTimeRange;
   final String position;
@@ -10,6 +12,7 @@ class ActiveShift {
 
   ActiveShift({
     required this.id,
+    required this.userId,
     required this.username,
     required this.slotTimeRange,
     required this.position,
@@ -24,6 +27,8 @@ class ActiveShift {
       id: json['id'] is int
           ? json['id'] as int
           : int.tryParse('${json['id']}') ?? 0,
+      userId: json['user_id'], // ← Обязательно берём из JSON
+
       username: json['username']?.toString() ?? '',
       slotTimeRange: json['slot_time_range']?.toString() ?? '',
       position: json['position']?.toString() ?? '',
