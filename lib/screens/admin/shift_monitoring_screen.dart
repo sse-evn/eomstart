@@ -1,10 +1,9 @@
-// lib/screens/admin/shift_monitoring_screen.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
+import 'package:micro_mobility_app/screens/admin/shifts_list/shift_details_screen.dart';
 
 class ShiftMonitoringScreen extends StatefulWidget {
   const ShiftMonitoringScreen({super.key});
@@ -54,11 +53,38 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
     });
   }
 
+  Map<String, List<ActiveShift>> _groupShiftsByDate(List<ActiveShift> shifts) {
+    final Map<String, List<ActiveShift>> grouped = {};
+    for (final shift in shifts) {
+      final dateKey = shift.startTime.toIso8601String().split('T').first;
+      grouped.putIfAbsent(dateKey, () => []);
+      grouped[dateKey]!.add(shift);
+    }
+    return grouped;
+  }
+
+  String _formatDate(String isoDate) {
+    final date = DateTime.parse(isoDate);
+    final now = DateTime.now();
+    if (date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day) {
+      return 'Сегодня';
+    } else if (date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day - 1) {
+      return 'Вчера';
+    }
+    return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Активные смены'),
+        backgroundColor: Colors.blue,
+        elevation: 1,
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -68,7 +94,12 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             } else if (snapshot.hasError) {
-              return Center(child: Text('Ошибка: ${snapshot.error}'));
+              return Center(
+                child: Text(
+                  'Ошибка: ${snapshot.error}',
+                  style: TextStyle(color: Colors.red),
+                ),
+              );
             }
 
             final shifts = snapshot.data!;
@@ -76,33 +107,122 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
               return const Center(child: Text('Нет активных смен'));
             }
 
-            return ListView.builder(
-              itemCount: shifts.length,
-              itemBuilder: (context, index) {
-                final shift = shifts[index];
-                return Card(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: ListTile(
-                    leading: const Icon(Icons.access_time, color: Colors.green),
-                    title: Text(
-                      shift.username,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+            final grouped = _groupShiftsByDate(shifts);
+
+            return ListView(
+              children: grouped.entries.map((entry) {
+                final date = entry.key;
+                final shiftsForDay = entry.value;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      child: Text(
+                        _formatDate(date),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
                     ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Слот: ${shift.slotTimeRange}'),
-                        Text('Зона: ${shift.zone}'),
-                        Text('Позиция: ${shift.position}'),
-                        Text('Старт: ${shift.startTime.formatTimeDate()}'),
-                      ],
-                    ),
-                    trailing:
-                        const Icon(Icons.check_circle, color: Colors.green),
-                  ),
+                    ...shiftsForDay.map((shift) {
+                      return InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ShiftDetailsScreen(shift: shift),
+                            ),
+                          );
+                        },
+                        child: Card(
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                ClipOval(
+                                  child: shift.selfie.isNotEmpty
+                                      ? Image.network(
+                                          'https://eom-sharing.duckdns.org${shift.selfie}',
+                                          width: 60,
+                                          height: 60,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              Container(
+                                            width: 60,
+                                            height: 60,
+                                            color: Colors.grey[300],
+                                            child: const Icon(Icons.person,
+                                                color: Colors.grey),
+                                          ),
+                                        )
+                                      : Container(
+                                          width: 60,
+                                          height: 60,
+                                          color: Colors.grey[300],
+                                          child: const Icon(Icons.person,
+                                              color: Colors.grey),
+                                        ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        shift.username,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Позиция: ${shift.position}',
+                                        style: const TextStyle(
+                                            color: Colors.grey, fontSize: 14),
+                                      ),
+                                      Text(
+                                        'Зона: ${shift.zone}',
+                                        style: const TextStyle(
+                                            color: Colors.grey, fontSize: 14),
+                                      ),
+                                      Text(
+                                        'Слот: ${shift.slotTimeRange}',
+                                        style: const TextStyle(
+                                            color: Colors.grey, fontSize: 14),
+                                      ),
+                                      Text(
+                                        'Начало: ${TimeFormat(shift.startTime).formatTimeDate()}',
+                                        style: const TextStyle(
+                                            color: Colors.green, fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.circle,
+                                    color: Colors.green, size: 12),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ],
                 );
-              },
+              }).toList(),
             );
           },
         ),
@@ -111,7 +231,6 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
   }
 }
 
-// Вспомогательное расширение
 extension TimeFormat on DateTime {
   String formatTimeDate() {
     final date =

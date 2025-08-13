@@ -1,9 +1,11 @@
-import 'dart:async';
+// lib/components/slot_card.dart
+
+import 'dart:async'; // ✅ Обязательно импортируем async для Timer
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/shift_provider.dart';
-import '../../modals/slot_setup_modal.dart';
+import '../modals/slot_setup_modal.dart'; // Убедитесь, что путь правильный
 
 class SlotCard extends StatefulWidget {
   const SlotCard({super.key});
@@ -13,7 +15,7 @@ class SlotCard extends StatefulWidget {
 }
 
 class _SlotCardState extends State<SlotCard> {
-  Timer? _timer;
+  Timer? _timer; // ✅ Добавлено: объявление таймера
   bool _isLoading = false;
   bool _showError = false;
   String _errorMessage = '';
@@ -25,15 +27,17 @@ class _SlotCardState extends State<SlotCard> {
   }
 
   void _startTimer() {
-    _timer?.cancel();
+    _timer?.cancel(); // Теперь _timer определён
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {}); // Обновляем UI каждую секунду
+      }
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _timer?.cancel(); // Отменяем таймер при уничтожении виджета
     super.dispose();
   }
 
@@ -46,6 +50,7 @@ class _SlotCardState extends State<SlotCard> {
 
     final bool hasActiveShift = provider.slotState == SlotState.active;
     final DateTime? startTime = provider.startTime;
+
 
     return Column(
       children: [
@@ -72,6 +77,48 @@ class _SlotCardState extends State<SlotCard> {
                   spreadRadius: 1,
                   blurRadius: 5,
                   offset: Offset(0, 3),
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          if (_showError) _buildErrorBanner(),
+          Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Container(
+              width: screenWidth * 0.9,
+              decoration: BoxDecoration(
+                gradient: hasActiveShift
+                    ? LinearGradient(
+                        colors: isDarkMode
+                            ? [Colors.green[900]!, Colors.green[800]!]
+                            : [
+                                const Color(0xFF4CAF50),
+                                const Color(0xFF2E7D32)
+                              ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                borderRadius: BorderRadius.circular(20),
+                border: hasActiveShift
+                    ? Border.all(color: Colors.green[700]!, width: 2)
+                    : null,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  children: [
+                    if (hasActiveShift)
+                      _buildActiveShiftUI(startTime, theme, isDarkMode)
+                    else
+                      _buildInactiveShiftUI(context, theme, isDarkMode),
+                    const SizedBox(height: 20),
+                    _buildShiftReport(provider, theme, isDarkMode),
+                  ],
                 ),
               ]
           ),
@@ -100,7 +147,9 @@ class _SlotCardState extends State<SlotCard> {
     if (startTime == null) return const SizedBox();
 
     final duration = DateTime.now().difference(startTime);
-    final timeString = '${duration.inHours}ч ${duration.inMinutes % 60}мин';
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final timeString = '$hours ч $minutes мин';
 
     return Column(
       children: [
@@ -149,18 +198,9 @@ class _SlotCardState extends State<SlotCard> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildInfoItem(
-                'Начало',
-                DateFormat.Hm().format(startTime),
-                theme,
-                Colors.white,
-              ),
-              _buildInfoItem(
-                'Время работы',
-                timeString,
-                theme,
-                Colors.white,
-              ),
+              _buildInfoItem('Начало', DateFormat.Hm().format(startTime), theme,
+                  Colors.white),
+              _buildInfoItem('Время работы', timeString, theme, Colors.white),
             ],
           ),
         ),
@@ -229,78 +269,6 @@ class _SlotCardState extends State<SlotCard> {
     );
   }
 
-  Widget _buildCalendarWeek(ThemeData theme, bool isDarkMode) {
-    final now = DateTime.now();
-    final currentDay = now.weekday;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'ТЕКУЩАЯ НЕДЕЛЯ',
-          style: TextStyle(
-            color:
-                isDarkMode ? Colors.white.withOpacity(0.8) : Colors.grey[600],
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-        ),
-        const SizedBox(height: 12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: List.generate(7, (index) {
-              final day = (index + 1) % 7;
-              final isCurrent = day == currentDay;
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Column(
-                  children: [
-                    Text(
-                      _getShortWeekday(day),
-                      style: TextStyle(
-                        fontWeight:
-                            isCurrent ? FontWeight.bold : FontWeight.normal,
-                        color: isCurrent
-                            ? (isDarkMode ? Colors.white : Colors.blue)
-                            : (isDarkMode
-                                ? Colors.white.withOpacity(0.7)
-                                : Colors.black),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: isCurrent
-                            ? (isDarkMode
-                                ? Colors.white
-                                : Colors.blue.withOpacity(0.2))
-                            : null,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        '${now.day + (day - currentDay)}',
-                        style: TextStyle(
-                          fontWeight:
-                              isCurrent ? FontWeight.bold : FontWeight.normal,
-                          color: isCurrent
-                              ? (isDarkMode ? Colors.green[800]! : Colors.blue)
-                              : (isDarkMode ? Colors.white : Colors.black),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildShiftReport(
       ShiftProvider provider, ThemeData theme, bool isDarkMode) {
     return Container(
@@ -352,7 +320,7 @@ class _SlotCardState extends State<SlotCard> {
     );
   }
 
-  Widget _buildErrorBanner(BuildContext context) {
+  Widget _buildErrorBanner() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -378,11 +346,6 @@ class _SlotCardState extends State<SlotCard> {
         ],
       ),
     );
-  }
-
-  String _getShortWeekday(int weekday) {
-    const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-    return days[weekday % 7];
   }
 
   Future<void> _confirmEndSlot(BuildContext context) async {

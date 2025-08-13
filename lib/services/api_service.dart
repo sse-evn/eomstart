@@ -27,6 +27,22 @@ class ApiService {
     }
   }
 
+  Future<void> forceEndShift(String token, int userId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/users/$userId/end-shift'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      final message = utf8.decode(response.bodyBytes);
+      throw Exception(
+          'Failed to force end shift: ${response.statusCode} — $message');
+    }
+  }
+
   Future<void> logout(String token) async {
     await http.post(
       Uri.parse('$baseUrl/logout'),
@@ -80,7 +96,7 @@ class ApiService {
       },
       body: jsonEncode({
         'username': username,
-        'first_name': firstName, // ✅ Было: firstName
+        'first_name': firstName,
       }),
     );
 
@@ -228,11 +244,32 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      final List<dynamic> body = jsonDecode(response.body);
-      return body.map((e) => e.toString()).toList();
+      final body = jsonDecode(response.body);
+      final list = (body as List?) ?? [];
+      return list.map((e) => e.toString()).toList();
     } else {
       throw Exception(
         'Failed to load time slots: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}',
+      );
+    }
+  }
+
+  Future<List<ActiveShift>> getActiveShifts(String token) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/shifts/active'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+      final list = (body as List?) ?? [];
+      return list.map((e) => ActiveShift.fromJson(e)).toList();
+    } else {
+      throw Exception(
+        'Failed to load active shifts: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}',
       );
     }
   }
