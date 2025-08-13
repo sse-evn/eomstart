@@ -80,13 +80,12 @@ class ApiService {
       },
       body: jsonEncode({
         'username': username,
-        'firstName': firstName,
+        'first_name': firstName, // ✅ Было: firstName
       }),
     );
 
-    if (response.statusCode != 201 && response.statusCode != 200) {
-      throw Exception(
-          'Failed to create user: ${utf8.decode(response.bodyBytes)}');
+    if (response.statusCode != 201) {
+      throw Exception('Ошибка: ${utf8.decode(response.bodyBytes)}');
     }
   }
 

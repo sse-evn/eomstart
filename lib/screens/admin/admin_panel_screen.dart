@@ -1,11 +1,12 @@
 // lib/screens/admin/admin_panel_screen.dart
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/screens/admin/tasks_screen.dart';
 import 'package:micro_mobility_app/screens/admin/map_upload_screen.dart';
 import 'package:micro_mobility_app/screens/admin/shift_monitoring_screen.dart';
 import 'package:micro_mobility_app/widgets/admin_users_list.dart';
-import 'package:micro_mobility_app/screens/map_screen/map_screens.dart'; // Убедись, что путь верный
+import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -24,9 +25,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     'Смены',
   ];
 
+  // Ключи для принудительного обновления вкладок (опционально)
+  final List<GlobalKey<RefreshIndicatorState>> _refreshKeys = [
+    GlobalKey<RefreshIndicatorState>(), // для вкладки "Пользователи"
+    GlobalKey(), // Задания
+    GlobalKey(), // Карта
+    GlobalKey(), // Смены
+  ];
+
   @override
   Widget build(BuildContext context) {
-    // Динамически определяем тело в зависимости от индекса
     Widget currentBody;
 
     switch (_currentIndex) {
@@ -39,7 +47,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       case 2:
         currentBody = MapUploadScreen(
           onGeoJsonLoaded: (File file) {
-            // После загрузки переходим на экран карты с этим файлом
+            // После загрузки GeoJSON — переходим на экран карты
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -61,10 +69,20 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         title: Text(_titles[_currentIndex]),
         centerTitle: true,
         backgroundColor: Colors.blue[700],
-        actions: const [
+        actions: [
+          // Кнопка обновления — вызывает pull-to-refresh на текущей вкладке
           IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: null, // Позже можешь добавить логику обновления
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              // Пример: вызываем обновление только для вкладки "Пользователи"
+              if (_currentIndex == 0) {
+                final key = _refreshKeys[0];
+                if (key.currentState != null) {
+                  key.currentState!.show();
+                }
+              }
+              // Можно добавить обновление для других вкладок
+            },
             tooltip: 'Обновить',
           ),
         ],
@@ -78,6 +96,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           });
         },
         type: BottomNavigationBarType.fixed,
+        selectedItemColor: Colors.blue,
+        unselectedItemColor: Colors.grey,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.people),

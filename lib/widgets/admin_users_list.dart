@@ -1,8 +1,9 @@
 // lib/widgets/admin_users_list.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:micro_mobility_app/services/api_service.dart';
 
 class AdminUsersList extends StatefulWidget {
   const AdminUsersList({super.key});
@@ -99,23 +100,235 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
   Future<void> _updateUserRole(
       int userId, String newRole, String username) async {
-    // ... (остаётся как было)
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Изменить роль?'),
+        content: Text('Назначить "$username" роль "${_roleLabels[newRole]}"?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Да')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final token = await _storage.read(key: 'jwt_token');
+      if (token == null) throw Exception('Токен не найден');
+
+      await _apiService.updateUserRole(token, userId, newRole);
+
+      if (mounted) {
+        _addLog('🔄 $username → ${_roleLabels[newRole]}');
+        setState(() {
+          _usersFuture = _fetchUsers();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Роль обновлена'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _activateUser(int userId, String username) async {
-    // ... (как было)
+    try {
+      final token = await _storage.read(key: 'jwt_token');
+      if (token == null) throw Exception('Токен не найден');
+
+      await _apiService.activateUser(token, userId);
+
+      if (mounted) {
+        _addLog('✅ Активирован: $username');
+        setState(() {
+          _usersFuture = _fetchUsers();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Доступ активирован'),
+              backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _deactivateUser(int userId, String username) async {
-    // ... (как было)
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Отправить в ожидание?'),
+        content: Text('Пользователь "$username" потеряет доступ к приложению.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Да, отправить',
+                style: TextStyle(color: Colors.orange)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final token = await _storage.read(key: 'jwt_token');
+      if (token == null) throw Exception('Токен не найден');
+
+      await _apiService.deactivateUser(token, userId);
+
+      if (mounted) {
+        _addLog('⏸️ Отправлен в ожидание: $username');
+        setState(() {
+          _usersFuture = _fetchUsers();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Доступ отозван'), backgroundColor: Colors.orange),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _deleteUser(int userId, String username) async {
-    // ... (как было)
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить пользователя?'),
+        content: Text('Вы уверены, что хотите удалить "$username"?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final token = await _storage.read(key: 'jwt_token');
+      if (token == null) throw Exception('Токен не найден');
+
+      await _apiService.deleteUser(token, userId);
+
+      if (mounted) {
+        _addLog('❌ Удалён: $username');
+        setState(() {
+          _usersFuture = _fetchUsers();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Пользователь удалён'),
+              backgroundColor: Colors.orange),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _createUser() async {
-    // ... (как было)
+    final username = _usernameController.text.trim();
+    final firstName = _firstNameController.text.trim();
+
+    if (username.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Введите логин')),
+        );
+      }
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Добавить пользователя'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Логин: $username'),
+            if (firstName.isNotEmpty) Text('Имя: $firstName'),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Добавить')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final token = await _storage.read(key: 'jwt_token');
+      if (token == null) throw Exception('Токен не найден');
+
+      await _apiService.createUser(token, username, firstName);
+
+      if (mounted) {
+        _addLog('✅ Добавлен: $username ($firstName)');
+        Navigator.pop(context);
+        setState(() {
+          _usersFuture = _fetchUsers();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Пользователь добавлен'),
+              backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _refreshData() async {
@@ -275,30 +488,46 @@ class _AdminUsersListState extends State<AdminUsersList> {
                           },
                           itemBuilder: (ctx) {
                             final items = <PopupMenuEntry<String>>[];
+
                             for (final role in _roleLabels.keys) {
-                              items.add(PopupMenuItem(
+                              items.add(
+                                PopupMenuItem(
                                   value: 'role:$role',
                                   child:
-                                      Text('Назначить: ${_roleLabels[role]}')));
+                                      Text('Назначить: ${_roleLabels[role]}'),
+                                ),
+                              );
                             }
+
                             if (_currentUserRole == 'superadmin') {
                               items.add(const PopupMenuDivider());
+
                               if (status == 'active') {
-                                items.add(const PopupMenuItem(
+                                items.add(
+                                  const PopupMenuItem(
                                     value: 'deactivate',
                                     child: Text('Отправить в ожидание',
-                                        style:
-                                            TextStyle(color: Colors.orange))));
+                                        style: TextStyle(color: Colors.orange)),
+                                  ),
+                                );
                               } else if (status == 'pending') {
-                                items.add(const PopupMenuItem(
+                                items.add(
+                                  const PopupMenuItem(
                                     value: 'activate',
-                                    child: Text('Активировать доступ')));
+                                    child: Text('Активировать доступ'),
+                                  ),
+                                );
                               }
-                              items.add(const PopupMenuItem(
+
+                              items.add(
+                                const PopupMenuItem(
                                   value: 'delete',
                                   child: Text('Удалить',
-                                      style: TextStyle(color: Colors.red))));
+                                      style: TextStyle(color: Colors.red)),
+                                ),
+                              );
                             }
+
                             return items;
                           },
                           icon: const Icon(Icons.more_vert),
@@ -327,14 +556,16 @@ class _AdminUsersListState extends State<AdminUsersList> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-                controller: _usernameController,
-                decoration:
-                    const InputDecoration(hintText: 'Логин (обязательно)')),
+              controller: _usernameController,
+              decoration:
+                  const InputDecoration(hintText: 'Логин (обязательно)'),
+            ),
             const SizedBox(height: 8),
             TextField(
-                controller: _firstNameController,
-                decoration:
-                    const InputDecoration(hintText: 'Имя (необязательно)')),
+              controller: _firstNameController,
+              decoration:
+                  const InputDecoration(hintText: 'Имя (необязательно)'),
+            ),
           ],
         ),
         actions: [
