@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:collection/collection.dart'; // ← Добавь импорт
+import 'package:collection/collection.dart';
 import 'calendar_widget.dart';
 import 'info_row.dart';
 import '../../providers/shift_provider.dart';

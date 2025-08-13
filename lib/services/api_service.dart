@@ -1,4 +1,3 @@
-// lib/services/api_service.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -7,7 +6,6 @@ import 'package:micro_mobility_app/models/active_shift.dart';
 import '../models/shift_data.dart';
 
 class ApiService {
-  // ✅ Исправлено: убраны пробелы, переименовано в публичное
   static const String baseUrl = 'https://eom-sharing.duckdns.org/api';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -198,8 +196,7 @@ class ApiService {
     }
   }
 
-  // ✅ Исправлено: правильный URL и обработка ошибок
-  Future<List<ActiveShift>> getActiveShifts(String token) async {
+  Future<ActiveShift?> getActiveShift(String token) async {
     final response = await http.get(
       Uri.parse('$baseUrl/shifts/active'),
       headers: {
@@ -209,11 +206,73 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      final List<dynamic> jsonList = jsonDecode(response.body);
-      return jsonList.map((json) => ActiveShift.fromJson(json)).toList();
+      final data = jsonDecode(response.body);
+      if (data == null) return null;
+      if (data is Map<String, dynamic>) {
+        return ActiveShift.fromJson(data);
+      }
+      throw Exception('Invalid response format: expected object or null');
     } else {
       throw Exception(
-          'Failed to load active shifts: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+        'Failed to load active shift: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}',
+      );
+    }
+  }
+
+  Future<List<String>> getAvailableTimeSlots(String token) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/slots/times'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> body = jsonDecode(response.body);
+      return body.map((e) => e.toString()).toList();
+    } else {
+      throw Exception(
+        'Failed to load time slots: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}',
+      );
+    }
+  }
+
+  Future<List<String>> getAvailablePositions(String token) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/slots/positions'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> body = jsonDecode(response.body);
+      return body.map((e) => e.toString()).toList();
+    } else {
+      throw Exception(
+        'Failed to load positions: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}',
+      );
+    }
+  }
+
+  Future<List<String>> getAvailableZones(String token) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/slots/zones'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> body = jsonDecode(response.body);
+      return body.map((e) => e.toString()).toList();
+    } else {
+      throw Exception(
+        'Failed to load zones: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}',
+      );
     }
   }
 }

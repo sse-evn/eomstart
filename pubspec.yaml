@@ -43,8 +43,11 @@ dependencies:
   flutter_inappwebview: ^6.1.5
   telegram_login_flutter: ^1.0.1
   syncfusion_flutter_charts: ^30.2.4
+  file_picker: ^10.3.1
 
 flutter:
   uses-material-design: true
   assets:
     - assets/
+    - assets/geojson/
+    - assets/almaty_zone.geojson

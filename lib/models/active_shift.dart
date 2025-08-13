@@ -1,5 +1,3 @@
-// lib/models/active_shift.dart
-
 class ActiveShift {
   final int id;
   final String username;

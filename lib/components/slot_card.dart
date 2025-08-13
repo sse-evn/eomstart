@@ -1,5 +1,4 @@
-import 'dart:async' show Timer;
-
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -14,7 +13,7 @@ class SlotCard extends StatefulWidget {
 }
 
 class _SlotCardState extends State<SlotCard> {
-  late Timer _timer;
+  Timer? _timer;
   bool _isLoading = false;
   bool _showError = false;
   String _errorMessage = '';
@@ -22,6 +21,11 @@ class _SlotCardState extends State<SlotCard> {
   @override
   void initState() {
     super.initState();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) setState(() {});
     });
@@ -29,7 +33,7 @@ class _SlotCardState extends State<SlotCard> {
 
   @override
   void dispose() {
-    _timer.cancel();
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -38,6 +42,10 @@ class _SlotCardState extends State<SlotCard> {
     final provider = Provider.of<ShiftProvider>(context);
     final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    final bool hasActiveShift = provider.slotState == SlotState.active;
+    final DateTime? startTime = provider.startTime;
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -52,27 +60,32 @@ class _SlotCardState extends State<SlotCard> {
             child: Container(
               width: screenWidth * 0.9,
               decoration: BoxDecoration(
-                gradient: provider.slotState == SlotState.active
-                    ? const LinearGradient(
-                        colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                gradient: hasActiveShift
+                    ? LinearGradient(
+                        colors: isDarkMode
+                            ? [Colors.green[900]!, Colors.green[800]!]
+                            : [Color(0xFF4CAF50), Color(0xFF2E7D32)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       )
                     : null,
                 borderRadius: BorderRadius.circular(20),
+                border: hasActiveShift
+                    ? Border.all(color: Colors.green[700]!, width: 2)
+                    : null,
               ),
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Column(
                   children: [
-                    if (provider.slotState == SlotState.active)
-                      _buildActiveSlot(provider, theme)
+                    if (hasActiveShift)
+                      _buildActiveShiftUI(startTime, theme, isDarkMode)
                     else
-                      _buildInactiveSlot(context, provider),
+                      _buildInactiveShiftUI(context, theme, isDarkMode),
                     const SizedBox(height: 20),
-                    _buildCalendarWeek(provider, theme),
+                    _buildCalendarWeek(theme, isDarkMode),
                     const SizedBox(height: 20),
-                    _buildShiftReport(provider, theme),
+                    _buildShiftReport(provider, theme, isDarkMode),
                   ],
                 ),
               ),
@@ -83,36 +96,8 @@ class _SlotCardState extends State<SlotCard> {
     );
   }
 
-  Widget _buildErrorBanner(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.red[400],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: Colors.white),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _errorMessage,
-              style: const TextStyle(color: Colors.white),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.white, size: 20),
-            onPressed: () => setState(() => _showError = false),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActiveSlot(ShiftProvider provider, ThemeData theme) {
-    final startTime = provider.startTime;
+  Widget _buildActiveShiftUI(
+      DateTime? startTime, ThemeData theme, bool isDarkMode) {
     if (startTime == null) return const SizedBox();
 
     final duration = DateTime.now().difference(startTime);
@@ -157,7 +142,9 @@ class _SlotCardState extends State<SlotCard> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: isDarkMode
+                ? Colors.white.withOpacity(0.1)
+                : Colors.green[100]!.withOpacity(0.3),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -182,49 +169,36 @@ class _SlotCardState extends State<SlotCard> {
     );
   }
 
-  Widget _buildInactiveSlot(BuildContext context, ShiftProvider provider) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-
+  Widget _buildInactiveShiftUI(
+      BuildContext context, ThemeData theme, bool isDarkMode) {
     return InkWell(
       onTap: () => _openSlotSetupModal(context),
       borderRadius: BorderRadius.circular(16),
-      hoverColor: Colors.green.withOpacity(0.1),
-      splashColor: Colors.green.withOpacity(0.2),
-      highlightColor: Colors.transparent,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDarkMode
-              ? Colors.green[900]?.withOpacity(0.3)
+              ? Colors.green[900]!.withOpacity(0.3)
               : Colors.green[50],
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isDarkMode ? Colors.green[700]! : Colors.green[100]!,
             width: 1.5,
           ),
-          boxShadow: [
-            if (!isDarkMode)
-              BoxShadow(
-                color: Colors.green.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-          ],
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: isDarkMode ? Colors.green[800] : Colors.green[100],
+                color: isDarkMode ? Colors.green[800]! : Colors.green[100]!,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.play_circle_fill,
-                color: isDarkMode ? Colors.green[300] : Colors.green[700],
+                color: isDarkMode ? Colors.green[300]! : Colors.green[700]!,
                 size: 32,
               ),
             ),
@@ -234,19 +208,19 @@ class _SlotCardState extends State<SlotCard> {
                 'Начать новую смену',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: isDarkMode ? Colors.green[100] : Colors.green[800],
+                  color: isDarkMode ? Colors.green[100]! : Colors.green[800]!,
                 ),
               ),
             ),
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: isDarkMode ? Colors.green[800] : Colors.green[100],
+                color: isDarkMode ? Colors.green[800]! : Colors.green[100]!,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.chevron_right,
-                color: isDarkMode ? Colors.green[300] : Colors.green[600],
+                color: isDarkMode ? Colors.green[300]! : Colors.green[600]!,
                 size: 24,
               ),
             ),
@@ -256,7 +230,7 @@ class _SlotCardState extends State<SlotCard> {
     );
   }
 
-  Widget _buildCalendarWeek(ShiftProvider provider, ThemeData theme) {
+  Widget _buildCalendarWeek(ThemeData theme, bool isDarkMode) {
     final now = DateTime.now();
     final currentDay = now.weekday;
 
@@ -266,16 +240,13 @@ class _SlotCardState extends State<SlotCard> {
         Text(
           'ТЕКУЩАЯ НЕДЕЛЯ',
           style: TextStyle(
-            color: provider.slotState == SlotState.active
-                ? Colors.white.withOpacity(0.8)
-                : Colors.grey[600],
+            color:
+                isDarkMode ? Colors.white.withOpacity(0.8) : Colors.grey[600],
             fontWeight: FontWeight.bold,
             fontSize: 12,
           ),
         ),
         const SizedBox(height: 12),
-
-        /// Горизонтальная прокрутка для предотвращения overflow
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -292,13 +263,11 @@ class _SlotCardState extends State<SlotCard> {
                       style: TextStyle(
                         fontWeight:
                             isCurrent ? FontWeight.bold : FontWeight.normal,
-                        color: provider.slotState == SlotState.active
-                            ? isCurrent
-                                ? Colors.white
-                                : Colors.white.withOpacity(0.7)
-                            : isCurrent
-                                ? Colors.blue
-                                : Colors.black,
+                        color: isCurrent
+                            ? (isDarkMode ? Colors.white : Colors.blue)
+                            : (isDarkMode
+                                ? Colors.white.withOpacity(0.7)
+                                : Colors.black),
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -306,7 +275,7 @@ class _SlotCardState extends State<SlotCard> {
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: isCurrent
-                            ? (provider.slotState == SlotState.active
+                            ? (isDarkMode
                                 ? Colors.white
                                 : Colors.blue.withOpacity(0.2))
                             : null,
@@ -317,13 +286,9 @@ class _SlotCardState extends State<SlotCard> {
                         style: TextStyle(
                           fontWeight:
                               isCurrent ? FontWeight.bold : FontWeight.normal,
-                          color: provider.slotState == SlotState.active
-                              ? isCurrent
-                                  ? Colors.green[800]
-                                  : Colors.white
-                              : isCurrent
-                                  ? Colors.blue
-                                  : Colors.black,
+                          color: isCurrent
+                              ? (isDarkMode ? Colors.green[800]! : Colors.blue)
+                              : (isDarkMode ? Colors.white : Colors.black),
                         ),
                       ),
                     ),
@@ -337,13 +302,12 @@ class _SlotCardState extends State<SlotCard> {
     );
   }
 
-  Widget _buildShiftReport(ShiftProvider provider, ThemeData theme) {
+  Widget _buildShiftReport(
+      ShiftProvider provider, ThemeData theme, bool isDarkMode) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: provider.slotState == SlotState.active
-            ? Colors.white.withOpacity(0.1)
-            : Colors.grey[100],
+        color: isDarkMode ? Colors.grey[800] : Colors.grey[100],
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -351,9 +315,7 @@ class _SlotCardState extends State<SlotCard> {
           Icon(
             Icons.report,
             size: 24,
-            color: provider.slotState == SlotState.active
-                ? Colors.white
-                : Colors.grey[600],
+            color: isDarkMode ? Colors.grey[400]! : Colors.grey[600]!,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -363,9 +325,7 @@ class _SlotCardState extends State<SlotCard> {
                   : 'Последняя смена: ${DateFormat.yMd().format(provider.shiftHistory.last.date)}',
               style: TextStyle(
                 fontSize: 14,
-                color: provider.slotState == SlotState.active
-                    ? Colors.white
-                    : Colors.grey[800],
+                color: isDarkMode ? Colors.grey[300]! : Colors.grey[800]!,
               ),
             ),
           ),
@@ -380,19 +340,44 @@ class _SlotCardState extends State<SlotCard> {
       children: [
         Text(
           title,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: color.withOpacity(0.8),
-          ),
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: color.withOpacity(0.8)),
         ),
         const SizedBox(height: 4),
         Text(
           value,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
+          style: theme.textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold, color: color),
         ),
       ],
+    );
+  }
+
+  Widget _buildErrorBanner(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.red[400],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.white),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _errorMessage,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.white, size: 20),
+            onPressed: () => setState(() => _showError = false),
+          ),
+        ],
+      ),
     );
   }
 
@@ -445,7 +430,8 @@ class _SlotCardState extends State<SlotCard> {
       );
 
       if (result == true && mounted) {
-        await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
+        final provider = Provider.of<ShiftProvider>(context, listen: false);
+        await provider.loadShifts();
       }
     } catch (e) {
       setState(() {

@@ -1,9 +1,11 @@
 // lib/screens/admin/admin_panel_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/screens/admin/tasks_screen.dart';
 import 'package:micro_mobility_app/screens/admin/map_upload_screen.dart';
 import 'package:micro_mobility_app/screens/admin/shift_monitoring_screen.dart';
-import 'package:micro_mobility_app/widgets/admin_users_list.dart'; // Вынесем список пользователей
+import 'package:micro_mobility_app/widgets/admin_users_list.dart';
+import 'package:micro_mobility_app/screens/map_screen/map_screens.dart'; // Убедись, что путь верный
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -15,13 +17,6 @@ class AdminPanelScreen extends StatefulWidget {
 class _AdminPanelScreenState extends State<AdminPanelScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = const [
-    AdminUsersList(), // Список пользователей
-    TasksScreen(),
-    MapUploadScreen(),
-    ShiftMonitoringScreen(),
-  ];
-
   final List<String> _titles = [
     'Пользователи',
     'Задания',
@@ -31,6 +26,36 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Динамически определяем тело в зависимости от индекса
+    Widget currentBody;
+
+    switch (_currentIndex) {
+      case 0:
+        currentBody = const AdminUsersList();
+        break;
+      case 1:
+        currentBody = const TasksScreen();
+        break;
+      case 2:
+        currentBody = MapUploadScreen(
+          onGeoJsonLoaded: (File file) {
+            // После загрузки переходим на экран карты с этим файлом
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MapScreen(customGeoJsonFile: file),
+              ),
+            );
+          },
+        );
+        break;
+      case 3:
+        currentBody = const ShiftMonitoringScreen();
+        break;
+      default:
+        currentBody = const AdminUsersList();
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_currentIndex]),
@@ -38,10 +63,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         backgroundColor: Colors.blue[700],
         actions: const [
           IconButton(
-              icon: Icon(Icons.refresh), onPressed: null, tooltip: 'Обновить'),
+            icon: Icon(Icons.refresh),
+            onPressed: null, // Позже можешь добавить логику обновления
+            tooltip: 'Обновить',
+          ),
         ],
       ),
-      body: _screens[_currentIndex],
+      body: currentBody,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {

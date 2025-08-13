@@ -1,3 +1,5 @@
+// lib/screens/map_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -7,7 +9,9 @@ import 'package:flutter_map_geojson/flutter_map_geojson.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  final File? customGeoJsonFile; // Необязательный файл от пользователя
+
+  const MapScreen({super.key, this.customGeoJsonFile});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -58,11 +62,19 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _loadAndParseGeoJson() async {
     try {
-      final String geoJsonString =
-          await rootBundle.loadString('assets/almaty_zone.geojson');
+      String geoJsonString;
+
+      if (widget.customGeoJsonFile != null) {
+        // Читаем файл, загруженный пользователем
+        geoJsonString = await widget.customGeoJsonFile!.readAsString();
+      } else {
+        // Используем дефолтный файл из assets
+        geoJsonString = await rootBundle.loadString(AppConstants.almatyGeoJson);
+      }
+
       _geoJsonParser.parseGeoJsonAsString(geoJsonString);
 
-      // Вычисляем точный центр масс для каждой зоны
+      // Вычисляем центр масс для каждой зоны
       for (int i = 0; i < _geoJsonParser.polygons.length; i++) {
         final points = _geoJsonParser.polygons[i].points;
         final zoneId = i + 1;
@@ -73,7 +85,7 @@ class _MapScreenState extends State<MapScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ошибка загрузки GeoJSON')),
+          SnackBar(content: Text('Ошибка загрузки GeoJSON: $e')),
         );
       }
     }
@@ -97,6 +109,8 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     area /= 2;
+    if (area == 0) return points[0]; // Защита от деления на 0
+
     final double centroidLat = lat / (6 * area);
     final double centroidLng = lng / (6 * area);
 
