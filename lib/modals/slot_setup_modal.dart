@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
+import 'package:micro_mobility_app/models/shift_data.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../providers/shift_provider.dart';
@@ -47,18 +48,22 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
   void _startSyncTimer() {
     _syncTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (mounted) _checkActiveShift();
+      if (mounted) _syncWithServer();
     });
   }
 
+  /// Инициализация: получаем токен и синхронизируем с сервером
   Future<void> _initializeData() async {
     setState(() => _isLoading = true);
     try {
       _token = await _storage.read(key: 'jwt_token');
       if (_token == null) throw Exception('Требуется авторизация');
 
+      // Сначала синхронизируем с сервером
+      await _syncWithServer();
+
+      // Загружаем доступные опции
       await Future.wait([
-        _checkActiveShift(),
         _loadTimeSlots(),
         _loadPositions(),
         _loadZones(),
@@ -70,7 +75,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
   }
 
-  Future<void> _checkActiveShift() async {
+  /// 🔁 Принудительная синхронизация с сервером
+  Future<void> _syncWithServer() async {
     try {
       final activeShift = await _apiService.getActiveShift(_token!);
       if (mounted) {
@@ -78,10 +84,19 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           _hasActiveShift = activeShift != null;
           _backendConflict = false;
         });
+
+        // Обновляем провайдер
+        final provider = Provider.of<ShiftProvider>(context, listen: false);
+        if (activeShift != null) {
+          provider.setActiveShift(activeShift as ShiftData);
+        } else {
+          provider.clearActiveShift();
+        }
       }
     } catch (e) {
-      if (!e.toString().contains('404') && mounted) {
-        _showError('Ошибка проверки смены: ${e.toString()}');
+      if (mounted && !e.toString().contains('404')) {
+        setState(() => _backendConflict = true);
+        _showError('Ошибка проверки смены: $e');
       }
     }
   }
@@ -91,10 +106,10 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       final slots = await _apiService.getAvailableTimeSlots(_token!);
       if (mounted) setState(() => _timeSlots = slots);
     } catch (e) {
-      _showError('Ошибка загрузки слотов');
-      if (mounted)
+      if (mounted) {
         setState(() =>
             _timeSlots = ['7:00 - 15:00', '15:00 - 23:00', '7:00 - 23:00']);
+      }
     }
   }
 
@@ -108,7 +123,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         });
       }
     } catch (e) {
-      _showError('Ошибка загрузки должностей');
       if (mounted) {
         setState(() {
           _positions = ['Курьер', 'Оператор', 'Менеджер'];
@@ -128,7 +142,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         });
       }
     } catch (e) {
-      _showError('Ошибка загрузки зон');
       if (mounted) {
         setState(() {
           _zones = ['Центр', 'Север', 'Юг', 'Запад', 'Восток'];
@@ -138,6 +151,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
   }
 
+  /// 📸 Сделать селфи
   Future<void> _takeSelfie() async {
     try {
       final image = await _picker.pickImage(
@@ -153,14 +167,18 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
   }
 
+  /// ✅ Завершить и начать смену
   Future<void> _finish() async {
     if (_token == null) {
       _showError('Требуется авторизация');
       return;
     }
 
-    if (_hasActiveShift || _backendConflict) {
-      _showError('У вас уже есть активная смена');
+    // ⚠️ Перед стартом — снова проверяем сервер
+    await _syncWithServer();
+    if (_hasActiveShift) {
+      setState(() => _backendConflict = true);
+      _showError('Смена уже активна на сервере');
       return;
     }
 
@@ -172,7 +190,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     setState(() => _isLoading = true);
 
     try {
-      await _verifyShiftNotActive();
       final compressedFile = await _compressImage(File(_selfie!.path));
       await _startShift(compressedFile);
       if (mounted) Navigator.pop(context, true);
@@ -180,35 +197,36 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       if (e.toString().contains('active')) {
         setState(() => _backendConflict = true);
       }
-      _showError('Ошибка: ${e.toString()}');
+      _showError('Не удалось начать смену: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _verifyShiftNotActive() async {
-    final activeShift = await _apiService.getActiveShift(_token!);
-    if (activeShift != null) {
-      throw Exception('Обнаружена активная смена при проверке');
-    }
-  }
-
+  /// 🖼️ Улучшенное сжатие с обработкой ориентации
   Future<File> _compressImage(File imageFile) async {
     try {
       final bytes = await imageFile.readAsBytes();
       final original = img.decodeImage(bytes);
       if (original == null)
-        throw Exception("Не удалось обработать изображение");
+        throw Exception("Не удалось декодировать изображение");
 
-      final resized = img.copyResize(original, width: 800);
+      // Правильная ориентация по EXIF
+      final oriented = img.bakeOrientation(original);
+      // Масштабируем
+      final resized = img.copyResize(oriented, width: 800);
       final jpeg = img.encodeJpg(resized, quality: 80);
-      final tempFile = File('${imageFile.path}_compressed.jpg');
+
+      // Уникальное имя
+      final tempFile = File(
+          '${imageFile.path}_compressed_${DateTime.now().millisecondsSinceEpoch}.jpg');
       return await tempFile.writeAsBytes(jpeg);
     } catch (e) {
       throw Exception("Ошибка сжатия: ${e.toString()}");
     }
   }
 
+  /// 🚀 Запуск смены через провайдер
   Future<void> _startShift(File compressedFile) async {
     try {
       final provider = Provider.of<ShiftProvider>(context, listen: false);
@@ -222,7 +240,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     } catch (e) {
       if (e.toString().contains('active')) {
         setState(() => _backendConflict = true);
-        await _checkActiveShift();
+        await _syncWithServer(); // Обновляем состояние
       }
       rethrow;
     }

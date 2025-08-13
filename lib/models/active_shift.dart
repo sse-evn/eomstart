@@ -19,13 +19,18 @@ class ActiveShift {
 
   factory ActiveShift.fromJson(Map<String, dynamic> json) {
     return ActiveShift(
-      id: json['id'] as int,
-      username: json['username'] as String,
-      slotTimeRange: json['slot_time_range'] as String,
-      position: json['position'] as String,
-      zone: json['zone'] as String,
-      startTime: DateTime.parse(json['start_time'] as String),
-      isActive: json['is_active'] as bool,
+      id: json['id'] is int
+          ? json['id'] as int
+          : int.tryParse('${json['id']}') ?? 0,
+      username: json['username']?.toString() ?? '',
+      slotTimeRange: json['slot_time_range']?.toString() ?? '',
+      position: json['position']?.toString() ?? '',
+      zone: json['zone']?.toString() ?? '',
+      startTime: DateTime.tryParse(json['start_time']?.toString() ?? '') ??
+          DateTime.now(),
+      isActive: json['is_active'] is bool
+          ? json['is_active'] as bool
+          : (json['is_active']?.toString().toLowerCase() == 'true'),
     );
   }
 

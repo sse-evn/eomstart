@@ -180,6 +180,26 @@ class ShiftProvider with ChangeNotifier {
     }
   }
 
+  /// Новый метод — устанавливает активную смену вручную
+  void setActiveShift(ShiftData activeShift) {
+    _slotState = SlotState.active;
+    _startTime = activeShift.startTime as DateTime?;
+    _storage.write(key: 'slot_state', value: 'active');
+    _prefs.setString('active_slot_start_time', _startTime!.toIso8601String());
+    _startTimer();
+    notifyListeners();
+  }
+
+  /// Новый метод — сбрасывает активную смену
+  void clearActiveShift() {
+    _slotState = SlotState.inactive;
+    _startTime = null;
+    _storage.write(key: 'slot_state', value: 'inactive');
+    _prefs.remove('active_slot_start_time');
+    _timer?.cancel();
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
