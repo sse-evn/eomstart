@@ -1,3 +1,4 @@
+// lib/services/api_service.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart' show debugPrint;
@@ -431,6 +432,170 @@ class ApiService {
     } else {
       throw Exception(
           'Failed to load zones: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+    }
+  }
+
+  // === НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С ЗАДАНИЯМИ ===
+
+  /// Получение списка всех заданий
+  Future<List<dynamic>> getTasks({
+    required String token,
+    String? adminUsername,
+  }) async {
+    try {
+      // Создаем URI с параметрами запроса
+      final uri = Uri.parse('$baseUrl/admin/tasks');
+      final queryParams = <String, String>{};
+
+      if (adminUsername != null && adminUsername.isNotEmpty) {
+        queryParams['admin_username'] = adminUsername;
+      }
+
+      final finalUri = uri.replace(queryParameters: queryParams);
+
+      final response = await http.get(
+        finalUri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic body = jsonDecode(response.body);
+        if (body is List) {
+          return body;
+        }
+        return [];
+      } else {
+        throw Exception(
+            'Failed to load tasks: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      }
+    } catch (e) {
+      debugPrint('Error loading tasks: $e');
+      rethrow;
+    }
+  }
+
+  /// Создание нового задания
+  Future<void> createTask({
+    required String token,
+    required String assigneeUsername,
+    required String title,
+    required String description,
+    required String priority,
+    DateTime? deadline,
+    File? image,
+  }) async {
+    try {
+      if (image != null) {
+        // Если есть изображение, используем multipart request
+        final request = http.MultipartRequest(
+          'POST',
+          Uri.parse('$baseUrl/admin/tasks'),
+        );
+
+        request.headers['Authorization'] = 'Bearer $token';
+
+        // Добавляем текстовые поля
+        request.fields['assignee_username'] = assigneeUsername;
+        request.fields['title'] = title;
+        request.fields['description'] = description;
+        request.fields['priority'] = priority;
+        if (deadline != null) {
+          request.fields['deadline'] = deadline.toIso8601String();
+        }
+
+        // Добавляем изображение
+        if (await image.exists()) {
+          request.files.add(
+            await http.MultipartFile.fromPath('image', image.path),
+          );
+        }
+
+        final response = await request.send();
+        final resp = await http.Response.fromStream(response);
+
+        if (resp.statusCode != 200 && resp.statusCode != 201) {
+          throw Exception(
+              'Failed to create task: ${resp.statusCode} - ${utf8.decode(resp.bodyBytes)}');
+        }
+      } else {
+        // Если нет изображения, используем обычный POST
+        final response = await http.post(
+          Uri.parse('$baseUrl/admin/tasks'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'assignee_username': assigneeUsername,
+            'title': title,
+            'description': description,
+            'priority': priority,
+            if (deadline != null) 'deadline': deadline.toIso8601String(),
+          }),
+        );
+
+        if (response.statusCode != 200 && response.statusCode != 201) {
+          throw Exception(
+              'Failed to create task: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error creating task: $e');
+      rethrow;
+    }
+  }
+
+  /// Обновление статуса задания
+  Future<void> updateTaskStatus({
+    required String token,
+    required int taskId,
+    required String status,
+  }) async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$baseUrl/admin/tasks/$taskId/status'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'status': status}),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+            'Failed to update task status: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      }
+    } catch (e) {
+      debugPrint('Error updating task status: $e');
+      rethrow;
+    }
+  }
+
+  /// Удаление задания
+// В api_service.dart
+  Future<void> deleteTask({
+    required String token,
+    required int taskId,
+  }) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/admin/tasks/$taskId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw Exception(
+            'Failed to delete task: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      }
+    } catch (e) {
+      debugPrint('Error deleting task: $e');
+      rethrow;
     }
   }
 }

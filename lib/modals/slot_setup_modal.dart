@@ -47,19 +47,12 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   void initState() {
     super.initState();
     _initializeData();
-    _startSyncTimer();
   }
 
   @override
   void dispose() {
     _syncTimer?.cancel();
     super.dispose();
-  }
-
-  void _startSyncTimer() {
-    _syncTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (mounted) _syncWithServer();
-    });
   }
 
   Future<void> _initializeData() async {
@@ -76,7 +69,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         _loadUserProfile(),
         _loadTimeSlots(),
         _loadZones(),
-        _syncWithServer(),
       ]);
     } catch (e) {
       _handleInitializationError(e);
@@ -123,42 +115,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
   List<String> _getDefaultPositions() {
     return ['Курьер', 'Оператор', 'Менеджер', 'Скаут'];
-  }
-
-  Future<void> _syncWithServer() async {
-    if (_token == null) return;
-
-    try {
-      final activeShift = await _apiService.getActiveShift(_token!);
-      debugPrint(
-          '🔧 Server active shift check: ${activeShift != null ? 'YES' : 'NO'}');
-
-      if (mounted) {
-        final hasActiveShift = activeShift != null;
-        if (this._hasActiveShift != hasActiveShift) {
-          setState(() {
-            _hasActiveShift = hasActiveShift;
-            _backendConflict = false;
-          });
-          debugPrint('🔄 UI state updated: hasActiveShift = $hasActiveShift');
-        }
-
-        final provider = Provider.of<ShiftProvider>(context, listen: false);
-        if (activeShift != null) {
-          await provider.setActiveShift(activeShift);
-          debugPrint('✅ Provider updated with active shift');
-        } else {
-          await provider.clearActiveShift();
-          debugPrint('✅ Provider cleared active shift');
-        }
-      }
-    } catch (e) {
-      debugPrint('❌ Sync error: $e');
-      if (mounted && !e.toString().contains('404')) {
-        setState(() => _backendConflict = true);
-        _showError('Ошибка проверки смены: $e');
-      }
-    }
   }
 
   Future<void> _loadTimeSlots() async {
@@ -239,28 +195,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       return;
     }
 
-    await _syncWithServer();
-
-    if (_hasActiveShift) {
-      final confirmed = await _showActiveShiftDialog();
-      if (confirmed != true) return;
-
-      try {
-        await Provider.of<ShiftProvider>(context, listen: false).endSlot();
-        await _syncWithServer();
-
-        if (_hasActiveShift) {
-          _showError('Не удалось завершить предыдущую смену.');
-          return;
-        }
-
-        _showSuccess('Предыдущая смена завершена. Можно начинать новую.');
-      } catch (e) {
-        _showError('Ошибка завершения: $e');
-        return;
-      }
-    }
-
     setState(() => _isLoading = true);
 
     try {
@@ -306,7 +240,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     } catch (e) {
       if (e.toString().contains('active')) {
         setState(() => _backendConflict = true);
-        await _syncWithServer();
       }
       rethrow;
     }

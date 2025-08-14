@@ -1,9 +1,8 @@
-// lib/screens/components/slot_card.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:micro_mobility_app/models/active_shift.dart'; // Импортируем модель и вспомогательную функцию
+import 'package:micro_mobility_app/models/active_shift.dart';
 import '../../providers/shift_provider.dart';
 import '../modals/slot_setup_modal.dart';
 
@@ -40,8 +39,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
 
   Future<void> _loadInitialData() async {
     try {
-      final provider = Provider.of<ShiftProvider>(context, listen: false);
-      await provider.loadShifts();
+      await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
       setState(() => _isDataLoaded = true);
     } catch (e) {
       setState(() {
@@ -56,8 +54,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
     _timer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       if (mounted) {
         try {
-          final provider = Provider.of<ShiftProvider>(context, listen: false);
-          await provider.loadShifts();
+          await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
           setState(() {});
         } catch (e) {
           setState(() {
@@ -84,9 +81,8 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
         final screenWidth = MediaQuery.of(context).size.width;
         final isDarkMode = theme.brightness == Brightness.dark;
 
-        final bool hasActiveShift = provider.slotState == SlotState.active;
-        final ActiveShift? activeShift =
-            provider.activeShift; // Получаем объект активной смены
+        final ActiveShift? activeShift = provider.activeShift;
+        final bool hasActiveShift = activeShift != null;
 
         if (!_isDataLoaded) {
           return const Center(child: CircularProgressIndicator());
@@ -130,8 +126,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                       child: Column(
                         children: [
                           if (hasActiveShift)
-                            _buildActiveShiftUI(activeShift, theme,
-                                isDarkMode) // Передаем объект активной смены
+                            _buildActiveShiftUI(activeShift, theme, isDarkMode)
                           else
                             _buildInactiveShiftUI(context, theme, isDarkMode),
                           const SizedBox(height: 20),
@@ -150,12 +145,11 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
   }
 
   Widget _buildActiveShiftUI(
-      ActiveShift? activeShift, ThemeData theme, bool isDarkMode) {
-    // Проверяем, что объект активной смены не null
-    if (activeShift == null || activeShift.startTime == null) {
+      ActiveShift activeShift, ThemeData theme, bool isDarkMode) {
+    if (activeShift.startTimeString == null || activeShift.startTime == null) {
       return const Text(
         'Ошибка: Данные активной смены не определены',
-        style: TextStyle(color: Colors.red),
+        style: TextStyle(color: Colors.white),
       );
     }
 
@@ -164,9 +158,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
     final minutes = duration.inMinutes.remainder(60);
     final timeString = '$hours ч $minutes мин';
 
-    // Используем вспомогательную функцию для извлечения времени из строки сервера
-    final String serverTime =
-        extractTimeFromIsoString(activeShift.startTimeString);
+    final serverTime = extractTimeFromIsoString(activeShift.startTimeString);
 
     return Column(
       children: [
@@ -216,7 +208,6 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              // Используем время, извлеченное из строки сервера
               _buildInfoItem('Начало', serverTime, theme, Colors.white),
               _buildInfoItem('Время работы', timeString, theme, Colors.white),
             ],
@@ -393,7 +384,6 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
       setState(() => _isLoading = true);
       try {
         await Provider.of<ShiftProvider>(context, listen: false).endSlot();
-        await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
       } catch (e) {
         setState(() {
           _errorMessage = 'Ошибка при завершении смены: ${e.toString()}';
@@ -414,9 +404,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
       );
 
       if (result == true && mounted) {
-        final provider = Provider.of<ShiftProvider>(context, listen: false);
-        await provider.loadShifts();
-        setState(() {});
+        await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
       }
     } catch (e) {
       setState(() {

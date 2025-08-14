@@ -88,16 +88,59 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       return boltMatch.group(1)!;
     }
 
+    // Если не распознали как ссылку, возвращаем как есть (возможно, это уже номер)
     return link.trim();
   }
 
+  // Новый метод для добавления номера вручную
+  void _addNumberManually() {
+    TextEditingController _controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Добавить номер вручную'),
+          content: TextField(
+            controller: _controller,
+            decoration:
+                const InputDecoration(hintText: "Введите номер самоката"),
+            autofocus: true,
+            // Добавляем обработчик нажатия Enter
+            onSubmitted: (value) {
+              Navigator.of(context).pop(); // Закрываем диалог
+              if (value.trim().isNotEmpty) {
+                _addScannedNumber(value.trim()); // Добавляем номер
+              }
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Отмена'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                if (_controller.text.trim().isNotEmpty) {
+                  _addScannedNumber(_controller.text.trim());
+                }
+              },
+              child: const Text('Добавить'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _addScannedNumber(String rawCode) {
+    // Сначала пытаемся извлечь номер, даже если это уже строка
     final String cleanedNumber = _extractNumberFromLink(rawCode);
 
-    if (cleanedNumber.isEmpty || cleanedNumber.startsWith('http')) {
+    if (cleanedNumber.isEmpty) {
       setState(() {
         _scanStatus =
-            'Не удалось распознать номер из "${rawCode.substring(0, rawCode.length > 30 ? 30 : rawCode.length)}..."';
+            'Не удалось добавить номер из "${rawCode.substring(0, rawCode.length > 30 ? 30 : rawCode.length)}..."';
         _scanStatusColor = Colors.red;
       });
       return;
@@ -106,7 +149,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     if (!_scannedNumbers.contains(cleanedNumber)) {
       setState(() {
         _scannedNumbers.insert(0, cleanedNumber);
-        _scanStatus = 'Отсканирован: $cleanedNumber';
+        _scanStatus = 'Добавлен: $cleanedNumber';
         _scanStatusColor = Colors.green;
       });
       _saveScannedNumbers();
@@ -207,6 +250,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         centerTitle: true,
         backgroundColor: Colors.green[700],
         automaticallyImplyLeading: false,
+        actions: [
+          // Добавляем кнопку в AppBar для ручного ввода
+          IconButton(
+            icon: const Icon(Icons.add, color: Colors.white),
+            tooltip: 'Добавить номер вручную',
+            onPressed: _addNumberManually,
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -291,12 +342,26 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                             return const Text('Выключить вспышку',
                                 style: TextStyle(color: Colors.white));
                         }
-                        // return const Text('Включить вспышку',
-                        //     style: TextStyle(color: Colors.white));
                       },
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.orange,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
+                    ),
+                  ),
+                  // Добавляем кнопку ручного ввода под сканером
+                  const SizedBox(height: 10),
+                  ElevatedButton.icon(
+                    onPressed: _addNumberManually,
+                    icon: const Icon(Icons.edit, color: Colors.white),
+                    label: const Text('Ввести номер вручную',
+                        style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -343,7 +408,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                     child: _scannedNumbers.isEmpty
                         ? const Center(
                             child: Text(
-                              'Список пуст. Отсканируйте первый номер!',
+                              'Список пуст. Отсканируйте первый номер или добавьте вручную!',
                               style: TextStyle(color: Colors.grey),
                               textAlign: TextAlign.center,
                             ),

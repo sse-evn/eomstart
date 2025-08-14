@@ -3,8 +3,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'auth_screen/login_screen.dart';
 import 'admin/admin_panel_screen.dart';
-import 'package:micro_mobility_app/services/api_service.dart';
-import 'auth_screen/login_screen.dart'; // ← Импортирует и ApiService тоже
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -45,7 +43,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
       return {};
@@ -77,8 +79,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Ошибка выхода')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ошибка выхода'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
@@ -101,82 +108,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            children: [
-              // === Заголовок профиля ===
-              FutureBuilder<Map<String, dynamic>>(
-                future: _profileFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const _ProfileHeaderShimmer();
-                  }
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // === Заголовок профиля ===
+                    FutureBuilder<Map<String, dynamic>>(
+                      future: _profileFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const _ProfileHeaderShimmer();
+                        }
 
-                  if (snapshot.hasError ||
-                      !snapshot.hasData ||
-                      snapshot.data!.isEmpty) {
-                    return const _ProfileErrorCard();
-                  }
+                        if (snapshot.hasError ||
+                            !snapshot.hasData ||
+                            snapshot.data!.isEmpty) {
+                          return const _ProfileErrorCard();
+                        }
 
-                  return _ProfileHeader(user: snapshot.data!);
-                },
-              ),
+                        return _ProfileHeader(user: snapshot.data!);
+                      },
+                    ),
 
-              // === Настройки ===
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Настройки',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
+                    const SizedBox(height: 24),
+
+                    // === Настройки ===
+                    _buildSectionHeader('Настройки'),
+                    _SettingsItem(
+                      icon: Icons.settings,
+                      title: 'Настройки',
+                      route: '/settings',
+                    ),
+
+                    const Divider(height: 1),
+
+                    // === Другое ===
+                    _buildSectionHeader('Другое'),
+                    _SettingsItem(
+                      icon: Icons.info,
+                      title: 'О приложении',
+                      route: '/about',
+                    ),
+
+                    // === Админ-панель (только для superadmin) ===
+                    if (_userRole == 'superadmin') ...[
+                      const Divider(height: 1),
+                      _SettingsItem(
+                        icon: Icons.admin_panel_settings,
+                        title: 'Админ-панель',
+                        route: '/admin',
+                      ),
+                    ],
+
+                    const Divider(height: 1),
+
+                    _SettingsItem(
+                      icon: Icons.logout,
+                      title: 'Выйти',
+                      color: Colors.red,
+                      onTap: _logout,
+                    ),
+
+                    const SizedBox(height: 32),
+                  ],
                 ),
               ),
-              const _SettingsItem(
-                icon: Icons.settings,
-                title: 'Настройки',
-                route: '/settings',
-              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 
-              const Divider(),
-
-              // === Другое ===
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Другое',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-              const _SettingsItem(
-                icon: Icons.info,
-                title: 'О приложении',
-                route: '/about',
-              ),
-
-              // === Админ-панель (только для superadmin) ===
-              if (_userRole == 'superadmin')
-                const _SettingsItem(
-                  icon: Icons.admin_panel_settings,
-                  title: 'Админ-панель',
-                  route: '/admin',
-                ),
-
-              _SettingsItem(
-                icon: Icons.logout,
-                title: 'Выйти',
-                color: Colors.red,
-                onTap: _logout,
-              ),
-
-              const SizedBox(height: 20),
-            ],
-          ),
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Colors.green[700],
         ),
       ),
     );
@@ -206,39 +226,66 @@ class _ProfileHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
       decoration: BoxDecoration(
-        color: Colors.green[50],
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.green[700]!,
+            Colors.green[600]!,
+          ],
+        ),
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(30),
           bottomRight: Radius.circular(30),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.3),
+            spreadRadius: 2,
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         children: [
           CircleAvatar(
             radius: 60,
-            backgroundColor: Colors.white,
+            backgroundColor: Colors.white.withOpacity(0.9),
             backgroundImage:
                 avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
             child: avatarUrl.isEmpty
-                ? const Icon(Icons.person, size: 60, color: Colors.grey)
+                ? Icon(
+                    Icons.person,
+                    size: 60,
+                    color: Colors.green[700],
+                  )
                 : null,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Text(
             fullName,
+            textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 24,
+              fontSize: 26,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Colors.white,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            _formatRole(role),
-            style: const TextStyle(
-              fontSize: 18,
-              color: Colors.green,
-              fontStyle: FontStyle.italic,
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              _formatRole(role),
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -272,21 +319,52 @@ class _ProfileHeaderShimmer extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-      color: Colors.green[50],
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.green[700]!.withOpacity(0.7),
+            Colors.green[600]!.withOpacity(0.5),
+          ],
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
+        ),
+      ),
       child: Column(
         children: [
-          const CircleAvatar(radius: 60, child: Icon(Icons.person, size: 60)),
-          const SizedBox(height: 16),
           Container(
-            width: 150,
-            height: 20,
-            color: Colors.white,
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.3),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.person,
+              size: 60,
+              color: Colors.white,
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
           Container(
-            width: 100,
-            height: 16,
-            color: Colors.white,
+            width: 200,
+            height: 28,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: 120,
+            height: 24,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         ],
       ),
@@ -302,23 +380,53 @@ class _ProfileErrorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 60),
-      color: Colors.red[50],
+      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.1),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
+        ),
+      ),
       child: Column(
         children: [
-          const Icon(Icons.error, color: Colors.red, size: 48),
-          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.error,
+              color: Colors.white,
+              size: 48,
+            ),
+          ),
+          const SizedBox(height: 16),
           const Text(
             'Не удалось загрузить профиль',
-            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: Colors.red,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Повторяем...')),
+                const SnackBar(
+                  content: Text('Повторяем...'),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                ),
               );
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Повторить'),
           ),
         ],
@@ -345,16 +453,49 @@ class _SettingsItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: color ?? Colors.grey[700]),
-      title: Text(title, style: TextStyle(color: color ?? Colors.black87)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-      onTap: onTap ??
-          (route != null
-              ? () {
-                  Navigator.pushNamed(context, route!);
-                }
-              : null),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap ??
+            (route != null
+                ? () {
+                    Navigator.pushNamed(context, route!);
+                  }
+                : null),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: (color ?? Colors.green[700]!).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: color ?? Colors.green[700],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: color ?? Colors.black87,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: Colors.grey[400],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

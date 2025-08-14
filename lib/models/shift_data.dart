@@ -6,7 +6,8 @@ class ShiftData {
   final String transportStatus;
   final int newTasks;
   final bool isActive;
-  final String startTime;
+  final DateTime? startTime; // Изменено на DateTime?
+  final DateTime? endTime;
 
   ShiftData({
     required this.date,
@@ -16,7 +17,8 @@ class ShiftData {
     required this.transportStatus,
     required this.newTasks,
     required this.isActive,
-    required this.startTime,
+    this.startTime, // Изменено
+    this.endTime,
   });
 
   factory ShiftData.fromJson(Map<String, dynamic> json) {
@@ -31,8 +33,12 @@ class ShiftData {
           ? json['new_tasks'] as int
           : int.tryParse('${json['new_tasks']}') ?? 0,
       isActive: json['is_active'] is bool ? json['is_active'] as bool : false,
-      startTime:
-          json['start_time']?.toString() ?? DateTime.now().toIso8601String(),
+      startTime: json['start_time'] != null
+          ? DateTime.tryParse(json['start_time']?.toString() ?? '')
+          : null,
+      endTime: json['end_time'] != null
+          ? DateTime.tryParse(json['end_time']?.toString() ?? '')
+          : null,
     );
   }
 
@@ -45,7 +51,8 @@ class ShiftData {
       'transport_status': transportStatus,
       'new_tasks': newTasks,
       'is_active': isActive,
-      'start_time': startTime,
+      'start_time': startTime?.toIso8601String(), // Обновлено
+      'end_time': endTime?.toIso8601String(), // Добавлено
     };
   }
 }

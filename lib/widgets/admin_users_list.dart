@@ -1,4 +1,5 @@
 // lib/widgets/admin_users_list.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -30,7 +31,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
   String _selectedRoleFilter = 'all';
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _passwordController =
+      TextEditingController(); // Изменено с _firstNameController
 
   @override
   void initState() {
@@ -268,12 +270,21 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
   Future<void> _createUser() async {
     final username = _usernameController.text.trim();
-    final firstName = _firstNameController.text.trim();
+    final password = _passwordController.text.trim(); // Получаем пароль
 
     if (username.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Введите логин')),
+        );
+      }
+      return;
+    }
+    if (password.isEmpty) {
+      // Проверяем, что пароль введен
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Введите пароль')),
         );
       }
       return;
@@ -287,7 +298,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('Логин: $username'),
-            if (firstName.isNotEmpty) Text('Имя: $firstName'),
+            Text(
+                'Пароль: ${password.replaceAll(RegExp(r"."), "*")}'), // Отображаем звездочки вместо пароля
           ],
         ),
         actions: [
@@ -307,11 +319,13 @@ class _AdminUsersListState extends State<AdminUsersList> {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) throw Exception('Токен не найден');
 
-      await _apiService.createUser(token, username, firstName);
+      // Передаем username и password
+      await _apiService.createUser(token, username, password);
 
       if (mounted) {
-        _addLog('✅ Добавлен: $username ($firstName)');
-        Navigator.pop(context);
+        // Логируем действие (можно добавить пароль, если это безопасно для вашей системы аудита)
+        _addLog('✅ Добавлен: $username (с паролем)');
+        Navigator.pop(context); // Закрываем диалог
         setState(() {
           _usersFuture = _fetchUsers();
         });
@@ -324,8 +338,18 @@ class _AdminUsersListState extends State<AdminUsersList> {
       }
     } catch (e) {
       if (mounted) {
+        // Показываем более конкретную ошибку, если возможно
+        String errorMessage = e.toString();
+        if (errorMessage.contains('duplicate') ||
+            errorMessage.contains('exists')) {
+          errorMessage = 'Пользователь с таким логином уже существует.';
+        } else if (errorMessage.contains('password')) {
+          errorMessage = 'Пароль не соответствует требованиям безопасности.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Ошибка: $errorMessage'),
+              backgroundColor: Colors.red),
         );
       }
     }
@@ -343,82 +367,122 @@ class _AdminUsersListState extends State<AdminUsersList> {
   void dispose() {
     _searchController.dispose();
     _usernameController.dispose();
-    _firstNameController.dispose();
+    _passwordController.dispose(); // Dispose нового контроллера
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Theme.of(context).cardColor,
-          child: Column(
-            children: [
-              TextField(
-                controller: _searchController,
-                decoration: const InputDecoration(
-                  hintText: 'Поиск по логину или имени...',
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (value) => setState(() {}),
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _selectedRoleFilter,
-                items: [
-                  const DropdownMenuItem(value: 'all', child: Text('Все роли')),
-                  ..._roleLabels.keys.map((role) => DropdownMenuItem(
-                        value: role,
-                        child: Text(_roleLabels[role]!),
-                      )),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedRoleFilter = value!;
-                  });
-                },
-                decoration: const InputDecoration(
-                  labelText: 'Фильтр по ролям',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (_currentUserRole == 'superadmin')
-                ElevatedButton.icon(
-                  onPressed: _showCreateUserDialog,
-                  icon: const Icon(Icons.person_add),
-                  label: const Text('Добавить пользователя'),
-                  style:
-                      ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                ),
-            ],
-          ),
-        ),
-        if (_auditLog.isNotEmpty)
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // === Поиск и фильтры ===
           Card(
-            margin: const EdgeInsets.all(16),
-            child: ExpansionTile(
-              title: const Text('Журнал',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              children: _auditLog
-                  .take(10)
-                  .map((log) => ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 4),
-                        leading: const Icon(Icons.history,
-                            size: 16, color: Colors.grey),
-                        title: Text(log,
-                            style: const TextStyle(
-                                fontSize: 12, fontFamily: 'monospace')),
-                      ))
-                  .toList(),
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Поиск по логину или имени...',
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onChanged: (value) => setState(() {}),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _selectedRoleFilter,
+                    items: [
+                      const DropdownMenuItem(
+                          value: 'all', child: Text('Все роли')),
+                      ..._roleLabels.keys.map((role) => DropdownMenuItem(
+                            value: role,
+                            child: Text(_roleLabels[role]!),
+                          )),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedRoleFilter = value!;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Фильтр по ролям',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_currentUserRole == 'superadmin')
+                    ElevatedButton.icon(
+                      onPressed: _showCreateUserDialog,
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Добавить пользователя'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green[700],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-        Expanded(
-          child: RefreshIndicator(
+
+          const SizedBox(height: 24),
+
+          // === Журнал действий ===
+          if (_auditLog.isNotEmpty)
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ExpansionTile(
+                title: const Text(
+                  'Журнал',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                children: _auditLog
+                    .take(10)
+                    .map((log) => ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
+                          leading: const Icon(
+                            Icons.history,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
+                          title: Text(
+                            log,
+                            style: const TextStyle(
+                                fontSize: 12, fontFamily: 'monospace'),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ),
+
+          const SizedBox(height: 24),
+
+          // === Список пользователей ===
+          RefreshIndicator(
             onRefresh: _refreshData,
             child: FutureBuilder<List<dynamic>>(
               future: _usersFuture,
@@ -434,6 +498,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
                 final filteredUsers = allUsers.where((user) {
                   final role = (user['role']?.toString().toLowerCase() ?? '');
+                  // Исправлена обработка firstName/first_name для поиска
                   final name = ((user['firstName'] ?? user['first_name'] ?? '')
                           as String)
                       .toLowerCase();
@@ -451,11 +516,14 @@ class _AdminUsersListState extends State<AdminUsersList> {
                 }
 
                 return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
                   itemCount: filteredUsers.length,
                   itemBuilder: (context, index) {
                     final user = filteredUsers[index];
                     final userId = user['id'];
                     final username = user['username'] as String;
+                    // Исправлена обработка firstName/first_name для отображения
                     final firstName =
                         user['firstName'] ?? user['first_name'] ?? 'Без имени';
                     final role =
@@ -465,10 +533,17 @@ class _AdminUsersListState extends State<AdminUsersList> {
                     final displayRole = _roleLabels[role] ?? role;
 
                     return Card(
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 6),
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: ListTile(
-                        leading: CircleAvatar(child: Text('$userId')),
+                        leading: CircleAvatar(
+                          child: Text('$userId'),
+                          backgroundColor: Colors.green[700],
+                          foregroundColor: Colors.white,
+                        ),
                         title: Text(username,
                             style:
                                 const TextStyle(fontWeight: FontWeight.bold)),
@@ -539,14 +614,14 @@ class _AdminUsersListState extends State<AdminUsersList> {
               },
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   void _showCreateUserDialog() {
     _usernameController.clear();
-    _firstNameController.clear();
+    _passwordController.clear(); // Очищаем поле пароля
 
     showDialog(
       context: context,
@@ -562,9 +637,10 @@ class _AdminUsersListState extends State<AdminUsersList> {
             ),
             const SizedBox(height: 8),
             TextField(
-              controller: _firstNameController,
+              controller: _passwordController,
               decoration:
-                  const InputDecoration(hintText: 'Имя (необязательно)'),
+                  const InputDecoration(hintText: 'Пароль (обязательно)'),
+              obscureText: true, // Скрываем вводимый пароль
             ),
           ],
         ),
