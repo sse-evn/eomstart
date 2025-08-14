@@ -221,8 +221,8 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
                   _buildInfoRow('Позиция', widget.shift.position),
                   _buildInfoRow('Зона', widget.shift.zone),
                   _buildInfoRow('Слот времени', widget.shift.slotTimeRange),
-                  _buildInfoRow(
-                      'Начало смены', widget.shift.startTime.formatTimeDate()),
+                  _buildInfoRow('Начало смены',
+                      widget.shift.startTime?.formatTimeDate() ?? 'Нет данных'),
                   _buildInfoRow(
                       'ID сотрудника', widget.shift.userId.toString()),
 

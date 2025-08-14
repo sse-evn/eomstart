@@ -34,13 +34,6 @@ void main() async {
 
   final String? storedToken = await _storage.read(key: 'jwt_token');
 
-  // 🔹 DEBUG: Печатаем токен для curl
-  if (storedToken != null) {
-    debugPrint('🔑 JWT Token: $storedToken');
-  } else {
-    debugPrint('⚠️ Токен не найден в SecureStorage');
-  }
-
   if (storedToken != null && storedToken.isNotEmpty) {
     initialToken = storedToken;
     try {
@@ -115,7 +108,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       // При возвращении из фона — обновляем данные
-      print('✅ Приложение вернулось из фона — обновляем смены');
       _shiftProvider.loadShifts();
     }
   }

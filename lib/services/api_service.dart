@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/active_shift.dart' as active_shift;
@@ -255,44 +256,118 @@ class ApiService {
     }
   }
 
-  Future<active_shift.ActiveShift?> getActiveShift(String token) async {
-    final shifts = await getActiveShifts(token);
-    return shifts.isNotEmpty ? shifts.first : null;
+  Future<Map<String, dynamic>> login(String username, String password) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'username': username,
+        'password': password,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Ошибка авторизации: ${response.statusCode}');
+    }
   }
 
-  Future<List<active_shift.ActiveShift>> getActiveShifts(String token) async {
+// В api_service.dart
+  Future<active_shift.ActiveShift?> getActiveShift(String token) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/shifts/active'),
+      Uri.parse(
+          '$baseUrl/shifts/active'), // Этот endpoint возвращает ОДИН объект
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
     );
 
+    debugPrint('📡 GetUserActiveShift API status: ${response.statusCode}');
+    debugPrint('📡 GetUserActiveShift API body: ${response.body}');
+
     if (response.statusCode == 200) {
-      if (response.body == 'null' || response.body.isEmpty) {
+      // Проверяем на "null" или пустое тело
+      if (response.body == 'null' || response.body.trim().isEmpty) {
+        debugPrint('📡 No active shift found (null response)');
+        return null;
+      }
+
+      try {
+        final dynamic body = jsonDecode(response.body);
+
+        // Если это объект - создаем ActiveShift
+        if (body is Map<String, dynamic>) {
+          debugPrint('✅ Parsed single active shift object');
+          return active_shift.ActiveShift.fromJson(body);
+        }
+        // Если это массив с одним элементом - берем первый
+        else if (body is List &&
+            body.isNotEmpty &&
+            body[0] is Map<String, dynamic>) {
+          debugPrint('✅ Parsed active shift from array[0]');
+          return active_shift.ActiveShift.fromJson(body[0]);
+        }
+        // Если пустой массив
+        else if (body is List && body.isEmpty) {
+          debugPrint('📡 Empty array response, no active shift');
+          return null;
+        }
+
+        debugPrint('❌ Unexpected response format: ${body.runtimeType}');
+        return null;
+      } catch (e) {
+        debugPrint('❌ Error parsing active shift: $e');
+        return null;
+      }
+    } else {
+      debugPrint('❌ API error: ${response.statusCode} - ${response.body}');
+      return null;
+    }
+  }
+
+// Этот метод для получения ВСЕХ активных смен (для админов)
+  Future<List<active_shift.ActiveShift>> getActiveShifts(String token) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/shifts/active'), // Другой endpoint!
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    debugPrint('📡 GetActiveShifts API status: ${response.statusCode}');
+    debugPrint('📡 GetActiveShifts API body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      if (response.body == 'null' || response.body.trim().isEmpty) {
         return [];
       }
 
-      final dynamic body = jsonDecode(response.body);
-      if (body is List) {
-        List<active_shift.ActiveShift> shifts = [];
-        for (var item in body) {
-          try {
+      try {
+        final dynamic body = jsonDecode(response.body);
+
+        // Ожидаем массив
+        if (body is List) {
+          List<active_shift.ActiveShift> shifts = [];
+          for (var item in body) {
             if (item is Map<String, dynamic>) {
               shifts.add(active_shift.ActiveShift.fromJson(item));
             }
-          } catch (e) {
-            print('Error parsing active shift item: $e');
-            continue;
           }
+          debugPrint('✅ Parsed ${shifts.length} active shifts');
+          return shifts;
         }
-        return shifts;
+
+        debugPrint('❌ Expected array but got: ${body.runtimeType}');
+        return [];
+      } catch (e) {
+        debugPrint('❌ Error parsing active shifts list: $e');
+        return [];
       }
-      return [];
     } else {
-      throw Exception(
-          'Failed to load active shifts: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      throw Exception('Failed to load active shifts: ${response.statusCode}');
     }
   }
 

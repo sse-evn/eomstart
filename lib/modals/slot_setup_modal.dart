@@ -1,3 +1,5 @@
+// lib/modals/slot_setup_modal.dart
+
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -16,27 +18,22 @@ class SlotSetupModal extends StatefulWidget {
   State<SlotSetupModal> createState() => _SlotSetupModalState();
 }
 
-class _SlotSetupModalState extends State<SlotSetupModal>
-    with TickerProviderStateMixin {
+class _SlotSetupModalState extends State<SlotSetupModal> {
   final _storage = const FlutterSecureStorage();
   final _picker = ImagePicker();
   final _apiService = ApiService();
   String? _selectedTime;
   String? _position;
-  String? _zone;
+  String _zone = 'Центр';
   XFile? _selfie;
   bool _isLoading = false;
   bool _hasActiveShift = false;
   bool _backendConflict = false;
-  bool _hasError = false;
-  String _errorMessage = '';
   List<String> _timeSlots = [];
   List<String> _positions = [];
   List<String> _zones = [];
   String? _token;
   Timer? _syncTimer;
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
 
   static final Map<String, String> _roleLabels = {
     'scout': 'Скаут',
@@ -51,14 +48,6 @@ class _SlotSetupModalState extends State<SlotSetupModal>
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _scaleAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    );
     _initializeData();
     _startSyncTimer();
   }
@@ -66,7 +55,6 @@ class _SlotSetupModalState extends State<SlotSetupModal>
   @override
   void dispose() {
     _syncTimer?.cancel();
-    _animationController.dispose();
     super.dispose();
   }
 
@@ -78,11 +66,7 @@ class _SlotSetupModalState extends State<SlotSetupModal>
 
   Future<void> _initializeData() async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-      _errorMessage = '';
-    });
+    setState(() => _isLoading = true);
 
     try {
       _token = await _storage.read(key: 'jwt_token');
@@ -94,7 +78,7 @@ class _SlotSetupModalState extends State<SlotSetupModal>
         _loadUserProfile(),
         _loadTimeSlots(),
         _loadZones(),
-        _syncWithServer(),
+        _syncWithServer(), // Эта проверка должна обновить состояние
       ]);
     } catch (e) {
       _handleInitializationError(e);
@@ -106,14 +90,21 @@ class _SlotSetupModalState extends State<SlotSetupModal>
   Future<void> _loadUserProfile() async {
     try {
       final profile = await _apiService.getUserProfile(_token!);
+      debugPrint('✅ Профиль загружен: $profile');
+
       final role = (profile['role'] ?? '').toString().toLowerCase();
       final displayName = _roleLabels[role] ?? role.capitalize();
 
-      final positions = await _apiService.getAvailablePositions(_token!);
+      List<String> positions = [];
+      try {
+        positions = await _apiService.getAvailablePositions(_token!);
+      } catch (e) {
+        debugPrint('❌ Ошибка загрузки позиций: $e');
+      }
 
       if (mounted) {
         setState(() {
-          _positions = positions;
+          _positions = positions.isEmpty ? _getDefaultPositions() : positions;
           _position = _positions.contains(displayName)
               ? displayName
               : _positions.isNotEmpty
@@ -122,14 +113,18 @@ class _SlotSetupModalState extends State<SlotSetupModal>
         });
       }
     } catch (e) {
+      debugPrint('❌ Ошибка загрузки профиля: $e');
       if (mounted) {
         setState(() {
-          _positions = [];
-          _position = null;
+          _positions = _getDefaultPositions();
+          _position = _positions.isNotEmpty ? _positions.first : null;
         });
       }
-      throw e;
     }
+  }
+
+  List<String> _getDefaultPositions() {
+    return ['Курьер', 'Оператор', 'Менеджер', 'Скаут'];
   }
 
   Future<void> _syncWithServer() async {
@@ -137,6 +132,8 @@ class _SlotSetupModalState extends State<SlotSetupModal>
 
     try {
       final activeShift = await _apiService.getActiveShift(_token!);
+      debugPrint(
+          '🔧 Server active shift check: ${activeShift != null ? 'YES' : 'NO'}');
 
       if (mounted) {
         final hasActiveShift = activeShift != null;
@@ -145,16 +142,21 @@ class _SlotSetupModalState extends State<SlotSetupModal>
             _hasActiveShift = hasActiveShift;
             _backendConflict = false;
           });
+          debugPrint('🔄 UI state updated: hasActiveShift = $hasActiveShift');
         }
 
+        // Важно: обновляем провайдер с реальными данными с сервера
         final provider = Provider.of<ShiftProvider>(context, listen: false);
         if (activeShift != null) {
-          provider.setActiveShift(activeShift);
+          await provider.setActiveShift(activeShift);
+          debugPrint('✅ Provider updated with active shift');
         } else {
-          provider.clearActiveShift();
+          await provider.clearActiveShift();
+          debugPrint('✅ Provider cleared active shift');
         }
       }
     } catch (e) {
+      debugPrint('❌ Sync error: $e');
       if (mounted && !e.toString().contains('404')) {
         setState(() => _backendConflict = true);
         _showError('Ошибка проверки смены: $e');
@@ -165,20 +167,12 @@ class _SlotSetupModalState extends State<SlotSetupModal>
   Future<void> _loadTimeSlots() async {
     try {
       final slots = await _apiService.getAvailableTimeSlots(_token!);
-      if (mounted) {
-        setState(() {
-          _timeSlots = slots;
-          _selectedTime = _timeSlots.isNotEmpty ? _timeSlots.first : null;
-        });
-      }
+      if (mounted) setState(() => _timeSlots = slots);
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _timeSlots = [];
-          _selectedTime = null;
-        });
+        setState(() =>
+            _timeSlots = ['7:00 - 15:00', '15:00 - 23:00', '7:00 - 23:00']);
       }
-      throw e;
     }
   }
 
@@ -188,17 +182,16 @@ class _SlotSetupModalState extends State<SlotSetupModal>
       if (mounted) {
         setState(() {
           _zones = zones;
-          _zone = _zones.isNotEmpty ? _zones.first : null;
+          if (zones.isNotEmpty) _zone = zones.first;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _zones = [];
-          _zone = null;
+          _zones = ['Центр', 'Север', 'Юг', 'Запад', 'Восток'];
+          _zone = _zones.first;
         });
       }
-      throw e;
     }
   }
 
@@ -238,14 +231,16 @@ class _SlotSetupModalState extends State<SlotSetupModal>
       return;
     }
 
+    // Проверяем актуальное состояние перед началом
     await _syncWithServer();
+
     if (_hasActiveShift) {
       final confirmed = await _showActiveShiftDialog();
       if (confirmed != true) return;
 
       try {
         await Provider.of<ShiftProvider>(context, listen: false).endSlot();
-        await _syncWithServer();
+        await _syncWithServer(); // Синхронизируем после завершения
 
         if (_hasActiveShift) {
           _showError('Не удалось завершить предыдущую смену.');
@@ -297,7 +292,7 @@ class _SlotSetupModalState extends State<SlotSetupModal>
       await provider.startSlot(
         slotTimeRange: _selectedTime!,
         position: _position!,
-        zone: _zone!,
+        zone: _zone,
         selfie: XFile(compressedFile.path),
       );
       setState(() => _hasActiveShift = true);
@@ -311,12 +306,16 @@ class _SlotSetupModalState extends State<SlotSetupModal>
   }
 
   void _handleInitializationError(Object error) {
+    debugPrint('❌ Ошибка инициализации: $error');
+    _showError('Ошибка загрузки данных: ${error.toString()}');
+
     if (mounted) {
       setState(() {
-        _hasError = true;
-        _errorMessage = error.toString();
+        _positions = _getDefaultPositions();
+        _position = _positions.isNotEmpty ? _positions.first : null;
+        _zones = ['Центр', 'Север', 'Юг', 'Запад', 'Восток'];
+        _zone = _zones.isNotEmpty ? _zones.first : 'Центр';
       });
-      _showError('Ошибка загрузки данных: ${error.toString()}');
     }
   }
 
@@ -383,21 +382,8 @@ class _SlotSetupModalState extends State<SlotSetupModal>
     final isDarkMode = theme.brightness == Brightness.dark;
     final hasActiveShift = _hasActiveShift || _backendConflict;
 
-    if (_hasError) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Ошибка: $_errorMessage'),
-            ElevatedButton(
-              onPressed: _initializeData,
-              child: const Text('Повторить'),
-            ),
-          ],
-        ),
-      );
-    }
+    debugPrint(
+        '📱 BUILD: hasActiveShift = $_hasActiveShift, backendConflict = $_backendConflict');
 
     return Container(
       padding: EdgeInsets.only(
@@ -410,13 +396,8 @@ class _SlotSetupModalState extends State<SlotSetupModal>
         color: isDarkMode ? Colors.grey[900] : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: _isLoading
-          ? Center(
-              child: ScaleTransition(
-                scale: _scaleAnimation,
-                child: const CircularProgressIndicator(),
-              ),
-            )
+      child: _isLoading && _timeSlots.isEmpty
+          ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -437,8 +418,7 @@ class _SlotSetupModalState extends State<SlotSetupModal>
                     _buildSelfiePlaceholder(isDarkMode),
                   _buildSelfieButton(isDarkMode, hasActiveShift),
                   const SizedBox(height: 24),
-                  if (_timeSlots.isNotEmpty)
-                    ..._buildTimeSlots(isDarkMode, hasActiveShift),
+                  ..._buildTimeSlots(isDarkMode, hasActiveShift),
                   const SizedBox(height: 24),
                   if (_positions.isNotEmpty)
                     _buildPositionDropdown(isDarkMode, hasActiveShift),
@@ -455,31 +435,28 @@ class _SlotSetupModalState extends State<SlotSetupModal>
   }
 
   Widget _buildConflictWarning() {
-    return ScaleTransition(
-      scale: _scaleAnimation,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        margin: const EdgeInsets.only(top: 12),
-        decoration: BoxDecoration(
-          color: Colors.orange[100],
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.warning, color: Colors.orange[800]),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Обнаружен конфликт состояний. Попробуйте обновить данные.',
-                style: TextStyle(color: Colors.orange[800]),
-              ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(top: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning, color: Colors.orange[800]),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Обнаружен конфликт состояний. Попробуйте обновить данные.',
+              style: TextStyle(color: Colors.orange[800]),
             ),
-            IconButton(
-              icon: Icon(Icons.refresh, color: Colors.orange[800]),
-              onPressed: _initializeData,
-            ),
-          ],
-        ),
+          ),
+          IconButton(
+            icon: Icon(Icons.refresh, color: Colors.orange[800]),
+            onPressed: _initializeData,
+          ),
+        ],
       ),
     );
   }
@@ -549,7 +526,6 @@ class _SlotSetupModalState extends State<SlotSetupModal>
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
-        disabledBackgroundColor: Colors.grey[400],
       ),
     );
   }
@@ -564,9 +540,7 @@ class _SlotSetupModalState extends State<SlotSetupModal>
               ? null
               : () => setState(() => _selectedTime = slot),
           borderRadius: BorderRadius.circular(10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
+          child: Container(
             padding: const EdgeInsets.symmetric(vertical: 14),
             decoration: BoxDecoration(
               color: isSelected
@@ -701,26 +675,21 @@ class _SlotSetupModalState extends State<SlotSetupModal>
         _isLoading ||
         _selectedTime == null ||
         _selfie == null ||
-        _position == null ||
-        _zone == null;
+        _position == null;
 
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         onPressed: isDisabled ? null : _finish,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isDisabled ? Colors.grey : Colors.green[700],
+          backgroundColor: isBlocked ? Colors.grey : Colors.green[700],
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          disabledBackgroundColor: Colors.grey[400],
         ),
         child: _isLoading
-            ? ScaleTransition(
-                scale: _scaleAnimation,
-                child: const CircularProgressIndicator(color: Colors.white),
-              )
+            ? const CircularProgressIndicator(color: Colors.white)
             : Text(
                 isBlocked ? 'Смена уже активна' : 'Начать смену',
                 style: const TextStyle(

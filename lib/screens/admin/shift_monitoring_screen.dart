@@ -57,9 +57,12 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
   Map<String, List<ActiveShift>> _groupShiftsByDate(List<ActiveShift> shifts) {
     final Map<String, List<ActiveShift>> grouped = {};
     for (final shift in shifts) {
-      final dateKey = shift.startTime.toIso8601String().split('T').first;
-      grouped.putIfAbsent(dateKey, () => []);
-      grouped[dateKey]!.add(shift);
+      // Добавляем проверку на null
+      if (shift.startTime != null) {
+        final dateKey = shift.startTime!.toIso8601String().split('T').first;
+        grouped.putIfAbsent(dateKey, () => []);
+        grouped[dateKey]!.add(shift);
+      }
     }
     return grouped;
   }
@@ -179,39 +182,39 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        shift.username,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          shift.username,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Позиция: ${shift.position}',
-                                        style: const TextStyle(
-                                            color: Colors.grey, fontSize: 14),
-                                      ),
-                                      Text(
-                                        'Зона: ${shift.zone}',
-                                        style: const TextStyle(
-                                            color: Colors.grey, fontSize: 14),
-                                      ),
-                                      Text(
-                                        'Слот: ${shift.slotTimeRange}',
-                                        style: const TextStyle(
-                                            color: Colors.grey, fontSize: 14),
-                                      ),
-                                      Text(
-                                        'Начало: ${TimeFormat(shift.startTime).formatTimeDate()}',
-                                        style: const TextStyle(
-                                            color: Colors.green, fontSize: 14),
-                                      ),
-                                    ],
-                                  ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Позиция: ${shift.position}',
+                                          style: const TextStyle(
+                                              color: Colors.grey, fontSize: 14),
+                                        ),
+                                        Text(
+                                          'Зона: ${shift.zone}',
+                                          style: const TextStyle(
+                                              color: Colors.grey, fontSize: 14),
+                                        ),
+                                        Text(
+                                          'Слот: ${shift.slotTimeRange}',
+                                          style: const TextStyle(
+                                              color: Colors.grey, fontSize: 14),
+                                        ),
+                                        Text(
+                                          'Начало: ${shift.startTime != null ? TimeFormat(shift.startTime!).formatTimeDate() : 'Нет данных'}',
+                                          style: const TextStyle(
+                                              color: Colors.green,
+                                              fontSize: 14),
+                                        ),
+                                      ]),
                                 ),
                                 const Icon(Icons.circle,
                                     color: Colors.green, size: 12),
