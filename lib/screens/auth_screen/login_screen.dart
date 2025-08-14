@@ -45,23 +45,40 @@ class _LoginScreenState extends State<LoginScreen> {
     if (mounted && token != null && token.isNotEmpty) {
       try {
         final profile = await _apiService.getUserProfile(token);
-        final status = profile['status']?.toString();
+        final status =
+            (profile['status'] ?? 'inactive').toString().toLowerCase();
         final role = profile['role']?.toString().toLowerCase();
+        final isActive = (profile['is_active'] as bool?) ?? false;
 
         if (mounted) {
-          if (status == 'pending' && role != 'superadmin') {
+          // Логика перехода внутри экрана логина
+          if (isActive && status != 'pending') {
+            final nextRoute = role == 'superadmin' ? '/admin' : '/dashboard';
+            Navigator.pushNamedAndRemoveUntil(
+                context, nextRoute, (route) => false);
+          } else if (status == 'pending') {
             Navigator.pushNamedAndRemoveUntil(
                 context, '/pending', (route) => false);
-          } else {
+          } else if (status == 'new' || status == 'null') {
+            // Если новый пользователь - направляем на регистрацию
             Navigator.pushNamedAndRemoveUntil(
-                context, '/dashboard', (route) => false);
+                context, '/registration', (route) => false);
+          } else {
+            // Если пользователь не активен, остаемся на экране логина
+            // и не показываем ошибку, просто позволяем пользователю войти
+            // или зарегистрироваться снова.
+            // Токен уже недействителен, поэтому удаляем его.
+            await _storage.delete(key: 'jwt_token');
           }
         }
       } catch (e) {
-        // Токен недействителен, продолжаем показывать экран логина
+        // Токен недействителен, удаляем его и остаемся на экране логина
         debugPrint('Недействительный токен: $e');
+        await _storage.delete(key: 'jwt_token');
+        // Не показываем ошибку пользователю, просто позволяем войти заново.
       }
     }
+    // Если токена нет или он недействителен, остаемся на экране логина
   }
 
   void _showError(String message) {
@@ -108,11 +125,22 @@ class _LoginScreenState extends State<LoginScreen> {
         await shiftProvider.setToken(token);
 
         // Переходим к нужному экрану
-        final role = (response['role'] ?? 'user').toString().toLowerCase();
-        final nextRoute = role == 'superadmin' ? '/admin' : '/dashboard';
+        final profile = await _apiService.getUserProfile(token);
+        final status =
+            (profile['status'] ?? 'inactive').toString().toLowerCase();
+        final role = (profile['role'] ?? 'user').toString().toLowerCase();
 
         if (mounted) {
-          Navigator.pushReplacementNamed(context, nextRoute);
+          if (status == 'pending' && role != 'superadmin') {
+            Navigator.pushNamedAndRemoveUntil(
+                context, '/pending', (route) => false);
+          } else if (status == 'new' || status == 'null') {
+            Navigator.pushNamedAndRemoveUntil(
+                context, '/registration', (route) => false);
+          } else {
+            final nextRoute = role == 'superadmin' ? '/admin' : '/dashboard';
+            Navigator.pushReplacementNamed(context, nextRoute);
+          }
         }
       } else {
         _showError('Неверный логин или пароль');
@@ -193,12 +221,19 @@ class _LoginScreenState extends State<LoginScreen> {
         final role = profile['role']?.toString().toLowerCase();
 
         if (mounted) {
+          // Проверяем статус пользователя
           if (status == 'pending' && role != 'superadmin') {
             Navigator.pushNamedAndRemoveUntil(
                 context, '/pending', (route) => false);
-          } else {
+          } else if (status == 'new' || status == null) {
+            // Если новый пользователь - направляем на регистрацию
             Navigator.pushNamedAndRemoveUntil(
-                context, '/dashboard', (route) => false);
+                context, '/registration', (route) => false);
+          } else {
+            // Для активных пользователей - в основное приложение
+            final nextRoute = role == 'superadmin' ? '/admin' : '/dashboard';
+            Navigator.pushNamedAndRemoveUntil(
+                context, nextRoute, (route) => false);
           }
         }
       } else {
@@ -239,9 +274,13 @@ class _LoginScreenState extends State<LoginScreen> {
           if (status == 'pending' && role != 'superadmin') {
             Navigator.pushNamedAndRemoveUntil(
                 context, '/pending', (route) => false);
-          } else {
+          } else if (status == 'new' || status == null) {
             Navigator.pushNamedAndRemoveUntil(
-                context, '/dashboard', (route) => false);
+                context, '/registration', (route) => false);
+          } else {
+            final nextRoute = role == 'superadmin' ? '/admin' : '/dashboard';
+            Navigator.pushNamedAndRemoveUntil(
+                context, nextRoute, (route) => false);
           }
         }
       } else {

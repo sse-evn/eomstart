@@ -85,6 +85,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       final role = (profile['role'] ?? '').toString().toLowerCase();
       final displayName = _roleLabels[role] ?? role.capitalize();
 
+      // Загружаем позиции с бэкенда
       List<String> positions = [];
       try {
         positions = await _apiService.getAvailablePositions(_token!);
@@ -95,11 +96,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       if (mounted) {
         setState(() {
           _positions = positions.isEmpty ? _getDefaultPositions() : positions;
-          _position = _positions.contains(displayName)
-              ? displayName
-              : _positions.isNotEmpty
-                  ? _positions.first
-                  : null;
+          // Устанавливаем позицию из профиля пользователя
+          _position = displayName;
         });
       }
     } catch (e) {
@@ -130,18 +128,17 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           debugPrint('🕒 Updated _timeSlots from server: $_timeSlots');
         } else {
           debugPrint('🕒 Server returned empty list, using default time slots');
-          // _timeSlots уже установлены по умолчанию в поле класса
         }
       }
     } catch (e) {
       debugPrint('❌ Ошибка загрузки временных слотов с сервера: $e');
-      // Используем значения по умолчанию, которые уже установлены
       debugPrint('🕒 Using default fallback time slots');
     }
   }
 
   Future<void> _loadZones() async {
     try {
+      // Загружаем зоны с бэкенда
       final zones = await _apiService.getAvailableZones(_token!);
       if (mounted) {
         setState(() {
@@ -150,6 +147,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         });
       }
     } catch (e) {
+      debugPrint('❌ Ошибка загрузки зон: $e');
       if (mounted) {
         setState(() {
           _zones = ['Центр', 'Север', 'Юг', 'Запад', 'Восток'];
@@ -157,6 +155,46 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         });
       }
     }
+  }
+
+  bool _isTimeSlotAvailable(String timeSlot) {
+    final now = DateTime.now();
+    final currentHour = now.hour;
+    final currentMinute = now.minute;
+
+    // Парсим временной слот (например, "07:00 - 15:00")
+    final parts = timeSlot.split(' - ');
+    if (parts.length != 2) return true;
+
+    final startTimeStr = parts[0]; // "07:00"
+    final startParts = startTimeStr.split(':');
+    if (startParts.length != 2) return true;
+
+    final slotHour = int.tryParse(startParts[0]) ?? 0;
+    final slotMinute = int.tryParse(startParts[1]) ?? 0;
+
+    // Проверяем разницу во времени (минимум 30 минут)
+    final currentTimeInMinutes = currentHour * 60 + currentMinute;
+    final slotTimeInMinutes = slotHour * 60 + slotMinute;
+
+    // Если слот начинается сегодня, но уже прошло время или слишком близко
+    if (slotHour > currentHour ||
+        (slotHour == currentHour && slotMinute > currentMinute)) {
+      final difference = slotTimeInMinutes - currentTimeInMinutes;
+      if (difference < 30) {
+        return false;
+      }
+    }
+
+    // Если слот начинается раньше текущего времени (но не учитывая переход через полночь)
+    if (slotHour < currentHour && currentHour >= 2 && currentHour <= 6) {
+      // Если сейчас 2-6 утра, нельзя открывать утренние смены
+      if (slotHour >= 7 && slotHour <= 12) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   Future<void> _takeSelfie() async {
@@ -361,6 +399,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                   const SizedBox(height: 24),
                   _buildTimeSlotsSection(isDarkMode, hasActiveShift),
                   const SizedBox(height: 24),
+                  _buildPositionDropdown(isDarkMode, hasActiveShift),
+                  const SizedBox(height: 24),
                   if (_zones.isNotEmpty)
                     _buildZoneDropdown(isDarkMode, hasActiveShift),
                   const SizedBox(height: 24),
@@ -500,9 +540,10 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       itemBuilder: (context, index) {
         final timeSlot = _timeSlots[index];
         final isSelected = _selectedTime == timeSlot;
+        final isAvailable = _isTimeSlotAvailable(timeSlot);
 
         return ElevatedButton(
-          onPressed: isBlocked || _isLoading
+          onPressed: (isBlocked || _isLoading || !isAvailable)
               ? null
               : () => setState(() => _selectedTime = timeSlot),
           style: ElevatedButton.styleFrom(
@@ -530,16 +571,74 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             ),
             elevation: isSelected ? 4 : 1,
           ),
-          child: Text(
-            timeSlot,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                timeSlot,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (!isAvailable)
+                const Text(
+                  'недоступно',
+                  style: TextStyle(fontSize: 10, color: Colors.red),
+                ),
+            ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPositionDropdown(bool isDarkMode, bool isBlocked) {
+    return DropdownButtonFormField<String>(
+      value: _position,
+      items: _positions.map((item) {
+        return DropdownMenuItem(
+            value: item,
+            child: Text(
+              item,
+              style: TextStyle(
+                color: isDarkMode ? Colors.white : Colors.black,
+              ),
+            ));
+      }).toList(),
+      onChanged: isBlocked || _isLoading
+          ? null
+          : (String? value) => setState(() => _position = value),
+      decoration: InputDecoration(
+        labelText: 'Должность',
+        labelStyle: TextStyle(
+          color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!,
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!,
+          ),
+        ),
+        filled: true,
+        fillColor: isDarkMode ? Colors.grey[800] : Colors.grey[100],
+      ),
+      dropdownColor: isDarkMode ? Colors.grey[800] : Colors.white,
+      style: TextStyle(
+        color: isDarkMode ? Colors.white : Colors.black,
+        fontSize: 16,
+      ),
+      icon: Icon(
+        Icons.arrow_drop_down,
+        color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+      ),
     );
   }
 

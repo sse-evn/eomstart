@@ -87,8 +87,9 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Активные смены'),
-        backgroundColor: Colors.blue,
-        elevation: 1,
+        backgroundColor: Colors.green[700],
+        elevation: 4,
+        foregroundColor: Colors.white,
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -101,134 +102,235 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
               return Center(
                 child: Text(
                   'Ошибка: ${snapshot.error}',
-                  style: TextStyle(color: Colors.red),
+                  style: const TextStyle(color: Colors.red),
                 ),
               );
             }
 
             final shifts = snapshot.data!;
             if (shifts.isEmpty) {
-              return const Center(child: Text('Нет активных смен'));
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.access_time, size: 64, color: Colors.grey),
+                    SizedBox(height: 16),
+                    Text(
+                      'Нет активных смен',
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              );
             }
 
             final grouped = _groupShiftsByDate(shifts);
 
-            return ListView(
-              children: grouped.entries.map((entry) {
-                final date = entry.key;
-                final shiftsForDay = entry.value;
+            return Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.grey[50]!,
+                    Colors.white,
+                  ],
+                ),
+              ),
+              child: ListView(
+                children: grouped.entries.map((entry) {
+                  final date = entry.key;
+                  final shiftsForDay = entry.value;
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      child: Text(
-                        _formatDate(date),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+                        child: Text(
+                          _formatDate(date),
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green[700],
+                          ),
                         ),
                       ),
-                    ),
-                    ...shiftsForDay.map((shift) {
-                      return InkWell(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  ShiftDetailsScreen(shift: shift),
-                            ),
-                          );
-                        },
-                        child: Card(
-                          margin: const EdgeInsets.symmetric(
+                      ...shiftsForDay.map((shift) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 4),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            child: Row(
-                              children: [
-                                ClipOval(
-                                  child: shift.selfie.isNotEmpty
-                                      ? Image.network(
-                                          'https://eom-sharing.duckdns.org${shift.selfie}',
-                                          width: 60,
-                                          height: 60,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
-                                              Container(
-                                            width: 60,
-                                            height: 60,
-                                            color: Colors.grey[300],
-                                            child: const Icon(Icons.person,
-                                                color: Colors.grey),
+                          child: Card(
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        ShiftDetailsScreen(shift: shift),
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    // Фото сотрудника
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(30),
+                                        border: Border.all(
+                                          color: Colors.green[100]!,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: ClipOval(
+                                        child: shift.selfie.isNotEmpty
+                                            ? Image.network(
+                                                'https://eom-sharing.duckdns.org${shift.selfie}',
+                                                width: 60,
+                                                height: 60,
+                                                fit: BoxFit.cover,
+                                                loadingBuilder: (context, child,
+                                                    loadingProgress) {
+                                                  if (loadingProgress == null)
+                                                    return child;
+                                                  return Container(
+                                                    width: 60,
+                                                    height: 60,
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.grey[200],
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              30),
+                                                    ),
+                                                    child: const Center(
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                              strokeWidth: 2),
+                                                    ),
+                                                  );
+                                                },
+                                                errorBuilder: (context, error,
+                                                        stackTrace) =>
+                                                    Container(
+                                                  width: 60,
+                                                  height: 60,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.grey[200],
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            30),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.person,
+                                                    color: Colors.grey,
+                                                    size: 30,
+                                                  ),
+                                                ),
+                                              )
+                                            : Container(
+                                                width: 60,
+                                                height: 60,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.grey[200],
+                                                  borderRadius:
+                                                      BorderRadius.circular(30),
+                                                ),
+                                                child: const Icon(
+                                                  Icons.person,
+                                                  color: Colors.grey,
+                                                  size: 30,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            shift.username,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                              color: Colors.black87,
+                                            ),
                                           ),
-                                        )
-                                      : Container(
-                                          width: 60,
-                                          height: 60,
-                                          color: Colors.grey[300],
-                                          child: const Icon(Icons.person,
-                                              color: Colors.grey),
-                                        ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          shift.username,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
+                                          const SizedBox(height: 6),
+                                          _buildInfoChip('Позиция',
+                                              shift.position, Colors.blue),
+                                          const SizedBox(height: 4),
+                                          _buildInfoChip(
+                                              'Зона', shift.zone, Colors.green),
+                                          const SizedBox(height: 4),
+                                          _buildInfoChip(
+                                              'Слот',
+                                              shift.slotTimeRange,
+                                              Colors.orange),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Начало: ${shift.startTime != null ? TimeFormat(shift.startTime!).formatTimeDate() : 'Нет данных'}',
+                                            style: TextStyle(
+                                              color: Colors.green[700],
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Позиция: ${shift.position}',
-                                          style: const TextStyle(
-                                              color: Colors.grey, fontSize: 14),
-                                        ),
-                                        Text(
-                                          'Зона: ${shift.zone}',
-                                          style: const TextStyle(
-                                              color: Colors.grey, fontSize: 14),
-                                        ),
-                                        Text(
-                                          'Слот: ${shift.slotTimeRange}',
-                                          style: const TextStyle(
-                                              color: Colors.grey, fontSize: 14),
-                                        ),
-                                        Text(
-                                          'Начало: ${shift.startTime != null ? TimeFormat(shift.startTime!).formatTimeDate() : 'Нет данных'}',
-                                          style: const TextStyle(
-                                              color: Colors.green,
-                                              fontSize: 14),
-                                        ),
-                                      ]),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green[100],
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(
+                                        Icons.circle,
+                                        color: Colors.green,
+                                        size: 12,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const Icon(Icons.circle,
-                                    color: Colors.green, size: 12),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-                  ],
-                );
-              }).toList(),
+                        );
+                      }).toList(),
+                    ],
+                  );
+                }).toList(),
+              ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Text(
+        '$label: $value',
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );

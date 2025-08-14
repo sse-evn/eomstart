@@ -98,8 +98,9 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Детали смены'),
-        backgroundColor: Colors.blue,
-        elevation: 1,
+        backgroundColor: Colors.green[700],
+        elevation: 4,
+        foregroundColor: Colors.white,
       ),
       body: Stack(
         children: [
@@ -109,137 +110,283 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Сотрудник
-                  const Text(
-                    'Сотрудник:',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                  // Карточка сотрудника
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.shift.username,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Сотрудник',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.shift.username,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'ID: ${widget.shift.userId}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 20),
 
-                  // Фото
-                  const Text(
-                    'Фото смены',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                  // Фото смены
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  GestureDetector(
-                    onTap: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => Dialog(
-                          backgroundColor: Colors.black,
-                          child: Stack(
-                            children: [
-                              InteractiveViewer(
-                                child: Image.network(
-                                  'https://eom-sharing.duckdns.org${widget.shift.selfie}',
-                                  loadingBuilder:
-                                      (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return const Center(
-                                        child: CircularProgressIndicator());
-                                  },
-                                  errorBuilder: (_, __, ___) => const Column(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Фото смены',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        GestureDetector(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => Dialog(
+                                backgroundColor: Colors.black,
+                                child: Stack(
+                                  children: [
+                                    InteractiveViewer(
+                                      child: Image.network(
+                                        'https://eom-sharing.duckdns.org${widget.shift.selfie}',
+                                        loadingBuilder:
+                                            (context, child, loadingProgress) {
+                                          if (loadingProgress == null)
+                                            return child;
+                                          return const Center(
+                                              child:
+                                                  CircularProgressIndicator());
+                                        },
+                                        errorBuilder: (_, __, ___) =>
+                                            const Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.error,
+                                                color: Colors.red, size: 48),
+                                            Text('Фото не загружено',
+                                                style: TextStyle(
+                                                    color: Colors.white)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 20,
+                                      right: 20,
+                                      child: IconButton(
+                                        icon: const Icon(Icons.close,
+                                            color: Colors.white),
+                                        onPressed: () => Navigator.pop(ctx),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: Colors.grey.shade200, width: 1),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                'https://eom-sharing.duckdns.org${widget.shift.selfie}',
+                                height: 200,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(
+                                    height: 200,
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (_, __, ___) => Container(
+                                  height: 200,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.error,
-                                          color: Colors.red, size: 48),
-                                      Text('Фото не загружено',
-                                          style:
-                                              TextStyle(color: Colors.white)),
+                                      Icon(Icons.person,
+                                          size: 60, color: Colors.grey),
+                                      SizedBox(height: 8),
+                                      Text('Фото отсутствует',
+                                          style: TextStyle(color: Colors.grey)),
                                     ],
                                   ),
                                 ),
                               ),
-                              Positioned(
-                                top: 20,
-                                right: 20,
-                                child: IconButton(
-                                  icon: const Icon(Icons.close,
-                                      color: Colors.white),
-                                  onPressed: () => Navigator.pop(ctx),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Информация о смене
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Информация о смене',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildInfoRow('Позиция', widget.shift.position),
+                        _buildInfoRow('Зона', widget.shift.zone),
+                        _buildInfoRow(
+                            'Слот времени', widget.shift.slotTimeRange),
+                        _buildInfoRow(
+                            'Начало смены',
+                            widget.shift.startTime?.formatTimeDate() ??
+                                'Нет данных'),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.green.shade100),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline,
+                                  size: 16, color: Colors.green[700]),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Смена активна',
+                                  style: TextStyle(
+                                    color: Colors.green[700],
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      );
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey, width: 1),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          'https://eom-sharing.duckdns.org${widget.shift.selfie}',
-                          height: 200,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return const Center(
-                                child: CircularProgressIndicator());
-                          },
-                          errorBuilder: (_, __, ___) => const Icon(Icons.person,
-                              size: 100, color: Colors.grey),
-                        ),
-                      ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 24),
-
-                  // Информация о смене
-                  const Text(
-                    'Информация о смене',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  _buildInfoRow('Позиция', widget.shift.position),
-                  _buildInfoRow('Зона', widget.shift.zone),
-                  _buildInfoRow('Слот времени', widget.shift.slotTimeRange),
-                  _buildInfoRow('Начало смены',
-                      widget.shift.startTime?.formatTimeDate() ?? 'Нет данных'),
-                  _buildInfoRow(
-                      'ID сотрудника', widget.shift.userId.toString()),
-
                   const SizedBox(height: 32),
 
                   // Кнопка завершения (только для superadmin)
                   if (_currentUserRole == 'superadmin')
-                    ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _forceEndShift,
-                      icon: const Icon(Icons.close, size: 18),
-                      label: Text(
-                          _isLoading ? 'Завершение...' : 'Завершить смену'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.red.shade600, Colors.red.shade800],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.red.withOpacity(0.3),
+                            blurRadius: 15,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading ? null : _forceEndShift,
+                        icon: const Icon(Icons.close,
+                            size: 18, color: Colors.white),
+                        label: Text(
+                          _isLoading ? 'Завершение...' : 'Завершить смену',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
@@ -249,8 +396,12 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
           ),
           if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(child: CircularProgressIndicator()),
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
             ),
         ],
       ),
@@ -259,22 +410,28 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
 
   Widget _buildInfoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 110,
+            width: 120,
             child: Text(
               '$label:',
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600, color: Colors.grey),
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
+              ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontSize: 15),
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
             ),
           ),
         ],

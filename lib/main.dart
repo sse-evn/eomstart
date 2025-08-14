@@ -1,151 +1,231 @@
-// main.dart
+// lib/screens/auth_screen/registration_screen.dart
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:micro_mobility_app/settings_provider.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
-import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
-import 'package:micro_mobility_app/screens/auth_screen/pending_screen.dart';
-import 'package:micro_mobility_app/screens/dashboard_screen.dart';
-import 'package:micro_mobility_app/screens/profile_screens.dart';
-import 'package:micro_mobility_app/screens/settings_screen.dart';
-import 'package:micro_mobility_app/screens/about_screen.dart';
-import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
-import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.dart';
-import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 
-import 'providers/shift_provider.dart';
+class RegistrationScreen extends StatefulWidget {
+  const RegistrationScreen({super.key});
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('ru', null);
+  @override
+  State<RegistrationScreen> createState() => _RegistrationScreenState();
+}
 
-  // Инициализация всех зависимостей
+class _RegistrationScreenState extends State<RegistrationScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _storage = const FlutterSecureStorage();
   final _apiService = ApiService();
-  final _prefs = await SharedPreferences.getInstance();
-
-  String initialRoute = '/dashboard';
-  String? initialToken;
-
-  final String? storedToken = await _storage.read(key: 'jwt_token');
-
-  if (storedToken != null && storedToken.isNotEmpty) {
-    initialToken = storedToken;
-    try {
-      final profile = await _apiService.getUserProfile(storedToken);
-      final role = (profile['role'] ?? 'user').toString().toLowerCase();
-      final isActive = (profile['is_active'] as bool?) ?? false;
-
-      if (isActive) {
-        if (role == 'superadmin') {
-          initialRoute = '/admin';
-        } else {
-          initialRoute = '/dashboard';
-        }
-      } else {
-        initialRoute = '/pending';
-      }
-    } catch (e) {
-      debugPrint('Ошибка получения профиля при старте: $e');
-      initialRoute = '/';
-      await _storage.delete(key: 'jwt_token');
-    }
-  }
-
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ChangeNotifierProvider(
-          create: (_) => ShiftProvider(
-            apiService: _apiService,
-            storage: _storage,
-            prefs: _prefs,
-            initialToken: initialToken,
-          ),
-        ),
-      ],
-      child: MyApp(
-        initialRoute: initialRoute,
-        token: initialToken,
-      ),
-    ),
-  );
-}
-
-class MyApp extends StatefulWidget {
-  final String initialRoute;
-  final String? token;
-
-  const MyApp({super.key, required this.initialRoute, this.token});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  late ShiftProvider _shiftProvider;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Получаем ShiftProvider после инициализации
-    _shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // При возвращении из фона — обновляем данные
-      _shiftProvider.loadShifts();
-    }
-  }
+  bool _isLoading = false;
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitRegistration() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final token = await _storage.read(key: 'jwt_token');
+      if (token == null) throw Exception('Токен не найден');
+
+      await _apiService.completeRegistration(
+        token,
+        _firstNameController.text.trim(),
+        _lastNameController.text.trim(),
+        _phoneController.text.trim(),
+      );
+
+      if (mounted) {
+        // После регистрации направляем на экран ожидания подтверждения
+        Navigator.pushNamedAndRemoveUntil(
+            context, '/pending', (route) => false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка регистрации: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Оператор микромобильности',
-      theme: ThemeData(
-        primarySwatch: Colors.green,
-        scaffoldBackgroundColor: Colors.grey[100],
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-        ),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        title: const Text('Регистрация'),
+        backgroundColor: Colors.green[700],
+        foregroundColor: Colors.white,
       ),
-      initialRoute: widget.initialRoute,
-      debugShowCheckedModeBanner: false,
-      routes: {
-        '/': (context) => const LoginScreen(),
-        '/dashboard': (context) => const DashboardScreen(),
-        '/profile': (context) => const ProfileScreen(),
-        '/settings': (context) => const SettingsScreen(),
-        '/about': (context) => const AboutScreen(),
-        '/map': (context) => const MapScreen(),
-        '/qr_scanner': (context) => const QrScannerScreen(),
-        // '/positions': (context) => const PositionsScreen(),
-        // '/zones': (context) => ZonesScreen(onZoneSelected: (zone) {}),
-        '/admin': (context) => const AdminPanelScreen(),
-        '/pending': (context) => const PendingApprovalScreen(),
-      },
+      body: Center(
+        child: Card(
+          margin: const EdgeInsets.symmetric(horizontal: 32),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          elevation: 8,
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.green[100],
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.app_registration,
+                      size: 60,
+                      color: Colors.green[800],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Завершите регистрацию',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Пожалуйста, заполните информацию о себе',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  _buildTextField(
+                    controller: _firstNameController,
+                    label: 'Имя',
+                    hint: 'Введите ваше имя',
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Поле не может быть пустым';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _lastNameController,
+                    label: 'Фамилия',
+                    hint: 'Введите вашу фамилию',
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Поле не может быть пустым';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _phoneController,
+                    label: 'Телефон',
+                    hint: 'Введите номер телефона',
+                    keyboardType: TextInputType.phone,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Поле не может быть пустым';
+                      }
+                      // Простая проверка формата телефона
+                      if (!RegExp(r'^[+]?[0-9]{10,15}$').hasMatch(value)) {
+                        return 'Неверный формат телефона';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green[700],
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: _isLoading ? null : _submitRegistration,
+                      child: _isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              'Зарегистрироваться',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          validator: validator,
+          decoration: InputDecoration(
+            hintText: hint,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.green[700]!),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:micro_mobility_app/config.dart' show AppConfig;
 import 'package:micro_mobility_app/models/active_shift.dart' as active_shift;
 import '../models/shift_data.dart' as shift_data;
 
@@ -153,6 +154,49 @@ class ApiService {
 
     if (response.statusCode != 200) {
       throw Exception('Failed to deactivate user');
+    }
+  }
+
+  Future<void> completeRegistration(
+    String token,
+    String firstName,
+    String lastName,
+    String phone,
+  ) async {
+    // Убедитесь, что URL соответствует вашему бэкенду
+    final response = await http.post(
+      Uri.parse(
+          'https://eom-sharing.duckdns.org/api/auth/complete-registration'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'first_name': firstName,
+        'last_name': lastName,
+        'phone': phone,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      // Обработка ошибок от сервера
+      String errorMessage = 'Ошибка при завершении регистрации';
+      try {
+        final errorResponse = jsonDecode(response.body);
+        errorMessage =
+            errorResponse['error'] ?? errorResponse['message'] ?? errorMessage;
+      } catch (e) {
+        // Если не удалось распарсить JSON, используем тело ответа как есть или стандартное сообщение
+        errorMessage = response.body.isNotEmpty ? response.body : errorMessage;
+      }
+      throw Exception('$errorMessage (Код: ${response.statusCode})');
+    }
+    if (response.statusCode == 200) {
+      // Успешная регистрация
+      debugPrint('Регистрация успешно завершена');
+    } else {
+      // Обработка других кодов ответа, если необходимо
+      debugPrint('Регистрация завершена с кодом: ${response.statusCode}');
     }
   }
 
