@@ -1,3 +1,4 @@
+// lib/providers/shift_provider.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -15,6 +16,7 @@ class ShiftProvider with ChangeNotifier {
 
   String? _token;
   SlotState _slotState = SlotState.inactive;
+  ActiveShift? _activeShift; // Новое поле для хранения объекта активной смены
   List<ShiftData> _shiftHistory = [];
   DateTime _selectedDate = DateTime.now();
   Timer? _timer;
@@ -78,6 +80,7 @@ class ShiftProvider with ChangeNotifier {
   }
 
   SlotState get slotState => _slotState;
+  ActiveShift? get activeShift => _activeShift; // Геттер для активной смены
   List<ShiftData> get shiftHistory => _shiftHistory;
   DateTime get selectedDate => _selectedDate;
   DateTime? get startTime => _startTime;
@@ -189,6 +192,7 @@ class ShiftProvider with ChangeNotifier {
       _slotState = SlotState.inactive;
       _timer?.cancel();
       _startTime = null;
+      _activeShift = null; // Очищаем объект активной смены
 
       await _storage.write(key: 'slot_state', value: 'inactive');
       await _prefs.remove('active_slot_start_time');
@@ -207,6 +211,7 @@ class ShiftProvider with ChangeNotifier {
     if (activeShift.startTime != null) {
       _slotState = SlotState.active;
       _startTime = activeShift.startTime;
+      _activeShift = activeShift; // Сохраняем объект активной смены
       try {
         await _storage.write(key: 'slot_state', value: 'active');
         await _prefs.setString(
@@ -226,6 +231,7 @@ class ShiftProvider with ChangeNotifier {
   Future<void> clearActiveShift() async {
     _slotState = SlotState.inactive;
     _startTime = null;
+    _activeShift = null; // Очищаем объект активной смены
     try {
       await _storage.write(key: 'slot_state', value: 'inactive');
       await _prefs.remove('active_slot_start_time');

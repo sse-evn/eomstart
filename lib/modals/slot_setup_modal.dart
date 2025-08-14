@@ -1,5 +1,3 @@
-// lib/modals/slot_setup_modal.dart
-
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -29,7 +27,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   bool _isLoading = false;
   bool _hasActiveShift = false;
   bool _backendConflict = false;
-  List<String> _timeSlots = [];
+  List<String> _timeSlots = ['07:00 - 15:00', '15:00 - 23:00', '07:00 - 23:00'];
   List<String> _positions = [];
   List<String> _zones = [];
   String? _token;
@@ -78,7 +76,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         _loadUserProfile(),
         _loadTimeSlots(),
         _loadZones(),
-        _syncWithServer(), // Эта проверка должна обновить состояние
+        _syncWithServer(),
       ]);
     } catch (e) {
       _handleInitializationError(e);
@@ -145,7 +143,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           debugPrint('🔄 UI state updated: hasActiveShift = $hasActiveShift');
         }
 
-        // Важно: обновляем провайдер с реальными данными с сервера
         final provider = Provider.of<ShiftProvider>(context, listen: false);
         if (activeShift != null) {
           await provider.setActiveShift(activeShift);
@@ -166,13 +163,24 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
   Future<void> _loadTimeSlots() async {
     try {
+      debugPrint('🕒 Requesting time slots from server...');
       final slots = await _apiService.getAvailableTimeSlots(_token!);
-      if (mounted) setState(() => _timeSlots = slots);
-    } catch (e) {
+      debugPrint(
+          '🕒 Server response for time slots: $slots (type: ${slots.runtimeType})');
+
       if (mounted) {
-        setState(() =>
-            _timeSlots = ['7:00 - 15:00', '15:00 - 23:00', '7:00 - 23:00']);
+        if (slots is List && slots.isNotEmpty) {
+          setState(() => _timeSlots = slots.cast<String>());
+          debugPrint('🕒 Updated _timeSlots from server: $_timeSlots');
+        } else {
+          debugPrint('🕒 Server returned empty list, using default time slots');
+          // _timeSlots уже установлены по умолчанию в поле класса
+        }
       }
+    } catch (e) {
+      debugPrint('❌ Ошибка загрузки временных слотов с сервера: $e');
+      // Используем значения по умолчанию, которые уже установлены
+      debugPrint('🕒 Using default fallback time slots');
     }
   }
 
@@ -189,7 +197,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       if (mounted) {
         setState(() {
           _zones = ['Центр', 'Север', 'Юг', 'Запад', 'Восток'];
-          _zone = _zones.first;
+          _zone = _zones.isNotEmpty ? _zones.first : 'Центр';
         });
       }
     }
@@ -231,7 +239,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       return;
     }
 
-    // Проверяем актуальное состояние перед началом
     await _syncWithServer();
 
     if (_hasActiveShift) {
@@ -240,7 +247,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
       try {
         await Provider.of<ShiftProvider>(context, listen: false).endSlot();
-        await _syncWithServer(); // Синхронизируем после завершения
+        await _syncWithServer();
 
         if (_hasActiveShift) {
           _showError('Не удалось завершить предыдущую смену.');
@@ -384,13 +391,14 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
     debugPrint(
         '📱 BUILD: hasActiveShift = $_hasActiveShift, backendConflict = $_backendConflict');
+    debugPrint('🕒 Time slots count: ${_timeSlots.length}');
 
     return Container(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
-        left: 16,
-        right: 16,
-        top: 16,
+        left: 24,
+        right: 24,
+        top: 24,
       ),
       decoration: BoxDecoration(
         color: isDarkMode ? Colors.grey[900] : Colors.white,
@@ -405,24 +413,21 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                   Text(
                     'Начать новую смену',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: isDarkMode ? Colors.white : Colors.green[800],
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
                   if (_selfie != null)
                     _buildSelfiePreview()
                   else
                     _buildSelfiePlaceholder(isDarkMode),
                   _buildSelfieButton(isDarkMode, hasActiveShift),
                   const SizedBox(height: 24),
-                  ..._buildTimeSlots(isDarkMode, hasActiveShift),
+                  _buildTimeSlotsSection(isDarkMode, hasActiveShift),
                   const SizedBox(height: 24),
-                  if (_positions.isNotEmpty)
-                    _buildPositionDropdown(isDarkMode, hasActiveShift),
-                  const SizedBox(height: 16),
                   if (_zones.isNotEmpty)
                     _buildZoneDropdown(isDarkMode, hasActiveShift),
                   const SizedBox(height: 24),
@@ -530,95 +535,78 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     );
   }
 
-  List<Widget> _buildTimeSlots(bool isDarkMode, bool isBlocked) {
-    return _timeSlots.map((slot) {
-      final isSelected = _selectedTime == slot;
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: InkWell(
-          onTap: isBlocked || _isLoading
-              ? null
-              : () => setState(() => _selectedTime = slot),
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? Colors.green[100]
-                  : isDarkMode
-                      ? Colors.grey[800]
-                      : Colors.grey[100],
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isSelected ? Colors.green : Colors.transparent,
-                width: 1.5,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                slot,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: isSelected
-                      ? Colors.green[800]
-                      : isDarkMode
-                          ? Colors.white
-                          : Colors.black,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
+  Widget _buildTimeSlotsSection(bool isDarkMode, bool isBlocked) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Выберите время смены',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: isDarkMode ? Colors.white70 : Colors.black54,
           ),
         ),
-      );
-    }).toList();
+        const SizedBox(height: 12),
+        _buildTimeSlotsGrid(isDarkMode, isBlocked),
+      ],
+    );
   }
 
-  Widget _buildPositionDropdown(bool isDarkMode, bool isBlocked) {
-    return DropdownButtonFormField<String>(
-      value: _position,
-      items: _positions.map((item) {
-        return DropdownMenuItem(
-            value: item,
-            child: Text(
-              item,
-              style: TextStyle(
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-            ));
-      }).toList(),
-      onChanged: isBlocked || _isLoading
-          ? null
-          : (String? value) => setState(() => _position = value!),
-      decoration: InputDecoration(
-        labelText: 'Должность',
-        labelStyle: TextStyle(
-          color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!,
+  Widget _buildTimeSlotsGrid(bool isDarkMode, bool isBlocked) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 3 / 1.5,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: _timeSlots.length,
+      itemBuilder: (context, index) {
+        final timeSlot = _timeSlots[index];
+        final isSelected = _selectedTime == timeSlot;
+
+        return ElevatedButton(
+          onPressed: isBlocked || _isLoading
+              ? null
+              : () => setState(() => _selectedTime = timeSlot),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: isSelected
+                ? Colors.green[700]
+                : isDarkMode
+                    ? Colors.grey[800]
+                    : Colors.white,
+            foregroundColor: isSelected
+                ? Colors.white
+                : isDarkMode
+                    ? Colors.white
+                    : Colors.black,
+            side: BorderSide(
+              color: isSelected
+                  ? Colors.green[700]!
+                  : isDarkMode
+                      ? Colors.grey[700]!
+                      : Colors.grey[300]!,
+              width: isSelected ? 2 : 1,
+            ),
+            padding: const EdgeInsets.all(12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: isSelected ? 4 : 1,
           ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!,
+          child: Text(
+            timeSlot,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+            textAlign: TextAlign.center,
           ),
-        ),
-        filled: true,
-        fillColor: isDarkMode ? Colors.grey[800] : Colors.grey[100],
-      ),
-      dropdownColor: isDarkMode ? Colors.grey[800] : Colors.white,
-      style: TextStyle(
-        color: isDarkMode ? Colors.white : Colors.black,
-        fontSize: 16,
-      ),
-      icon: Icon(
-        Icons.arrow_drop_down,
-        color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-      ),
+        );
+      },
     );
   }
 
@@ -687,6 +675,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
+          elevation: 2,
         ),
         child: _isLoading
             ? const CircularProgressIndicator(color: Colors.white)

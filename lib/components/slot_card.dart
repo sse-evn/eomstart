@@ -1,7 +1,9 @@
+// lib/screens/components/slot_card.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:micro_mobility_app/models/active_shift.dart'; // Импортируем модель и вспомогательную функцию
 import '../../providers/shift_provider.dart';
 import '../modals/slot_setup_modal.dart';
 
@@ -83,7 +85,8 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
         final isDarkMode = theme.brightness == Brightness.dark;
 
         final bool hasActiveShift = provider.slotState == SlotState.active;
-        final DateTime? startTime = provider.startTime;
+        final ActiveShift? activeShift =
+            provider.activeShift; // Получаем объект активной смены
 
         if (!_isDataLoaded) {
           return const Center(child: CircularProgressIndicator());
@@ -127,7 +130,8 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                       child: Column(
                         children: [
                           if (hasActiveShift)
-                            _buildActiveShiftUI(startTime, theme, isDarkMode)
+                            _buildActiveShiftUI(activeShift, theme,
+                                isDarkMode) // Передаем объект активной смены
                           else
                             _buildInactiveShiftUI(context, theme, isDarkMode),
                           const SizedBox(height: 20),
@@ -146,18 +150,23 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
   }
 
   Widget _buildActiveShiftUI(
-      DateTime? startTime, ThemeData theme, bool isDarkMode) {
-    if (startTime == null) {
+      ActiveShift? activeShift, ThemeData theme, bool isDarkMode) {
+    // Проверяем, что объект активной смены не null
+    if (activeShift == null || activeShift.startTime == null) {
       return const Text(
-        'Ошибка: Время начала смены не определено',
+        'Ошибка: Данные активной смены не определены',
         style: TextStyle(color: Colors.red),
       );
     }
 
-    final duration = DateTime.now().difference(startTime);
+    final duration = DateTime.now().difference(activeShift.startTime!);
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final timeString = '$hours ч $minutes мин';
+
+    // Используем вспомогательную функцию для извлечения времени из строки сервера
+    final String serverTime =
+        extractTimeFromIsoString(activeShift.startTimeString);
 
     return Column(
       children: [
@@ -207,8 +216,8 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildInfoItem('Начало', DateFormat.Hm().format(startTime), theme,
-                  Colors.white),
+              // Используем время, извлеченное из строки сервера
+              _buildInfoItem('Начало', serverTime, theme, Colors.white),
               _buildInfoItem('Время работы', timeString, theme, Colors.white),
             ],
           ),
