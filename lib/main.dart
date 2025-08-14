@@ -15,7 +15,6 @@ import 'package:micro_mobility_app/screens/settings_screen.dart';
 import 'package:micro_mobility_app/screens/about_screen.dart';
 import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
 import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.dart';
-import 'package:micro_mobility_app/screens/map_screen/zones_screen.dart';
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 
 import 'providers/shift_provider.dart';

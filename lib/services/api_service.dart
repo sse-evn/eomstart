@@ -575,7 +575,6 @@ class ApiService {
   }
 
   /// Удаление задания
-// В api_service.dart
   Future<void> deleteTask({
     required String token,
     required int taskId,
@@ -595,6 +594,129 @@ class ApiService {
       }
     } catch (e) {
       debugPrint('Error deleting task: $e');
+      rethrow;
+    }
+  }
+
+  // === НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С КАРТАМИ ===
+
+  /// Получение списка всех загруженных карт
+  Future<List<dynamic>> getUploadedMaps(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/admin/maps'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic body = jsonDecode(response.body);
+        if (body is List) {
+          return body;
+        }
+        return [];
+      } else {
+        throw Exception(
+            'Failed to load maps: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      }
+    } catch (e) {
+      debugPrint('Error loading maps: $e');
+      rethrow;
+    }
+  }
+
+  /// Загрузка новой карты на сервер
+  Future<void> uploadMap({
+    required String token,
+    required String city,
+    required String description,
+    required File geoJsonFile,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/admin/maps/upload'),
+      );
+
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Добавляем текстовые поля
+      request.fields['city'] = city;
+      request.fields['description'] = description;
+
+      // Добавляем файл GeoJSON
+      if (await geoJsonFile.exists()) {
+        final file = await http.MultipartFile.fromPath(
+          'geojson_file',
+          geoJsonFile.path,
+          filename: geoJsonFile.path.split('/').last,
+        );
+        request.files.add(file);
+      } else {
+        throw Exception('GeoJSON file does not exist');
+      }
+
+      final response = await request.send();
+      final resp = await http.Response.fromStream(response);
+
+      if (resp.statusCode != 200 && resp.statusCode != 201) {
+        throw Exception(
+            'Failed to upload map: ${resp.statusCode} - ${utf8.decode(resp.bodyBytes)}');
+      }
+    } catch (e) {
+      debugPrint('Error uploading map: $e');
+      rethrow;
+    }
+  }
+
+  /// Удаление карты с сервера
+  Future<void> deleteMap({
+    required String token,
+    required int mapId,
+  }) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/admin/maps/$mapId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw Exception(
+            'Failed to delete map: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      }
+    } catch (e) {
+      debugPrint('Error deleting map: $e');
+      rethrow;
+    }
+  }
+
+  /// Получение карты по ID для просмотра
+  Future<Map<String, dynamic>> getMapById({
+    required String token,
+    required int mapId,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/admin/maps/$mapId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception(
+            'Failed to load map: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      }
+    } catch (e) {
+      debugPrint('Error loading map by id: $e');
       rethrow;
     }
   }
