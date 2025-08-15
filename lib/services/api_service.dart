@@ -8,6 +8,7 @@ import 'package:micro_mobility_app/models/active_shift.dart' as active_shift;
 import '../models/shift_data.dart' as shift_data;
 
 class ApiService {
+  // 🔴 ВАЖНО: УБРАНЫ ПРОБЕЛЫ В КОНЦЕ URL!
   static const String baseUrl = 'https://eom-sharing.duckdns.org/api';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -168,30 +169,26 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final dynamic body = jsonDecode(response.body);
-
-        // Более безопасная обработка данных
         if (body is List) {
-          List<shift_data.ShiftData> shifts = [];
-          for (var item in body) {
-            try {
-              if (item is Map<String, dynamic>) {
-                shifts.add(shift_data.ShiftData.fromJson(item));
-              }
-            } catch (e) {
-              print('Error parsing shift item: $e');
-              continue;
-            }
-          }
-          return shifts;
+          return body
+              .whereType<Map<String, dynamic>>()
+              .map((item) => shift_data.ShiftData.fromJson(item))
+              .toList();
         }
         return [];
+      } else if (response.statusCode == 401) {
+        // Пробуем обновить токен
+        final newToken = await refreshToken();
+        if (newToken != null) {
+          return await getShifts(newToken); // Повторяем запрос
+        } else {
+          throw Exception('Session expired. Please login again.');
+        }
       } else {
-        print('Shifts API error: ${response.statusCode} - ${response.body}');
         throw Exception(
             'Failed to load shifts: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
       }
     } catch (e) {
-      print('Network error in getShifts: $e');
       rethrow;
     }
   }
@@ -214,7 +211,6 @@ class ApiService {
       request.fields['position'] = position;
       request.fields['zone'] = zone;
 
-      // Проверяем существование файла перед добавлением
       if (await selfieImage.exists()) {
         request.files
             .add(await http.MultipartFile.fromPath('selfie', selfieImage.path));
@@ -268,10 +264,43 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+      // Сохраняем ОБА токена
+      await _storage.write(
+          key: 'jwt_token', value: body['token']); // access_token
+      await _storage.write(key: 'refresh_token', value: body['refresh_token']);
+
+      return body;
     } else {
       throw Exception('Ошибка авторизации: ${response.statusCode}');
     }
+  }
+
+// В ApiService.dart
+  Future<String?> refreshToken() async {
+    final refreshToken = await _storage.read(key: 'refresh_token');
+    if (refreshToken == null) return null;
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/refresh'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh_token': refreshToken}),
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final newAccessToken = body['access_token'];
+        if (newAccessToken != null) {
+          await _storage.write(key: 'jwt_token', value: newAccessToken);
+          return newAccessToken;
+        }
+      }
+    } catch (e) {
+      debugPrint('Refresh failed: $e');
+    }
+    return null;
   }
 
 // В api_service.dart
@@ -325,6 +354,33 @@ class ApiService {
     } else {
       debugPrint('❌ API error: ${response.statusCode} - ${response.body}');
       return null;
+    }
+  }
+
+  /// Получение списка заданий, назначенных текущему пользователю
+  Future<List<dynamic>> getMyTasks({required String token}) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/my/tasks'), // ✅ Правильный маршрут
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic body = jsonDecode(response.body);
+        if (body is List) {
+          return body;
+        }
+        return [];
+      } else {
+        throw Exception(
+            'Failed to load my tasks: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      }
+    } catch (e) {
+      debugPrint('Error in getMyTasks: $e');
+      rethrow;
     }
   }
 

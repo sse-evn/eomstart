@@ -1,8 +1,11 @@
+// lib/screens/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
-import 'auth_screen/login_screen.dart';
-import 'admin/admin_panel_screen.dart';
+import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
+import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
+// 1. Импортируем TasksScreen
+import 'package:micro_mobility_app/screens/tasks/tasks_screen.dart'; // Убедитесь, что путь правильный
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -16,7 +19,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   late Future<Map<String, dynamic>> _profileFuture;
-  String _userRole = 'user';
+  String _userRole = 'user'; // 2. Храним роль пользователя
 
   @override
   void initState() {
@@ -35,7 +38,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final role = (profile['role'] ?? 'user').toString().toLowerCase();
       if (mounted) {
         setState(() {
-          _userRole = role;
+          _userRole = role; // 3. Обновляем состояние с ролью
         });
       }
 
@@ -140,12 +143,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                     const SizedBox(height: 24),
 
+                    // === Мои задания (только для скаутов) ===
+                    // 4. Добавляем новый пункт меню, видимый только для скаутов
+                    if (_userRole == 'scout') ...[
+                      _buildSectionHeader('Задания'),
+                      _SettingsItem(
+                        icon: Icons.assignment, // Иконка заданий
+                        title: 'Мои задания',
+                        // Переход к экрану заданий
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const TasksScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                    ],
+
                     // === Настройки ===
                     _buildSectionHeader('Настройки'),
                     _SettingsItem(
                       icon: Icons.settings,
                       title: 'Настройки',
-                      route: '/settings',
+                      route:
+                          '/settings', // Убедитесь, что маршрут существует или реализуйте onTap
                     ),
 
                     const Divider(height: 1),
@@ -155,7 +179,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _SettingsItem(
                       icon: Icons.info,
                       title: 'О приложении',
-                      route: '/about',
+                      route:
+                          '/about', // Убедитесь, что маршрут существует или реализуйте onTap
                     ),
 
                     // === Админ-панель (только для superadmin) ===
@@ -164,7 +189,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _SettingsItem(
                         icon: Icons.admin_panel_settings,
                         title: 'Админ-панель',
-                        route: '/admin',
+                        route:
+                            '/admin', // Убедитесь, что маршрут существует или реализуйте onTap
                       ),
                     ],
 
@@ -436,19 +462,20 @@ class _ProfileErrorCard extends StatelessWidget {
 }
 
 // === Пункт меню ===
+// Убедитесь, что этот класс существует в вашем файле
 class _SettingsItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final Color? color;
   final String? route;
-  final VoidCallback? onTap;
+  final VoidCallback? onTap; // Добавлено onTap
 
   const _SettingsItem({
     required this.icon,
     required this.title,
     this.color,
     this.route,
-    this.onTap,
+    this.onTap, // Добавлено onTap
   });
 
   @override
@@ -456,9 +483,11 @@ class _SettingsItem extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        // Используем onTap, если он передан, иначе пытаемся использовать route
         onTap: onTap ??
             (route != null
                 ? () {
+                    // Проверка на существование маршрута или реализация навигации
                     Navigator.pushNamed(context, route!);
                   }
                 : null),
