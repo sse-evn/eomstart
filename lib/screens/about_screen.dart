@@ -60,7 +60,7 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
             const SizedBox(height: 40),
             const Text(
-              'Разработано evn',
+              'Разработано @evn',
               style: TextStyle(fontSize: 14, color: Colors.grey),
               textAlign: TextAlign.center,
             ),

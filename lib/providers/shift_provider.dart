@@ -1,12 +1,16 @@
+// lib/providers/shift_provider.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:image_picker/image_picker.dart'; // Для XFile
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:micro_mobility_app/models/active_shift.dart' as model;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/shift_data.dart';
-import '../services/api_service.dart';
+// Импорты моделей
+import 'package:micro_mobility_app/models/active_shift.dart'
+    as model; // Импорт модели ActiveShift
+import '../models/shift_data.dart'; // Импорт модели ShiftData
+// Импорт сервиса
+import '../services/api_service.dart'; // Импорт ApiService
 
 class ShiftProvider with ChangeNotifier {
   final ApiService _apiService;
@@ -42,7 +46,7 @@ class ShiftProvider with ChangeNotifier {
     _timer?.cancel();
     if (_activeShift?.startTime != null) {
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        notifyListeners();
+        notifyListeners(); // Обновляем UI каждую секунду для таймера
       });
     }
   }
@@ -66,34 +70,48 @@ class ShiftProvider with ChangeNotifier {
   }
 
   Future<void> loadShifts() async {
-    if (_token == null) return;
-
-    try {
-      final dynamic shiftsData = await _apiService.getShifts(_token!);
-      if (shiftsData is List) {
-        _shiftHistory = shiftsData
-            .map((item) => item as ShiftData)
-            .toList()
-            .cast<ShiftData>();
-      } else {
-        _shiftHistory = [];
-      }
-
-      final activeShift = await _apiService.getActiveShift(_token!);
-      _activeShift = activeShift;
-
-      if (activeShift != null) {
-        _startTimer();
-      } else {
-        _timer?.cancel();
-      }
-
-      notifyListeners();
-    } catch (e) {
+    if (_token == null) {
+      // Если токена нет, сбрасываем данные
       _shiftHistory = [];
       _activeShift = null;
       _timer?.cancel();
       notifyListeners();
+      return;
+    }
+
+    try {
+      // --- Загрузка истории смен ---
+      final dynamic shiftsData = await _apiService.getShifts(_token!);
+      if (shiftsData is List) {
+        // Более безопасный парсинг списка ShiftData
+        _shiftHistory = shiftsData
+            .whereType<Map<String, dynamic>>() // Фильтруем только Map
+            .map((json) => ShiftData.fromJson(json)) // Парсим из Json
+            .toList();
+      } else {
+        _shiftHistory = [];
+      }
+
+      // --- Загрузка активной смены ---
+      final activeShift = await _apiService.getActiveShift(_token!);
+      _activeShift = activeShift;
+
+      // --- Управление таймером ---
+      if (activeShift != null) {
+        _startTimer(); // Запускаем таймер, если есть активная смена
+      } else {
+        _timer?.cancel(); // Останавливаем таймер, если смены нет
+      }
+
+      notifyListeners(); // Уведомляем слушателей об изменении данных
+    } catch (e) {
+      debugPrint('ShiftProvider.loadShifts error: $e');
+      // В случае ошибки (например, сети) сбрасываем данные
+      _shiftHistory = [];
+      _activeShift = null;
+      _timer?.cancel();
+      notifyListeners();
+      // Не пробрасываем ошибку дальше, чтобы не ломать UI
     }
   }
 
@@ -102,16 +120,26 @@ class ShiftProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Начало новой смены
   Future<void> startSlot({
     required String slotTimeRange,
     required String position,
     required String zone,
-    required XFile selfie,
+    required XFile selfie, // Принимаем XFile напрямую
   }) async {
-    if (_activeShift != null) return;
-    if (_token == null) throw Exception('Токен не установлен');
+    // Предотвращаем множественный запуск
+    if (_activeShift != null) {
+      debugPrint('ShiftProvider: Cannot start slot, already active.');
+      return;
+    }
+    if (_token == null) {
+      debugPrint('ShiftProvider: Cannot start slot, no token.');
+      throw Exception('Токен не установлен');
+    }
 
+    // Преобразуем XFile в File для передачи в API
     final File imageFile = File(selfie.path);
+
     try {
       await _apiService.startSlot(
         token: _token!,
@@ -120,22 +148,37 @@ class ShiftProvider with ChangeNotifier {
         zone: zone,
         selfieImage: imageFile,
       );
+      debugPrint('ShiftProvider: Slot started successfully.');
 
+      // Перезагружаем данные смен (историю и активную)
+      // Используем unawaited, чтобы не блокировать UI
       unawaited(loadShifts());
     } catch (e) {
-      rethrow;
+      debugPrint('ShiftProvider.startSlot error: $e');
+      rethrow; // Пробрасываем ошибку, чтобы её можно было обработать в UI
     }
   }
 
+  /// Завершение текущей смены
   Future<void> endSlot() async {
-    if (_token == null) throw Exception('Токен не установлен');
-    if (_activeShift == null) return;
+    if (_token == null) {
+      debugPrint('ShiftProvider: Cannot end slot, no token.');
+      throw Exception('Токен не установлен');
+    }
+    if (_activeShift == null) {
+      debugPrint('ShiftProvider: Cannot end slot, no active shift.');
+      return; // Нечего завершать
+    }
 
     try {
       await _apiService.endSlot(_token!);
+      debugPrint('ShiftProvider: Slot ended successfully.');
+
+      // Перезагружаем данные смен
       unawaited(loadShifts());
     } catch (e) {
-      rethrow;
+      debugPrint('ShiftProvider.endSlot error: $e');
+      rethrow; // Пробрасываем ошибку
     }
   }
 
@@ -143,19 +186,5 @@ class ShiftProvider with ChangeNotifier {
   void dispose() {
     _timer?.cancel();
     super.dispose();
-  }
-}
-
-// Удалены SlotState, setActiveShift, clearActiveShift
-// Вместо них теперь используется `_activeShift` напрямую
-enum SlotState { inactive, active }
-
-extension IterableFirstOrNull<T> on Iterable<T> {
-  T? lastWhereOrNull(bool Function(T) test) {
-    T? result;
-    for (final item in this) {
-      if (test(item)) result = item;
-    }
-    return result;
   }
 }

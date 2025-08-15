@@ -45,6 +45,8 @@ dependencies:
   syncfusion_flutter_charts: ^30.2.4
   file_picker: ^10.3.1
   mocktail: ^1.0.4
+  connectivity_plus: ^6.1.5
+  lottie: ^3.3.1
 
 flutter:
   uses-material-design: true
@@ -53,3 +55,4 @@ flutter:
     - assets/geojson/
     - assets/almaty_zone.geojson
     - assets/icons/
+    - assets/icons/Insider-loading.json

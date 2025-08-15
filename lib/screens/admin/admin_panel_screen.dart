@@ -121,7 +121,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             });
           },
           type: BottomNavigationBarType.fixed,
-          selectedItemColor: Colors.green[700],
+          selectedItemColor: const Color(0xFF388E3C),
           unselectedItemColor: Colors.grey[600],
           backgroundColor: Colors.white,
           elevation: 0,
