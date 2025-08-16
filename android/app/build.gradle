@@ -22,7 +22,7 @@ android {
     ndkVersion flutter.ndkVersion
 
     defaultConfig {
-        applicationId "com.example.eomstart"
+        applicationId "kz.evn"
         minSdkVersion 21
         targetSdkVersion 35
         versionCode flutterVersionCode.toInteger()

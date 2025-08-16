@@ -56,3 +56,5 @@ flutter:
     - assets/almaty_zone.geojson
     - assets/icons/
     - assets/icons/Insider-loading.json
+dev_dependencies:
+  rename: ^3.1.0

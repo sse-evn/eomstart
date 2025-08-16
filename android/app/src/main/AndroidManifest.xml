@@ -19,7 +19,7 @@
     <application
         android:enableOnBackInvokedCallback="true"
 
-        android:label="eomstart"
+        android:label="EOM Start"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
