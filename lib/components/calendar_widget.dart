@@ -1,59 +1,71 @@
-// lib/components/calendar_widget.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 class CalendarWidget extends StatelessWidget {
   final List<DateTime> days;
   final DateTime selectedDate;
-  final Function(DateTime) onDateSelected;
+  final void Function(DateTime) onDateSelected;
 
   const CalendarWidget({
-    Key? key,
+    super.key,
     required this.days,
     required this.selectedDate,
     required this.onDateSelected,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: days.map((day) {
-        final isSelected = day.year == selectedDate.year &&
-            day.month == selectedDate.month &&
-            day.day == selectedDate.day;
+    return SizedBox(
+      height: 80,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: days.length,
+        itemBuilder: (context, index) {
+          final day = days[index];
+          final isSelected = selectedDate.year == day.year &&
+              selectedDate.month == day.month &&
+              selectedDate.day == day.day;
 
-        return Expanded(
-          child: GestureDetector(
+          return GestureDetector(
             onTap: () => onDateSelected(day),
-            child: SizedBox(
-              height: 60,
+            child: Container(
+              width: 70,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.green : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected ? Colors.green : Colors.grey,
+                  width: isSelected ? 2 : 1,
+                ),
+              ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    DateFormat('E', 'ru').format(day).toUpperCase(),
+                    DateFormat('E').format(day).toUpperCase(),
                     style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.black,
                       fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : Colors.grey,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
                     ),
                   ),
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 4),
                   Text(
-                    DateFormat('d').format(day),
+                    day.day.toString(),
                     style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.black,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : Colors.black,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        );
-      }).toList(),
+          );
+        },
+      ),
     );
   }
 }

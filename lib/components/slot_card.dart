@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
 import '../../providers/shift_provider.dart';
 import '../modals/slot_setup_modal.dart';
+import '../../utils/time_utils.dart'; // Добавь импорт
 
 class SlotCard extends StatefulWidget {
   const SlotCard({super.key});
@@ -146,18 +147,14 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
 
   Widget _buildActiveShiftUI(
       ActiveShift activeShift, ThemeData theme, bool isDarkMode) {
-    if (activeShift.startTimeString == null || activeShift.startTime == null) {
+    if (activeShift.startTimeString == null) {
       return const Text(
         'Ошибка: Данные активной смены не определены',
         style: TextStyle(color: Colors.white),
       );
     }
 
-    final duration = DateTime.now().difference(activeShift.startTime!);
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-    final timeString = '$hours ч $minutes мин';
-
+    // ✅ Используем твою утилиту для извлечения времени
     final serverTime = extractTimeFromIsoString(activeShift.startTimeString);
 
     return Column(
@@ -209,7 +206,8 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildInfoItem('Начало', serverTime, theme, Colors.white),
-              _buildInfoItem('Время работы', timeString, theme, Colors.white),
+              _buildInfoItem(
+                  'Слот', activeShift.slotTimeRange, theme, Colors.white),
             ],
           ),
         ),

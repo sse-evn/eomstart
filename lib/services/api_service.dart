@@ -8,7 +8,7 @@ import 'package:micro_mobility_app/models/active_shift.dart' as active_shift;
 import '../models/shift_data.dart' as shift_data;
 
 class ApiService {
-  // ✅ ИСПРАВЛЕНО: Убраны пробелы в конце URL
+  // ✅ ИСПРАВЛЕНО: Убраны все пробелы
   static const String baseUrl = 'https://eom-sharing.duckdns.org/api';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -81,7 +81,8 @@ class ApiService {
   /// === AUTHENTICATION ===
   Future<Map<String, dynamic>> login(String username, String password) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/login'),
+      // Проверьте на сервере правильный путь: /login или /auth/login
+      Uri.parse('$baseUrl/auth/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'username': username,
@@ -96,7 +97,8 @@ class ApiService {
       await _storage.write(key: 'refresh_token', value: body['refresh_token']);
       return body;
     } else {
-      throw Exception('Ошибка авторизации: ${response.statusCode}');
+      throw Exception(
+          'Ошибка авторизации: ${response.statusCode} - ${response.body}');
     }
   }
 
@@ -116,6 +118,56 @@ class ApiService {
       // В любом случае очищаем локальное хранилище
       await _storage.delete(key: 'jwt_token');
       await _storage.delete(key: 'refresh_token');
+    }
+  }
+
+  // === ДОБАВЛЕНО: Получение статистики самокатов из Telegram-бота ===
+  /// Получает статистику самокатов за текущую смену из базы данных Telegram-бота.
+  ///
+  /// Возвращает Map<String, dynamic> с данными статистики или throws Exception.
+  Future<Map<String, dynamic>> getScooterStatsForShift(String token) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.get(
+        Uri.parse('$baseUrl/scooter-stats/shift'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+    }, token);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception(
+          'Failed to load scooter stats: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+    }
+  }
+
+  // === ДОБАВЛЕНО: Получение telegram_user_id для пользователя ===
+  /// Получает telegram_user_id для данного user_id из Go-сервера.
+  /// Возвращает int? (telegram_user_id или null, если не найден/не установлен).
+  Future<int?> getUserTelegramId(String token, int userId) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.get(
+        // Убедитесь, что этот эндпоинт существует на вашем Go-сервере
+        Uri.parse('$baseUrl/users/$userId/telegram-id'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+    }, token);
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      // Предполагается, что сервер возвращает {"telegram_user_id": 123456789}
+      return body['telegram_user_id'] as int?;
+    } else {
+      // Может быть 404 (не найден), 403 (нет доступа) или другие ошибки
+      debugPrint(
+          'getUserTelegramId: Failed for user $userId. Status: ${response.statusCode}, Body: ${response.body}');
+      return null; // Важно вернуть null, а не бросать исключение, если ID не установлен
     }
   }
 
@@ -424,7 +476,7 @@ class ApiService {
   Future<List<active_shift.ActiveShift>> getActiveShifts(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
-        Uri.parse('$baseUrl/admin/shifts/active'),
+        Uri.parse('$baseUrl/admin/active-shifts'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -525,201 +577,6 @@ class ApiService {
     } else {
       throw Exception(
           'Failed to load zones: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
-    }
-  }
-
-  /// === TASKS ===
-  Future<List<dynamic>> getTasks({
-    required String token,
-    String? adminUsername,
-  }) async {
-    try {
-      final uri = Uri.parse('$baseUrl/admin/tasks');
-      final queryParams = <String, String>{};
-      if (adminUsername != null && adminUsername.isNotEmpty) {
-        queryParams['admin_username'] = adminUsername;
-      }
-      final finalUri = uri.replace(queryParameters: queryParams);
-
-      final response = await _authorizedRequest((token) async {
-        return await http.get(
-          finalUri,
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-      }, token);
-
-      if (response.statusCode == 200) {
-        final dynamic body = jsonDecode(response.body);
-        if (body is List) {
-          return body;
-        }
-        return [];
-      } else {
-        throw Exception(
-            'Failed to load tasks: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
-      }
-    } catch (e) {
-      debugPrint('Error loading tasks: $e');
-      rethrow;
-    }
-  }
-
-  /// Получение списка заданий, назначенных текущему пользователю
-  Future<List<dynamic>> getMyTasks({required String token}) async {
-    try {
-      final response = await _authorizedRequest((token) async {
-        return await http.get(
-          Uri.parse('$baseUrl/my/tasks'), // ✅ Правильный маршрут
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-      }, token);
-
-      if (response.statusCode == 200) {
-        final dynamic body = jsonDecode(response.body);
-        if (body is List) {
-          return body;
-        }
-        return [];
-      } else {
-        throw Exception(
-            'Failed to load my tasks: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
-      }
-    } catch (e) {
-      debugPrint('Error in getMyTasks: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> createTask({
-    required String token,
-    required String assigneeUsername,
-    required String title,
-    required String description,
-    required String priority,
-    DateTime? deadline,
-    File? image,
-  }) async {
-    try {
-      if (image != null) {
-        // Если есть изображение, используем multipart request
-        // Получаем обновлённый токен, если это необходимо
-        String effectiveToken = token;
-        if (await _isTokenAboutToExpire(token)) {
-          final newToken = await refreshToken();
-          if (newToken != null) {
-            effectiveToken = newToken;
-          } else {
-            throw Exception('Token expired and refresh failed');
-          }
-        }
-
-        final request = http.MultipartRequest(
-          'POST',
-          Uri.parse('$baseUrl/admin/tasks'),
-        );
-        request.headers['Authorization'] = 'Bearer $effectiveToken';
-        request.fields['assignee_username'] = assigneeUsername;
-        request.fields['title'] = title;
-        request.fields['description'] = description;
-        request.fields['priority'] = priority;
-        if (deadline != null) {
-          request.fields['deadline'] = deadline.toIso8601String();
-        }
-        if (await image.exists()) {
-          request.files
-              .add(await http.MultipartFile.fromPath('image', image.path));
-        }
-        final response = await request.send();
-        final resp = await http.Response.fromStream(response);
-        if (resp.statusCode != 200 && resp.statusCode != 201) {
-          throw Exception(
-              'Failed to create task: ${resp.statusCode} - ${utf8.decode(resp.bodyBytes)}');
-        }
-      } else {
-        // Если нет изображения, используем обычный POST
-        final response = await _authorizedRequest((token) async {
-          return await http.post(
-            Uri.parse('$baseUrl/admin/tasks'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({
-              'assignee_username': assigneeUsername,
-              'title': title,
-              'description': description,
-              'priority': priority,
-              if (deadline != null) 'deadline': deadline.toIso8601String(),
-            }),
-          );
-        }, token);
-
-        if (response.statusCode != 200 && response.statusCode != 201) {
-          throw Exception(
-              'Failed to create task: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
-        }
-      }
-    } catch (e) {
-      debugPrint('Error creating task: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> updateTaskStatus({
-    required String token,
-    required int taskId,
-    required String status,
-  }) async {
-    try {
-      final response = await _authorizedRequest((token) async {
-        return await http.patch(
-          Uri.parse('$baseUrl/admin/tasks/$taskId/status'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({'status': status}),
-        );
-      }, token);
-
-      if (response.statusCode != 200) {
-        throw Exception(
-            'Failed to update task status: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
-      }
-    } catch (e) {
-      debugPrint('Error updating task status: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> deleteTask({
-    required String token,
-    required int taskId,
-  }) async {
-    try {
-      final response = await _authorizedRequest((token) async {
-        return await http.delete(
-          Uri.parse('$baseUrl/admin/tasks/$taskId'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-      }, token);
-
-      if (response.statusCode != 200 && response.statusCode != 204) {
-        throw Exception(
-            'Failed to delete task: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
-      }
-    } catch (e) {
-      debugPrint('Error deleting task: $e');
-      rethrow;
     }
   }
 
@@ -851,23 +708,17 @@ class ApiService {
     }
   }
 
-  // === ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===
-
-  /// (Опционально) Проверка, истёк ли токен, анализируя его payload
-  /// Это не обязательно, так как сервер сам вернёт 401, но может быть полезно для proactive refresh.
   Future<bool> _isTokenAboutToExpire(String token) async {
     try {
       // Декодируем payload токена (без проверки подписи)
       final parts = token.split('.');
       if (parts.length != 3) return true; // Невалидный формат токена
-
       final payload = parts[1];
       // Добавляем '=' для корректного base64 декодирования, если необходимо
       final normalizedPayload = base64Url.normalize(payload);
       final payloadBytes = base64Url.decode(normalizedPayload);
       final payloadJson = utf8.decode(payloadBytes);
       final payloadMap = jsonDecode(payloadJson) as Map<String, dynamic>;
-
       final exp = payloadMap['exp'];
       if (exp is int) {
         final expirationTime = DateTime.fromMillisecondsSinceEpoch(exp * 1000);

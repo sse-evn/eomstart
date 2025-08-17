@@ -73,25 +73,3 @@ class ActiveShift {
     };
   }
 }
-
-String extractTimeFromIsoString(String? isoString) {
-  if (isoString == null || isoString.isEmpty) return '...';
-  final RegExp timeRegex = RegExp(r'T(\d{2}:\d{2})');
-  final Match? match = timeRegex.firstMatch(isoString);
-  if (match != null) {
-    return match.group(1)!;
-  } else {
-    try {
-      final parts = isoString.split('T');
-      if (parts.length > 1) {
-        final timePartWithTz = parts[1];
-        final timePart = timePartWithTz.split(RegExp(r'[+Z]'))[0];
-        final timeComponents = timePart.split(':');
-        if (timeComponents.length >= 2) {
-          return '${timeComponents[0]}:${timeComponents[1]}';
-        }
-      }
-    } catch (e) {}
-    return '...';
-  }
-}
