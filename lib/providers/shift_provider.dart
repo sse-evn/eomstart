@@ -5,12 +5,18 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart'; // Для XFile
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+// === ДОБАВЛЕНО: Импорт для работы с временными зонами ===
+import 'package:timezone/timezone.dart' as tz;
+// !!! УБРАЛИ: import 'package:timezone/data/latest.dart' as tz_data; !!!
+// Инициализация теперь происходит в main.dart
+
 // Импорты моделей
-import 'package:micro_mobility_app/models/active_shift.dart'
-    as model; // Импорт модели ActiveShift
-import '../models/shift_data.dart'; // Импорт модели ShiftData
+import 'package:micro_mobility_app/models/active_shift.dart' as model;
+import '../models/shift_data.dart';
+
 // Импорт сервиса
-import '../services/api_service.dart'; // Импорт ApiService
+import '../services/api_service.dart';
 
 class ShiftProvider with ChangeNotifier {
   final ApiService _apiService;
@@ -20,9 +26,23 @@ class ShiftProvider with ChangeNotifier {
   String? _token;
   model.ActiveShift? _activeShift;
   List<ShiftData> _shiftHistory = [];
-  DateTime _selectedDate = DateTime.now();
+  // === ИЗМЕНЕНО: Храним выбранную дату в UTC+5 ===
+  DateTime _selectedDate = _toAlmatyTime(DateTime.now());
   Timer? _timer;
 
+  bool _isEndingSlot = false; // 🔒 Защита от двойного вызова
+  bool _isStartingSlot = false; // 🔒 Защита при старте
+
+  // === ДОБАВЛЕНО: Поля для статистики бота ===
+  Map<String, dynamic>? _botStatsData;
+  bool _isLoadingBotStats = false;
+  // Кэшируем время последнего запроса, чтобы не запрашивать слишком часто
+  DateTime? _lastBotStatsFetchTime;
+
+  // === ИЗМЕНЕНО: Храним username вместо user_id ===
+  String? _currentUsername;
+  List<ShiftData> get activeShifts =>
+      _shiftHistory.where((shift) => shift.isActive).toList();
   ShiftProvider({
     required ApiService apiService,
     required FlutterSecureStorage storage,
@@ -31,22 +51,33 @@ class ShiftProvider with ChangeNotifier {
   })  : _apiService = apiService,
         _storage = storage,
         _prefs = prefs {
+    // !!! УБРАЛИ: tz_data.initializeTimeZones(); !!!
+    // Инициализация временных зон происходит в main.dart
     _token = initialToken;
     _initializeShiftProvider();
   }
 
-  Future<void> _initializeShiftProvider() async {
-    if (_token == null) {
-      _token = await _storage.read(key: 'jwt_token');
-    }
-    await loadShifts();
+  // === ДОБАВЛЕНО: Вспомогательная функция для преобразования в Almaty время ===
+  static DateTime _toAlmatyTime(DateTime dateTime) {
+    // !!! Теперь это безопасно, так как initializeTimeZones() уже был вызван в main() !!!
+    final almatyLocation = tz.getLocation('Asia/Almaty');
+    // Создаем TZDateTime из обычного DateTime
+    final tzDateTime = tz.TZDateTime.from(dateTime, almatyLocation);
+    // Преобразуем обратно в DateTime, но уже в нужной зоне
+    return tzDateTime.toLocal();
+  }
+
+  // === ДОБАВЛЕНО: Вспомогательная функция для получения текущего времени в Almaty ===
+  static DateTime _nowInAlmaty() {
+    final almatyLocation = tz.getLocation('Asia/Almaty');
+    return tz.TZDateTime.now(almatyLocation).toLocal();
   }
 
   void _startTimer() {
     _timer?.cancel();
     if (_activeShift?.startTime != null) {
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        notifyListeners(); // Обновляем UI каждую секунду для таймера
+        notifyListeners(); // Обновляем UI каждую секунду
       });
     }
   }
@@ -61,62 +92,77 @@ class ShiftProvider with ChangeNotifier {
   List<ShiftData> get shiftHistory => _shiftHistory;
   DateTime get selectedDate => _selectedDate;
 
+  // === ДОБАВЛЕНО: Геттеры для статистики бота ===
+  Map<String, dynamic>? get botStatsData => _botStatsData;
+  bool get isLoadingBotStats => _isLoadingBotStats;
+
+  // === ИЗМЕНЕНО: Геттер для username ===
+  String? get currentUsername => _currentUsername;
+
+  // ✅ Исправленный метод без двойного преобразования
   String get formattedWorkTime {
-    if (_activeShift?.startTime == null) return '0ч 0мин';
-    final duration = DateTime.now().difference(_activeShift!.startTime!);
-    final h = duration.inHours;
-    final m = (duration.inMinutes % 60);
-    return '${h}ч ${m}мин';
+    if (_activeShift?.startTime == null) return '0ч 0мин 0с';
+
+    // Просто форматируем startTime как "ЧЧ:ММ:СС"
+    final time = _activeShift!.startTime!;
+    return '${time.hour}ч ${time.minute}мин ${time.second}с';
+  }
+
+  Future<void> _initializeShiftProvider() async {
+    if (_token == null) {
+      _token = await _storage.read(key: 'jwt_token');
+    }
+    await loadShifts();
   }
 
   Future<void> loadShifts() async {
     if (_token == null) {
-      // Если токена нет, сбрасываем данные
       _shiftHistory = [];
       _activeShift = null;
+      _currentUsername = null; // Сбрасываем username
       _timer?.cancel();
       notifyListeners();
       return;
     }
 
     try {
-      // --- Загрузка истории смен ---
       final dynamic shiftsData = await _apiService.getShifts(_token!);
       if (shiftsData is List) {
-        // Более безопасный парсинг списка ShiftData
         _shiftHistory = shiftsData
-            .whereType<Map<String, dynamic>>() // Фильтруем только Map
-            .map((json) => ShiftData.fromJson(json)) // Парсим из Json
+            .whereType<Map<String, dynamic>>()
+            .map((json) => ShiftData.fromJson(json))
             .toList();
       } else {
         _shiftHistory = [];
       }
 
-      // --- Загрузка активной смены ---
       final activeShift = await _apiService.getActiveShift(_token!);
       _activeShift = activeShift;
 
-      // --- Управление таймером ---
+      // === ИЗМЕНЕНО: Устанавливаем username ===
       if (activeShift != null) {
-        _startTimer(); // Запускаем таймер, если есть активная смена
+        _currentUsername = activeShift.username; // Используем username
+        _startTimer();
       } else {
-        _timer?.cancel(); // Останавливаем таймер, если смены нет
+        _currentUsername = null;
+        _timer?.cancel();
       }
 
-      notifyListeners(); // Уведомляем слушателей об изменении данных
+      notifyListeners();
     } catch (e) {
       debugPrint('ShiftProvider.loadShifts error: $e');
-      // В случае ошибки (например, сети) сбрасываем данные
       _shiftHistory = [];
       _activeShift = null;
+      _currentUsername = null;
       _timer?.cancel();
       notifyListeners();
-      // Не пробрасываем ошибку дальше, чтобы не ломать UI
     }
   }
 
+  // === ИЗМЕНЕНО: Установка даты с учетом Almaty времени ===
   void selectDate(DateTime date) {
-    _selectedDate = DateTime(date.year, date.month, date.day);
+    // Преобразуем выбранную дату в Almaty время
+    _selectedDate = _toAlmatyTime(DateTime(date.year, date.month, date.day));
     notifyListeners();
   }
 
@@ -125,9 +171,12 @@ class ShiftProvider with ChangeNotifier {
     required String slotTimeRange,
     required String position,
     required String zone,
-    required XFile selfie, // Принимаем XFile напрямую
+    required XFile selfie,
   }) async {
-    // Предотвращаем множественный запуск
+    if (_isStartingSlot) {
+      debugPrint('ShiftProvider: Start slot already in progress.');
+      return;
+    }
     if (_activeShift != null) {
       debugPrint('ShiftProvider: Cannot start slot, already active.');
       return;
@@ -137,8 +186,9 @@ class ShiftProvider with ChangeNotifier {
       throw Exception('Токен не установлен');
     }
 
-    // Преобразуем XFile в File для передачи в API
     final File imageFile = File(selfie.path);
+    _isStartingSlot = true;
+    notifyListeners(); // UI может показать лоадер
 
     try {
       await _apiService.startSlot(
@@ -150,36 +200,117 @@ class ShiftProvider with ChangeNotifier {
       );
       debugPrint('ShiftProvider: Slot started successfully.');
 
-      // Перезагружаем данные смен (историю и активную)
-      // Используем unawaited, чтобы не блокировать UI
-      unawaited(loadShifts());
+      // Сразу перезагружаем данные
+      await loadShifts();
     } catch (e) {
       debugPrint('ShiftProvider.startSlot error: $e');
-      rethrow; // Пробрасываем ошибку, чтобы её можно было обработать в UI
+      rethrow;
+    } finally {
+      _isStartingSlot = false;
+      notifyListeners();
     }
   }
 
   /// Завершение текущей смены
   Future<void> endSlot() async {
+    if (_isEndingSlot) {
+      debugPrint('ShiftProvider: End slot already in progress.');
+      return;
+    }
     if (_token == null) {
       debugPrint('ShiftProvider: Cannot end slot, no token.');
       throw Exception('Токен не установлен');
     }
     if (_activeShift == null) {
-      debugPrint('ShiftProvider: Cannot end slot, no active shift.');
-      return; // Нечего завершать
+      debugPrint('ShiftProvider: No active shift to end.');
+      return;
     }
+
+    _isEndingSlot = true;
+    notifyListeners(); // Покажем лоадер
 
     try {
       await _apiService.endSlot(_token!);
-      debugPrint('ShiftProvider: Slot ended successfully.');
+      debugPrint('✅ Slot ended successfully.');
 
-      // Перезагружаем данные смен
+      // ✅ Сразу сбрасываем активную смену, username и таймер
+      _activeShift = null;
+      _currentUsername = null; // Сбрасываем username
+      _timer?.cancel();
+
+      // ✅ Перезагружаем историю (асинхронно)
       unawaited(loadShifts());
+
+      // ✅ Уведомляем UI немедленно
+      notifyListeners();
     } catch (e) {
-      debugPrint('ShiftProvider.endSlot error: $e');
-      rethrow; // Пробрасываем ошибку
+      debugPrint('❌ ShiftProvider.endSlot error: $e');
+
+      // На всякий случай — перезагружаем данные
+      await loadShifts();
+      rethrow;
+    } finally {
+      _isEndingSlot = false;
+      notifyListeners();
     }
+  }
+
+  // === ДОБАВЛЕНО: Метод для получения статистики бота ===
+  /// Получает статистику из Telegram-бота.
+  /// Кэширует данные на 30 секунд, чтобы избежать частых запросов.
+  Future<void> fetchBotStats() async {
+    // Не запрашиваем, если уже идёт запрос
+    if (_isLoadingBotStats) {
+      debugPrint('ShiftProvider: Bot stats fetch already in progress.');
+      return;
+    }
+
+    // Не запрашиваем, если прошло менее 30 секунд с последнего запроса
+    if (_lastBotStatsFetchTime != null) {
+      final now = DateTime.now();
+      final difference = now.difference(_lastBotStatsFetchTime!);
+      if (difference < const Duration(seconds: 30)) {
+        debugPrint('ShiftProvider: Bot stats fetch skipped (cache hit).');
+        // Даже если кэш "действителен", мы можем уведомить UI, что данные готовы
+        if (_botStatsData != null) {
+          notifyListeners();
+        }
+        return;
+      }
+    }
+
+    if (_token == null) {
+      debugPrint('ShiftProvider: Cannot fetch bot stats, no token.');
+      // Очищаем данные, если токена нет
+      _botStatsData = null;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingBotStats = true;
+    notifyListeners();
+
+    try {
+      debugPrint('ShiftProvider: Fetching bot stats...');
+      final stats = await _apiService.getScooterStatsForShift(_token!);
+      _botStatsData = stats;
+      _lastBotStatsFetchTime = DateTime.now();
+      debugPrint('ShiftProvider: Bot stats fetched successfully.');
+    } catch (e) {
+      debugPrint('ShiftProvider.fetchBotStats error: $e');
+      // В случае ошибки оставляем старые данные или null
+      // Можно показать уведомление пользователю
+    } finally {
+      _isLoadingBotStats = false;
+      notifyListeners();
+    }
+  }
+
+  // === ДОБАВЛЕНО: Метод для принудительного обновления статистики ===
+  /// Принудительно обновляет статистику бота, игнорируя кэш.
+  Future<void> forceRefreshBotStats() async {
+    _lastBotStatsFetchTime = null; // Сбрасываем время последнего запроса
+    await fetchBotStats();
   }
 
   @override

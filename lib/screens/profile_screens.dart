@@ -145,23 +145,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                     // === Мои задания (только для скаутов) ===
                     // 4. Добавляем новый пункт меню, видимый только для скаутов
-                    if (_userRole == 'scout') ...[
-                      _buildSectionHeader('Задания'),
-                      _SettingsItem(
-                        icon: Icons.assignment, // Иконка заданий
-                        title: 'Мои задания',
-                        // Переход к экрану заданий
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const TasksScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                    ],
+                    // if (_userRole == 'scout') ...[
+                    //   _buildSectionHeader('Задания'),
+                    //   _SettingsItem(
+                    //     icon: Icons.assignment, // Иконка заданий
+                    //     title: 'Мои задания',
+                    //     // Переход к экрану заданий
+                    //     onTap: () {
+                    //       Navigator.push(
+                    //         context,
+                    //         MaterialPageRoute(
+                    //           builder: (context) => const TasksScreen(),
+                    //         ),
+                    //       );
+                    //     },
+                    //   ),
+                    //   const Divider(height: 1),
+                    // ],
 
                     // === Настройки ===
                     _buildSectionHeader('Настройки'),

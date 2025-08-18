@@ -1,9 +1,11 @@
-// main.dart
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+// === ДОБАВЛЕНО: Импорт для инициализации временных зон ===
+import 'package:timezone/data/latest.dart' as tz_data;
 
 import 'package:micro_mobility_app/settings_provider.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
@@ -20,7 +22,12 @@ import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 import 'providers/shift_provider.dart';
 
 void main() async {
+  // === ДОБАВЛЕНО: Обязательно для асинхронной инициализации ===
   WidgetsFlutterBinding.ensureInitialized();
+
+  // === ДОБАВЛЕНО: Инициализация временных зон на старте приложения ===
+  tz_data.initializeTimeZones();
+
   await initializeDateFormatting('ru', null);
 
   // Инициализация всех зависимостей

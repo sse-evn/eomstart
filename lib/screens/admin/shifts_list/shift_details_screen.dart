@@ -1,9 +1,13 @@
 // lib/screens/admin/shifts_list/shift_details_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
+// Импорт для работы с временными зонами
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:provider/provider.dart'; // Добавлено
+import 'package:micro_mobility_app/providers/shift_provider.dart'; // Добавлено
 
 class ShiftDetailsScreen extends StatefulWidget {
   final ActiveShift shift;
@@ -81,6 +85,9 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
               backgroundColor: Colors.green),
         );
         Navigator.pop(context, true); // Вернём true, если нужно обновить список
+
+        // Обновляем данные в ShiftProvider
+        Provider.of<ShiftProvider>(context, listen: false).loadShifts();
       }
     } catch (e) {
       if (mounted) {
@@ -149,7 +156,7 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
                             children: [
                               InteractiveViewer(
                                 child: Image.network(
-                                  'https://eom-sharing.duckdns.org${widget.shift.selfie}',
+                                  'https://eom-sharing.duckdns.org${widget.shift.selfie}', // Исправлено
                                   loadingBuilder:
                                       (context, child, loadingProgress) {
                                     if (loadingProgress == null) return child;
@@ -190,7 +197,7 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: Image.network(
-                          'https://eom-sharing.duckdns.org${widget.shift.selfie}',
+                          'https://eom-sharing.duckdns.org${widget.shift.selfie}', // Исправлено
                           height: 200,
                           width: double.infinity,
                           fit: BoxFit.cover,
@@ -221,8 +228,12 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
                   _buildInfoRow('Позиция', widget.shift.position),
                   _buildInfoRow('Зона', widget.shift.zone),
                   _buildInfoRow('Слот времени', widget.shift.slotTimeRange),
-                  _buildInfoRow('Начало смены',
-                      widget.shift.startTime?.formatTimeDate() ?? 'Нет данных'),
+                  // Используем форматирование времени с секундами напрямую из startTime
+                  _buildInfoRow(
+                      'Начало смены',
+                      widget.shift.startTime != null
+                          ? widget.shift.startTime!.formatTimeDateWithSeconds()
+                          : 'Нет данных'),
                   _buildInfoRow(
                       'ID сотрудника', widget.shift.userId.toString()),
 
@@ -264,7 +275,7 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 110,
+            width: 130, // Увеличил ширину для размещения "Начало смены:"
             child: Text(
               '$label:',
               style: const TextStyle(
@@ -283,12 +294,13 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
   }
 }
 
+// Расширение для форматирования времени с секундами
 extension TimeFormat on DateTime {
-  String formatTimeDate() {
+  String formatTimeDateWithSeconds() {
     final date =
         '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}';
     final time =
-        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:${second.toString().padLeft(2, '0')}';
     return '$date $time';
   }
 }

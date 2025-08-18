@@ -7,6 +7,7 @@ import 'package:micro_mobility_app/screens/admin/map_upload_screen.dart';
 import 'package:micro_mobility_app/screens/admin/shift_monitoring_screen.dart';
 import 'package:micro_mobility_app/widgets/admin_users_list.dart';
 import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
+import 'package:micro_mobility_app/screens/generatorshift.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -20,7 +21,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   final List<String> _titles = [
     'Пользователи',
-    'Задания',
+    'Генератор смен',
     'Карта',
     'Смены',
   ];
@@ -42,7 +43,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         currentBody = const AdminUsersList();
         break;
       case 1:
-        currentBody = const TasksScreen();
+        currentBody = const Generatorshift();
         break;
       case 2:
         currentBody = MapUploadScreen(
@@ -138,7 +139,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             BottomNavigationBarItem(
               icon: Icon(Icons.assignment_outlined),
               activeIcon: Icon(Icons.assignment),
-              label: 'Задания',
+              label: 'Генератор смен',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.map_outlined),
