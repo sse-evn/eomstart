@@ -241,7 +241,6 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
             child: InkWell(
               onTap: () {
                 setState(() {
-                  // ✅ Безопасное переключение
                   _expandedDays[dateKey] = !(_expandedDays[dateKey] ?? true);
                 });
               },
@@ -434,14 +433,14 @@ class _ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text(
-          'Мониторинг смен',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
         centerTitle: true,
         backgroundColor: Colors.green[700],
         foregroundColor: Colors.white,
         elevation: 2,
+        leading: null,
+        automaticallyImplyLeading:
+            false, // 🔥 Ключевое: отключаем автоматическое добавление кнопки
+// 🟢 Убираем кнопку "назад"
       ),
       body: SafeArea(
         child: RefreshIndicator(
