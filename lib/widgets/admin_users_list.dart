@@ -1,10 +1,10 @@
 // lib/widgets/admin_users_list.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
+import 'package:micro_mobility_app/config.dart';
 
 class AdminUsersList extends StatefulWidget {
   const AdminUsersList({super.key});
@@ -19,6 +19,9 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
   late Future<List<dynamic>> _usersFuture;
   String _currentUserRole = '';
+  String _currentUsername = '';
+  String _currentUserFirstName = '';
+  String _currentUserRoleLabel = '';
   List<String> _auditLog = [];
 
   final Map<String, String> _roleLabels = {
@@ -28,31 +31,41 @@ class _AdminUsersListState extends State<AdminUsersList> {
     'superadmin': 'Суперадмин',
   };
 
+  final Map<String, Color> _statusColors = {
+    'active': Colors.green,
+    'pending': Colors.orange,
+    'deleted': Colors.grey,
+  };
+
   String _selectedRoleFilter = 'all';
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _passwordController =
-      TextEditingController(); // Изменено с _firstNameController
+  final TextEditingController _passwordController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _usersFuture = _fetchUsers();
-    _initData();
+    _loadProfile();
     _loadAuditLog();
   }
 
-  Future<void> _initData() async {
+  Future<void> _loadProfile() async {
     try {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) return;
 
       final profile = await _apiService.getUserProfile(token);
       final role = (profile['role'] ?? 'user').toString().toLowerCase();
+      final username = profile['username'] as String? ?? 'User';
+      final firstName = profile['first_name'] as String? ?? 'Не указано';
 
       if (mounted) {
         setState(() {
           _currentUserRole = role;
+          _currentUsername = username;
+          _currentUserFirstName = firstName;
+          _currentUserRoleLabel = _roleLabels[role] ?? role;
         });
       }
     } catch (e) {
@@ -66,12 +79,11 @@ class _AdminUsersListState extends State<AdminUsersList> {
       if (token == null) throw Exception('Токен не найден');
 
       final users = await _apiService.getAdminUsers(token);
-      debugPrint('✅ getAdminUsers response: $users');
       return users;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text('Ошибка загрузки: ${e.toString()}')),
         );
       }
       return [];
@@ -105,15 +117,19 @@ class _AdminUsersListState extends State<AdminUsersList> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Изменить роль?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Изменить роль?',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text('Назначить "$username" роль "${_roleLabels[newRole]}"?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Отмена')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Да')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Да, назначить'),
+          ),
         ],
       ),
     );
@@ -125,15 +141,12 @@ class _AdminUsersListState extends State<AdminUsersList> {
       if (token == null) throw Exception('Токен не найден');
 
       await _apiService.updateUserRole(token, userId, newRole);
+      _addLog('🔄 $username → ${_roleLabels[newRole]}');
 
       if (mounted) {
-        _addLog('🔄 $username → ${_roleLabels[newRole]}');
-        setState(() {
-          _usersFuture = _fetchUsers();
-        });
-
+        setState(() => _usersFuture = _fetchUsers());
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
               content: Text('Роль обновлена'), backgroundColor: Colors.green),
         );
       }
@@ -152,15 +165,12 @@ class _AdminUsersListState extends State<AdminUsersList> {
       if (token == null) throw Exception('Токен не найден');
 
       await _apiService.activateUser(token, userId);
+      _addLog('✅ Активирован: $username');
 
       if (mounted) {
-        _addLog('✅ Активирован: $username');
-        setState(() {
-          _usersFuture = _fetchUsers();
-        });
-
+        setState(() => _usersFuture = _fetchUsers());
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
               content: Text('Доступ активирован'),
               backgroundColor: Colors.green),
         );
@@ -178,16 +188,18 @@ class _AdminUsersListState extends State<AdminUsersList> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Отправить в ожидание?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Отправить в ожидание?',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text('Пользователь "$username" потеряет доступ к приложению.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Отмена')),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Да, отправить',
-                style: TextStyle(color: Colors.orange)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Да, отправить'),
           ),
         ],
       ),
@@ -200,15 +212,12 @@ class _AdminUsersListState extends State<AdminUsersList> {
       if (token == null) throw Exception('Токен не найден');
 
       await _apiService.deactivateUser(token, userId);
+      _addLog('⏸️ Отправлен в ожидание: $username');
 
       if (mounted) {
-        _addLog('⏸️ Отправлен в ожидание: $username');
-        setState(() {
-          _usersFuture = _fetchUsers();
-        });
-
+        setState(() => _usersFuture = _fetchUsers());
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
               content: Text('Доступ отозван'), backgroundColor: Colors.orange),
         );
       }
@@ -225,15 +234,19 @@ class _AdminUsersListState extends State<AdminUsersList> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить пользователя?'),
-        content: Text('Вы уверены, что хотите удалить "$username"?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Удалить пользователя?',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(
+            'Вы уверены, что хотите удалить "$username"? Это действие нельзя отменить.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Отмена')),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Удалить'),
           ),
         ],
       ),
@@ -246,15 +259,12 @@ class _AdminUsersListState extends State<AdminUsersList> {
       if (token == null) throw Exception('Токен не найден');
 
       await _apiService.deleteUser(token, userId);
+      _addLog('❌ Удалён: $username');
 
       if (mounted) {
-        _addLog('❌ Удалён: $username');
-        setState(() {
-          _usersFuture = _fetchUsers();
-        });
-
+        setState(() => _usersFuture = _fetchUsers());
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
               content: Text('Пользователь удалён'),
               backgroundColor: Colors.orange),
         );
@@ -270,45 +280,43 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
   Future<void> _createUser() async {
     final username = _usernameController.text.trim();
-    final password = _passwordController.text.trim(); // Получаем пароль
+    final password = _passwordController.text.trim();
 
     if (username.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Введите логин')),
-        );
-      }
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Введите логин')));
       return;
     }
     if (password.isEmpty) {
-      // Проверяем, что пароль введен
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Введите пароль')),
-        );
-      }
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Введите пароль')));
       return;
     }
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Добавить пользователя'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Добавить пользователя',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Логин: $username'),
-            Text(
-                'Пароль: ${password.replaceAll(RegExp(r"."), "*")}'), // Отображаем звездочки вместо пароля
+            const SizedBox(height: 4),
+            Text('Пароль: ${'*' * password.length}'),
           ],
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Отмена')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Добавить')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Добавить'),
+          ),
         ],
       ),
     );
@@ -319,47 +327,31 @@ class _AdminUsersListState extends State<AdminUsersList> {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) throw Exception('Токен не найден');
 
-      // Передаем username и password
       await _apiService.createUser(token, username, password);
+      _addLog('✅ Добавлен: $username');
 
       if (mounted) {
-        // Логируем действие (можно добавить пароль, если это безопасно для вашей системы аудита)
-        _addLog('✅ Добавлен: $username (с паролем)');
-        Navigator.pop(context); // Закрываем диалог
-        setState(() {
-          _usersFuture = _fetchUsers();
-        });
-
+        Navigator.pop(context);
+        setState(() => _usersFuture = _fetchUsers());
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
               content: Text('Пользователь добавлен'),
               backgroundColor: Colors.green),
         );
       }
     } catch (e) {
-      if (mounted) {
-        // Показываем более конкретную ошибку, если возможно
-        String errorMessage = e.toString();
-        if (errorMessage.contains('duplicate') ||
-            errorMessage.contains('exists')) {
-          errorMessage = 'Пользователь с таким логином уже существует.';
-        } else if (errorMessage.contains('password')) {
-          errorMessage = 'Пароль не соответствует требованиям безопасности.';
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Ошибка: $errorMessage'),
-              backgroundColor: Colors.red),
-        );
-      }
+      String message = 'Ошибка: $e';
+      if (e.toString().contains('duplicate'))
+        message = 'Пользователь с таким логином уже существует.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
     }
   }
 
   Future<void> _refreshData() async {
     if (mounted) {
-      setState(() {
-        _usersFuture = _fetchUsers();
-      });
+      setState(() => _usersFuture = _fetchUsers());
     }
   }
 
@@ -367,7 +359,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
   void dispose() {
     _searchController.dispose();
     _usernameController.dispose();
-    _passwordController.dispose(); // Dispose нового контроллера
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -378,12 +370,63 @@ class _AdminUsersListState extends State<AdminUsersList> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // === Профиль администратора ===
+          Card(
+            elevation: 4,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 36,
+                    backgroundColor: Colors.green[700],
+                    child: Icon(Icons.person, size: 36, color: Colors.white),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _currentUsername,
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          '$_currentUserFirstName • $_currentUserRoleLabel',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green[100],
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Вы: $_currentUserRoleLabel',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.green[800]),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
           // === Поиск и фильтры ===
           Card(
             elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -392,51 +435,54 @@ class _AdminUsersListState extends State<AdminUsersList> {
                     controller: _searchController,
                     decoration: InputDecoration(
                       hintText: 'Поиск по логину или имени...',
-                      prefixIcon: const Icon(Icons.search),
+                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
                       ),
+                      filled: true,
+                      fillColor: Colors.grey[100],
                     ),
                     onChanged: (value) => setState(() {}),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _selectedRoleFilter,
                     items: [
                       const DropdownMenuItem(
                           value: 'all', child: Text('Все роли')),
-                      ..._roleLabels.keys.map((role) => DropdownMenuItem(
-                            value: role,
-                            child: Text(_roleLabels[role]!),
+                      ..._roleLabels.entries.map((e) => DropdownMenuItem(
+                            value: e.key,
+                            child: Text(e.value),
                           )),
                     ],
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedRoleFilter = value!;
-                      });
-                    },
+                    onChanged: (value) =>
+                        setState(() => _selectedRoleFilter = value!),
                     decoration: InputDecoration(
                       labelText: 'Фильтр по ролям',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
                       ),
+                      filled: true,
+                      fillColor: Colors.grey[100],
                     ),
                   ),
                   const SizedBox(height: 16),
                   if (_currentUserRole == 'superadmin')
-                    ElevatedButton.icon(
-                      onPressed: _showCreateUserDialog,
-                      icon: const Icon(Icons.person_add),
-                      label: const Text('Добавить пользователя'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green[700],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _showCreateUserDialog,
+                        icon: const Icon(Icons.person_add, size: 18),
+                        label: const Text('Добавить пользователя'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[700],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ),
@@ -452,28 +498,18 @@ class _AdminUsersListState extends State<AdminUsersList> {
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+                  borderRadius: BorderRadius.circular(12)),
               child: ExpansionTile(
-                title: const Text(
-                  'Журнал',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+                title: const Text('Журнал действий',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
                 children: _auditLog
                     .take(10)
                     .map((log) => ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 4),
-                          leading: const Icon(
-                            Icons.history,
-                            size: 16,
-                            color: Colors.grey,
-                          ),
-                          title: Text(
-                            log,
-                            style: const TextStyle(
-                                fontSize: 12, fontFamily: 'monospace'),
-                          ),
+                          leading: const Icon(Icons.history,
+                              size: 16, color: Colors.grey),
+                          title: Text(log,
+                              style: const TextStyle(
+                                  fontSize: 12, fontFamily: 'monospace')),
                         ))
                     .toList(),
               ),
@@ -489,16 +525,14 @@ class _AdminUsersListState extends State<AdminUsersList> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
-                } else if (snapshot.hasError || !snapshot.hasData) {
-                  return Center(child: Text('Ошибка: ${snapshot.error}'));
+                } else if (!snapshot.hasData || snapshot.hasError) {
+                  return Center(
+                      child: Text('Ошибка: ${snapshot.error ?? 'Нет данных'}'));
                 }
 
-                final allUsers = snapshot.data!;
                 final query = _searchController.text.toLowerCase();
-
-                final filteredUsers = allUsers.where((user) {
+                final filteredUsers = snapshot.data!.where((user) {
                   final role = (user['role']?.toString().toLowerCase() ?? '');
-                  // Исправлена обработка firstName/first_name для поиска
                   final name = ((user['firstName'] ?? user['first_name'] ?? '')
                           as String)
                       .toLowerCase();
@@ -523,7 +557,6 @@ class _AdminUsersListState extends State<AdminUsersList> {
                     final user = filteredUsers[index];
                     final userId = user['id'];
                     final username = user['username'] as String;
-                    // Исправлена обработка firstName/first_name для отображения
                     final firstName =
                         user['firstName'] ?? user['first_name'] ?? 'Без имени';
                     final role =
@@ -531,24 +564,65 @@ class _AdminUsersListState extends State<AdminUsersList> {
                     final status =
                         (user['status']?.toString().toLowerCase() ?? 'pending');
                     final displayRole = _roleLabels[role] ?? role;
+                    final statusColor = _statusColors[status] ?? Colors.grey;
 
                     return Card(
                       margin: const EdgeInsets.symmetric(vertical: 8),
-                      elevation: 4,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
+                      elevation: 3,
                       child: ListTile(
                         leading: CircleAvatar(
-                          child: Text('$userId'),
-                          backgroundColor: Colors.green[700],
-                          foregroundColor: Colors.white,
+                          backgroundColor: statusColor,
+                          child: Text('$userId',
+                              style: const TextStyle(color: Colors.white)),
                         ),
                         title: Text(username,
                             style:
                                 const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('$firstName • $displayRole • $status'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('$firstName • $displayRole'),
+                            Text(
+                              status == 'active'
+                                  ? 'Активен'
+                                  : status == 'pending'
+                                      ? 'Ожидание'
+                                      : 'Удалён',
+                              style:
+                                  TextStyle(color: statusColor, fontSize: 12),
+                            ),
+                          ],
+                        ),
                         trailing: PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert),
+                          itemBuilder: (ctx) {
+                            return [
+                              ..._roleLabels.entries.map((e) => PopupMenuItem(
+                                    value: 'role:${e.key}',
+                                    child: Text('Назначить: ${e.value}'),
+                                  )),
+                              if (_currentUserRole == 'superadmin') ...[
+                                const PopupMenuDivider(),
+                                if (status == 'pending')
+                                  const PopupMenuItem(
+                                      value: 'activate',
+                                      child: Text('Активировать')),
+                                if (status == 'active')
+                                  const PopupMenuItem(
+                                    value: 'deactivate',
+                                    child: Text('Отправить в ожидание',
+                                        style: TextStyle(color: Colors.orange)),
+                                  ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Удалить',
+                                      style: TextStyle(color: Colors.red)),
+                                ),
+                              ]
+                            ];
+                          },
                           onSelected: (action) {
                             if (action.startsWith('role:')) {
                               final newRole = action.replaceFirst('role:', '');
@@ -561,51 +635,6 @@ class _AdminUsersListState extends State<AdminUsersList> {
                               _deleteUser(userId, username);
                             }
                           },
-                          itemBuilder: (ctx) {
-                            final items = <PopupMenuEntry<String>>[];
-
-                            for (final role in _roleLabels.keys) {
-                              items.add(
-                                PopupMenuItem(
-                                  value: 'role:$role',
-                                  child:
-                                      Text('Назначить: ${_roleLabels[role]}'),
-                                ),
-                              );
-                            }
-
-                            if (_currentUserRole == 'superadmin') {
-                              items.add(const PopupMenuDivider());
-
-                              if (status == 'active') {
-                                items.add(
-                                  const PopupMenuItem(
-                                    value: 'deactivate',
-                                    child: Text('Отправить в ожидание',
-                                        style: TextStyle(color: Colors.orange)),
-                                  ),
-                                );
-                              } else if (status == 'pending') {
-                                items.add(
-                                  const PopupMenuItem(
-                                    value: 'activate',
-                                    child: Text('Активировать доступ'),
-                                  ),
-                                );
-                              }
-
-                              items.add(
-                                const PopupMenuItem(
-                                  value: 'delete',
-                                  child: Text('Удалить',
-                                      style: TextStyle(color: Colors.red)),
-                                ),
-                              );
-                            }
-
-                            return items;
-                          },
-                          icon: const Icon(Icons.more_vert),
                         ),
                       ),
                     );
@@ -621,33 +650,43 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
   void _showCreateUserDialog() {
     _usernameController.clear();
-    _passwordController.clear(); // Очищаем поле пароля
+    _passwordController.clear();
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Добавить пользователя'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Добавить пользователя',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: _usernameController,
-              decoration:
-                  const InputDecoration(hintText: 'Логин (обязательно)'),
+              decoration: const InputDecoration(
+                hintText: 'Логин',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             TextField(
               controller: _passwordController,
-              decoration:
-                  const InputDecoration(hintText: 'Пароль (обязательно)'),
-              obscureText: true, // Скрываем вводимый пароль
+              decoration: const InputDecoration(
+                hintText: 'Пароль',
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+              obscureText: true,
             ),
           ],
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
-          TextButton(onPressed: _createUser, child: const Text('Добавить')),
+          ElevatedButton(
+            onPressed: _createUser,
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Добавить'),
+          ),
         ],
       ),
     );

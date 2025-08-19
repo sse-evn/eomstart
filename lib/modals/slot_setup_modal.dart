@@ -1,3 +1,4 @@
+// lib/modals/slot_setup_modal.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -21,26 +22,15 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   final _apiService = ApiService();
   String? _selectedTime;
   String? _position;
-  String _zone = 'Центр';
+  String? _zone;
   XFile? _selfie;
   bool _isLoading = false;
   bool _hasActiveShift = false;
   bool _backendConflict = false;
-  List<String> _timeSlots = ['07:00 - 15:00', '15:00 - 23:00', '07:00 - 23:00'];
+  List<String> _timeSlots = [];
   List<String> _positions = [];
   List<String> _zones = [];
   String? _token;
-  Timer? _syncTimer;
-
-  static final Map<String, String> _roleLabels = {
-    'scout': 'Скаут',
-    'supervisor': 'Супервайзер',
-    'coordinator': 'Координатор',
-    'superadmin': 'Суперадмин',
-    'courier': 'Курьер',
-    'operator': 'Оператор',
-    'manager': 'Менеджер',
-  };
 
   @override
   void initState() {
@@ -50,13 +40,15 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
   @override
   void dispose() {
-    _syncTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _initializeData() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       _token = await _storage.read(key: 'jwt_token');
@@ -64,112 +56,68 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         throw Exception('Требуется авторизация');
       }
 
-      await Future.wait([
-        _loadUserProfile(),
-        _loadTimeSlots(),
-        _loadZones(),
-      ]);
-    } catch (e) {
-      _handleInitializationError(e);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _loadUserProfile() async {
-    try {
       final profile = await _apiService.getUserProfile(_token!);
-      debugPrint('✅ Профиль загружен: $profile');
-
-      final role = (profile['role'] ?? '').toString().toLowerCase();
-      final displayName = _roleLabels[role] ?? role.capitalize();
-
-      List<String> positions = [];
-      try {
-        positions = await _apiService.getAvailablePositions(_token!);
-      } catch (e) {
-        debugPrint('❌ Ошибка загрузки позиций: $e');
-      }
+      final serverPositions = await _apiService.getAvailablePositions(_token!);
+      final serverZones = await _apiService.getAvailableZones(_token!);
+      final serverTimeSlots = await _apiService.getAvailableTimeSlots(_token!);
 
       if (mounted) {
         setState(() {
-          _positions = positions.isEmpty ? _getDefaultPositions() : positions;
-          _position = _positions.contains(displayName)
-              ? displayName
-              : _positions.isNotEmpty
-                  ? _positions.first
-                  : null;
-        });
-      }
-    } catch (e) {
-      debugPrint('❌ Ошибка загрузки профиля: $e');
-      if (mounted) {
-        setState(() {
-          _positions = _getDefaultPositions();
-          _position = _positions.isNotEmpty ? _positions.first : null;
-        });
-      }
-    }
-  }
+          _positions = serverPositions;
+          _zones = serverZones;
+          _timeSlots = serverTimeSlots.isNotEmpty
+              ? List<String>.from(serverTimeSlots)
+              : ['07:00 - 15:00', '15:00 - 23:00'];
 
-  List<String> _getDefaultPositions() {
-    return ['Курьер', 'Оператор', 'Менеджер', 'Скаут'];
-  }
-
-  Future<void> _loadTimeSlots() async {
-    try {
-      debugPrint('🕒 Requesting time slots from server...');
-      final slots = await _apiService.getAvailableTimeSlots(_token!);
-      debugPrint(
-          '🕒 Server response for time slots: $slots (type: ${slots.runtimeType})');
-
-      if (mounted) {
-        if (slots is List && slots.isNotEmpty) {
-          setState(() => _timeSlots = slots.cast<String>());
-          debugPrint('🕒 Updated _timeSlots from server: $_timeSlots');
-        } else {
-          debugPrint('🕒 Server returned empty list, using default time slots');
-          // _timeSlots уже установлены по умолчанию в поле класса
-        }
-      }
-    } catch (e) {
-      debugPrint('❌ Ошибка загрузки временных слотов с сервера: $e');
-      // Используем значения по умолчанию, которые уже установлены
-      debugPrint('🕒 Using default fallback time slots');
-    }
-  }
-
-  Future<void> _loadZones() async {
-    try {
-      final zones = await _apiService.getAvailableZones(_token!);
-      if (mounted) {
-        setState(() {
-          _zones = zones;
-          if (zones.isNotEmpty) _zone = zones.first;
+          _position = profile['position'] as String? ??
+              (_positions.isNotEmpty ? _positions.first : null);
+          _zone = profile['zone'] as String? ??
+              (_zones.isNotEmpty ? _zones.first : null);
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
+          // Fallback
+          _positions = ['Курьер', 'Оператор', 'Менеджер', 'Скаут'];
           _zones = ['Центр', 'Север', 'Юг', 'Запад', 'Восток'];
-          _zone = _zones.isNotEmpty ? _zones.first : 'Центр';
+          _timeSlots = ['07:00 - 15:00', '15:00 - 23:00'];
+          _position = _positions.first;
+          _zone = _zones.first;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
         });
       }
     }
   }
 
   Future<void> _takeSelfie() async {
+    if (_isLoading) return;
+
     try {
       final image = await _picker.pickImage(
         source: ImageSource.camera,
         maxWidth: 800,
         imageQuality: 80,
       );
-      if (image != null && mounted) {
-        setState(() => _selfie = image);
+
+      if (image != null) {
+        if (mounted) {
+          setState(() {
+            _selfie = image;
+          });
+        }
       }
     } catch (e) {
-      _showError('Ошибка камеры: ${e.toString()}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось открыть камеру')),
+        );
+      }
     }
   }
 
@@ -185,7 +133,12 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
 
     if (_position == null) {
-      _showError('Выберите должность');
+      _showError('Должность не указана');
+      return;
+    }
+
+    if (_zone == null) {
+      _showError('Зона не указана');
       return;
     }
 
@@ -194,99 +147,56 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     try {
       final compressedFile = await _compressImage(File(_selfie!.path));
-      await _startShift(compressedFile);
-      if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      _handleShiftStartError(e);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<File> _compressImage(File imageFile) async {
-    try {
-      final bytes = await imageFile.readAsBytes();
-      final original = img.decodeImage(bytes);
-      if (original == null)
-        throw Exception("Не удалось декодировать изображение");
-
-      final oriented = img.bakeOrientation(original);
-      final resized = img.copyResize(oriented, width: 800);
-      final jpeg = img.encodeJpg(resized, quality: 80);
-
-      final tempFile = File(
-          '${imageFile.path}_compressed_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      return await tempFile.writeAsBytes(jpeg);
-    } catch (e) {
-      throw Exception("Ошибка сжатия: ${e.toString()}");
-    }
-  }
-
-  Future<void> _startShift(File compressedFile) async {
-    try {
       final provider = Provider.of<ShiftProvider>(context, listen: false);
       await provider.startSlot(
         slotTimeRange: _selectedTime!,
         position: _position!,
-        zone: _zone,
+        zone: _zone!,
         selfie: XFile(compressedFile.path),
       );
-      setState(() => _hasActiveShift = true);
-    } catch (e) {
-      if (e.toString().contains('active')) {
-        setState(() => _backendConflict = true);
+
+      if (mounted) {
+        Navigator.pop(context, true);
+        _showSuccess('Смена успешно начата');
       }
-      rethrow;
+    } on Exception catch (e) {
+      if (mounted) {
+        if (e.toString().contains('active')) {
+          _showError('У вас уже есть активная смена');
+        } else {
+          _showError('Ошибка: ${e.toString()}');
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  void _handleInitializationError(Object error) {
-    debugPrint('❌ Ошибка инициализации: $error');
-    _showError('Ошибка загрузки данных: ${error.toString()}');
+  Future<File> _compressImage(File imageFile) async {
+    final bytes = await imageFile.readAsBytes();
+    final original = img.decodeImage(bytes);
+    if (original == null)
+      throw Exception("Не удалось декодировать изображение");
 
-    if (mounted) {
-      setState(() {
-        _positions = _getDefaultPositions();
-        _position = _positions.isNotEmpty ? _positions.first : null;
-        _zones = ['Центр', 'Север', 'Юг', 'Запад', 'Восток'];
-        _zone = _zones.isNotEmpty ? _zones.first : 'Центр';
-      });
-    }
-  }
+    final oriented = img.bakeOrientation(original);
+    final resized = img.copyResize(oriented, width: 800);
+    final jpeg = img.encodeJpg(resized, quality: 80);
 
-  void _handleShiftStartError(Object error) {
-    if (error.toString().contains('active')) {
-      setState(() => _backendConflict = true);
-      _showError('На сервере уже есть активная смена');
-    } else {
-      _showError('Не удалось начать смену: ${error.toString()}');
-    }
-  }
-
-  Future<bool?> _showActiveShiftDialog() {
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Завершить текущую смену?'),
-        content: const Text(
-            'На сервере обнаружена активная смена. Завершить её перед началом новой?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Завершить'),
-          ),
-        ],
-      ),
-    );
+    final tempFile = File(
+        '${imageFile.path}_compressed_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    return await tempFile.writeAsBytes(jpeg);
   }
 
   void _showError(String message) {
@@ -295,7 +205,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -308,7 +217,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -320,10 +228,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
     final hasActiveShift = _hasActiveShift || _backendConflict;
-
-    debugPrint(
-        '📱 BUILD: hasActiveShift = $_hasActiveShift, backendConflict = $_backendConflict');
-    debugPrint('🕒 Time slots count: ${_timeSlots.length}');
 
     return Container(
       padding: EdgeInsets.only(
@@ -363,38 +267,13 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                   if (_zones.isNotEmpty)
                     _buildZoneDropdown(isDarkMode, hasActiveShift),
                   const SizedBox(height: 24),
+                  if (_positions.isNotEmpty)
+                    _buildPositionDropdown(isDarkMode, hasActiveShift),
+                  const SizedBox(height: 24),
                   _buildSubmitButton(hasActiveShift),
-                  if (_backendConflict) _buildConflictWarning(),
                 ],
               ),
             ),
-    );
-  }
-
-  Widget _buildConflictWarning() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.only(top: 12),
-      decoration: BoxDecoration(
-        color: Colors.orange[100],
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.warning, color: Colors.orange[800]),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Обнаружен конфликт состояний. Попробуйте обновить данные.',
-              style: TextStyle(color: Colors.orange[800]),
-            ),
-          ),
-          IconButton(
-            icon: Icon(Icons.refresh, color: Colors.orange[800]),
-            onPressed: _initializeData,
-          ),
-        ],
-      ),
     );
   }
 
@@ -413,7 +292,13 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             top: 8,
             right: 8,
             child: GestureDetector(
-              onTap: () => setState(() => _selfie = null),
+              onTap: () {
+                if (mounted) {
+                  setState(() {
+                    _selfie = null;
+                  });
+                }
+              },
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: const BoxDecoration(
@@ -472,7 +357,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Выберите время смены',
+          'Время смены',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
@@ -480,65 +365,67 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           ),
         ),
         const SizedBox(height: 12),
-        _buildTimeSlotsGrid(isDarkMode, isBlocked),
-      ],
-    );
-  }
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 3 / 1.5,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemCount: _timeSlots.length,
+          itemBuilder: (context, index) {
+            final timeSlot = _timeSlots[index];
+            final isSelected = _selectedTime == timeSlot;
 
-  Widget _buildTimeSlotsGrid(bool isDarkMode, bool isBlocked) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 3 / 1.5,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: _timeSlots.length,
-      itemBuilder: (context, index) {
-        final timeSlot = _timeSlots[index];
-        final isSelected = _selectedTime == timeSlot;
-
-        return ElevatedButton(
-          onPressed: isBlocked || _isLoading
-              ? null
-              : () => setState(() => _selectedTime = timeSlot),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isSelected
-                ? Colors.green[700]
-                : isDarkMode
-                    ? Colors.grey[800]
-                    : Colors.white,
-            foregroundColor: isSelected
-                ? Colors.white
-                : isDarkMode
+            return ElevatedButton(
+              onPressed: isBlocked || _isLoading
+                  ? null
+                  : () {
+                      if (mounted) {
+                        setState(() {
+                          _selectedTime = timeSlot;
+                        });
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isSelected
+                    ? Colors.green[700]
+                    : isDarkMode
+                        ? Colors.grey[800]
+                        : Colors.white,
+                foregroundColor: isSelected
                     ? Colors.white
-                    : Colors.black,
-            side: BorderSide(
-              color: isSelected
-                  ? Colors.green[700]!
-                  : isDarkMode
-                      ? Colors.grey[700]!
-                      : Colors.grey[300]!,
-              width: isSelected ? 2 : 1,
-            ),
-            padding: const EdgeInsets.all(12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            elevation: isSelected ? 4 : 1,
-          ),
-          child: Text(
-            timeSlot,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        );
-      },
+                    : isDarkMode
+                        ? Colors.white
+                        : Colors.black,
+                side: BorderSide(
+                  color: isSelected
+                      ? Colors.green[700]!
+                      : isDarkMode
+                          ? Colors.grey[700]!
+                          : Colors.grey[300]!,
+                  width: isSelected ? 2 : 1,
+                ),
+                padding: const EdgeInsets.all(12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: isSelected ? 4 : 1,
+              ),
+              child: Text(
+                timeSlot,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -547,19 +434,81 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       value: _zone,
       items: _zones.map((item) {
         return DropdownMenuItem(
-            value: item,
-            child: Text(
-              item,
-              style: TextStyle(
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-            ));
+          value: item,
+          child: Text(
+            item,
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black,
+            ),
+          ),
+        );
       }).toList(),
       onChanged: isBlocked || _isLoading
           ? null
-          : (String? value) => setState(() => _zone = value!),
+          : (String? value) {
+              if (mounted && value != null) {
+                setState(() {
+                  _zone = value;
+                });
+              }
+            },
       decoration: InputDecoration(
         labelText: 'Зона',
+        labelStyle: TextStyle(
+          color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!,
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!,
+          ),
+        ),
+        filled: true,
+        fillColor: isDarkMode ? Colors.grey[800] : Colors.grey[100],
+      ),
+      dropdownColor: isDarkMode ? Colors.grey[800] : Colors.white,
+      style: TextStyle(
+        color: isDarkMode ? Colors.white : Colors.black,
+        fontSize: 16,
+      ),
+      icon: Icon(
+        Icons.arrow_drop_down,
+        color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+      ),
+    );
+  }
+
+  Widget _buildPositionDropdown(bool isDarkMode, bool isBlocked) {
+    return DropdownButtonFormField<String>(
+      value: _position,
+      items: _positions.map((item) {
+        return DropdownMenuItem(
+          value: item,
+          child: Text(
+            item,
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black,
+            ),
+          ),
+        );
+      }).toList(),
+      onChanged: isBlocked || _isLoading
+          ? null
+          : (String? value) {
+              if (mounted && value != null) {
+                setState(() {
+                  _position = value;
+                });
+              }
+            },
+      decoration: InputDecoration(
+        labelText: 'Должность',
         labelStyle: TextStyle(
           color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
         ),
@@ -595,7 +544,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         _isLoading ||
         _selectedTime == null ||
         _selfie == null ||
-        _position == null;
+        _position == null ||
+        _zone == null;
 
     return SizedBox(
       width: double.infinity,
@@ -621,12 +571,5 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
               ),
       ),
     );
-  }
-}
-
-extension StringExtension on String {
-  String capitalize() {
-    if (isEmpty) return this;
-    return this[0].toUpperCase() + substring(1).toLowerCase();
   }
 }
