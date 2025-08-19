@@ -6,11 +6,9 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/active_shift.dart' as active_shift;
 import '../models/shift_data.dart' as shift_data;
+import '../config.dart'; // ✅ Подключаем конфиг
 
 class ApiService {
-  // ✅ ИСПРАВЛЕНО: Убраны все пробелы
-  static const String baseUrl = 'https://eom-sharing.duckdns.org/api';
-
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   /// === УНИВЕРСАЛЬНЫЙ ЗАПРОС С АВТО-ОБНОВЛЕНИЕМ ТОКЕНА ===
@@ -30,9 +28,6 @@ class ApiService {
         // await _storage.write(key: 'jwt_token', value: newToken);
       } else {
         debugPrint('❌ Token refresh failed');
-        // Можно выбросить исключение или вызвать logout
-        // await logout(originalToken);
-        // throw Exception('Session expired. Please login again.');
       }
     }
 
@@ -50,13 +45,12 @@ class ApiService {
 
       debugPrint('🔄 Attempting to refresh token...');
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/refresh'),
+        Uri.parse(AppConfig.refreshTokenUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh_token': refreshToken}),
       );
 
       debugPrint('🔄 Refresh response status: ${response.statusCode}');
-      // debugPrint('🔄 Refresh response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -69,7 +63,6 @@ class ApiService {
       } else {
         debugPrint(
             '🔄 Failed to refresh token: ${response.statusCode} - ${response.body}');
-        // Если refresh_token тоже истёк, удаляем его
         await _storage.delete(key: 'refresh_token');
       }
     } catch (e) {
@@ -81,8 +74,7 @@ class ApiService {
   /// === AUTHENTICATION ===
   Future<Map<String, dynamic>> login(String username, String password) async {
     final response = await http.post(
-      // Проверьте на сервере правильный путь: /login или /auth/login
-      Uri.parse('$baseUrl/auth/login'),
+      Uri.parse(AppConfig.loginUrl),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'username': username,
@@ -92,7 +84,6 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      // Сохраняем ОБА токена
       await _storage.write(key: 'jwt_token', value: body['token']);
       await _storage.write(key: 'refresh_token', value: body['refresh_token']);
       return body;
@@ -103,10 +94,9 @@ class ApiService {
   }
 
   Future<void> logout(String token) async {
-    // Опционально: отправить запрос на сервер для отзыва токена
     try {
       await http.post(
-        Uri.parse('$baseUrl/logout'),
+        Uri.parse(AppConfig.logoutUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -115,20 +105,16 @@ class ApiService {
     } catch (e) {
       debugPrint('Error calling logout endpoint: $e');
     } finally {
-      // В любом случае очищаем локальное хранилище
       await _storage.delete(key: 'jwt_token');
       await _storage.delete(key: 'refresh_token');
     }
   }
 
-  // === ДОБАВЛЕНО: Получение статистики самокатов из Telegram-бота ===
-  /// Получает статистику самокатов за текущую смену из базы данных Telegram-бота.
-  ///
-  /// Возвращает Map<String, dynamic> с данными статистики или throws Exception.
+  /// === ДОБАВЛЕНО: Получение статистики самокатов из Telegram-бота ===
   Future<Map<String, dynamic>> getScooterStatsForShift(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
-        Uri.parse('$baseUrl/scooter-stats/shift'),
+        Uri.parse(AppConfig.scooterStatsUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -144,14 +130,11 @@ class ApiService {
     }
   }
 
-  // === ДОБАВЛЕНО: Получение telegram_user_id для пользователя ===
-  /// Получает telegram_user_id для данного user_id из Go-сервера.
-  /// Возвращает int? (telegram_user_id или null, если не найден/не установлен).
+  /// === ДОБАВЛЕНО: Получение telegram_user_id для пользователя ===
   Future<int?> getUserTelegramId(String token, int userId) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
-        // Убедитесь, что этот эндпоинт существует на вашем Go-сервере
-        Uri.parse('$baseUrl/users/$userId/telegram-id'),
+        Uri.parse(AppConfig.userTelegramIdUrl(userId)),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -161,13 +144,11 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      // Предполагается, что сервер возвращает {"telegram_user_id": 123456789}
       return body['telegram_user_id'] as int?;
     } else {
-      // Может быть 404 (не найден), 403 (нет доступа) или другие ошибки
       debugPrint(
           'getUserTelegramId: Failed for user $userId. Status: ${response.statusCode}, Body: ${response.body}');
-      return null; // Важно вернуть null, а не бросать исключение, если ID не установлен
+      return null;
     }
   }
 
@@ -175,7 +156,7 @@ class ApiService {
   Future<Map<String, dynamic>> getUserProfile(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
-        Uri.parse('$baseUrl/profile'),
+        Uri.parse(AppConfig.profileUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -195,7 +176,7 @@ class ApiService {
   Future<List<dynamic>> getAdminUsers(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
-        Uri.parse('$baseUrl/admin/users'),
+        Uri.parse(AppConfig.adminUsersUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -205,9 +186,7 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final dynamic body = jsonDecode(response.body);
-      if (body is List) {
-        return body;
-      }
+      if (body is List) return body;
       return [];
     } else {
       throw Exception(
@@ -218,7 +197,7 @@ class ApiService {
   Future<void> updateUserRole(String token, int userId, String newRole) async {
     final response = await _authorizedRequest((token) async {
       return await http.patch(
-        Uri.parse('$baseUrl/admin/users/$userId/role'),
+        Uri.parse(AppConfig.updateUserRoleUrl(userId)),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -234,17 +213,17 @@ class ApiService {
   }
 
   Future<void> createUser(
-      String token, String username, String firstName) async {
+      String token, String username, String password) async {
     final response = await _authorizedRequest((token) async {
       return await http.post(
-        Uri.parse('$baseUrl/admin/users'),
+        Uri.parse(AppConfig.adminUsersUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
           'username': username,
-          'first_name': firstName,
+          'password': password,
         }),
       );
     }, token);
@@ -257,7 +236,7 @@ class ApiService {
   Future<void> deleteUser(String token, int userId) async {
     final response = await _authorizedRequest((token) async {
       return await http.delete(
-        Uri.parse('$baseUrl/admin/users/$userId'),
+        Uri.parse(AppConfig.deleteUserUrl(userId)),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -274,7 +253,7 @@ class ApiService {
   Future<void> activateUser(String token, int userId) async {
     final response = await _authorizedRequest((token) async {
       return await http.patch(
-        Uri.parse('$baseUrl/admin/users/$userId/status'),
+        Uri.parse(AppConfig.updateUserStatusUrl(userId)),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -291,7 +270,7 @@ class ApiService {
   Future<void> deactivateUser(String token, int userId) async {
     final response = await _authorizedRequest((token) async {
       return await http.patch(
-        Uri.parse('$baseUrl/admin/users/$userId/status'),
+        Uri.parse(AppConfig.updateUserStatusUrl(userId)),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -308,7 +287,7 @@ class ApiService {
   Future<void> forceEndShift(String token, int userId) async {
     final response = await _authorizedRequest((token) async {
       return await http.post(
-        Uri.parse('$baseUrl/admin/users/$userId/end-shift'),
+        Uri.parse(AppConfig.forceEndShiftUrl(userId)),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -328,7 +307,7 @@ class ApiService {
     try {
       final response = await _authorizedRequest((token) async {
         return await http.get(
-          Uri.parse('$baseUrl/shifts'),
+          Uri.parse(AppConfig.shiftsUrl),
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
@@ -362,7 +341,6 @@ class ApiService {
     required File selfieImage,
   }) async {
     try {
-      // Получаем обновлённый токен, если это необходимо
       String effectiveToken = token;
       if (await _isTokenAboutToExpire(token)) {
         final newToken = await refreshToken();
@@ -375,7 +353,7 @@ class ApiService {
 
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl/slot/start'),
+        Uri.parse(AppConfig.startSlotUrl),
       );
 
       request.headers['Authorization'] = 'Bearer $effectiveToken';
@@ -398,7 +376,7 @@ class ApiService {
             'Failed to start slot: ${resp.reasonPhrase} - ${utf8.decode(resp.bodyBytes)}');
       }
     } catch (e) {
-      print('Error in startSlot: $e');
+      debugPrint('Error in startSlot: $e');
       rethrow;
     }
   }
@@ -407,7 +385,7 @@ class ApiService {
     try {
       final response = await _authorizedRequest((token) async {
         return await http.post(
-          Uri.parse('$baseUrl/slot/end'),
+          Uri.parse(AppConfig.endSlotUrl),
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
@@ -420,7 +398,7 @@ class ApiService {
             'Failed to end slot: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
       }
     } catch (e) {
-      print('Error in endSlot: $e');
+      debugPrint('Error in endSlot: $e');
       rethrow;
     }
   }
@@ -428,7 +406,7 @@ class ApiService {
   Future<active_shift.ActiveShift?> getActiveShift(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
-        Uri.parse('$baseUrl/shifts/active'),
+        Uri.parse(AppConfig.activeShiftUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -476,7 +454,7 @@ class ApiService {
   Future<List<active_shift.ActiveShift>> getActiveShifts(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
-        Uri.parse('$baseUrl/admin/active-shifts'),
+        Uri.parse('${AppConfig.apiBaseUrl}/admin/active-shifts'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -514,7 +492,7 @@ class ApiService {
   Future<List<String>> getAvailablePositions(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
-        Uri.parse('$baseUrl/slots/positions'),
+        Uri.parse(AppConfig.positionsUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -537,7 +515,7 @@ class ApiService {
   Future<List<String>> getAvailableTimeSlots(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
-        Uri.parse('$baseUrl/slots/times'),
+        Uri.parse(AppConfig.timeSlotsUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -560,7 +538,7 @@ class ApiService {
   Future<List<String>> getAvailableZones(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
-        Uri.parse('$baseUrl/slots/zones'),
+        Uri.parse(AppConfig.zonesUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -585,7 +563,7 @@ class ApiService {
     try {
       final response = await _authorizedRequest((token) async {
         return await http.get(
-          Uri.parse('$baseUrl/admin/maps'),
+          Uri.parse(AppConfig.adminMapsUrl),
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
@@ -595,9 +573,7 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final dynamic body = jsonDecode(response.body);
-        if (body is List) {
-          return body;
-        }
+        if (body is List) return body;
         return [];
       } else {
         throw Exception(
@@ -616,7 +592,6 @@ class ApiService {
     required File geoJsonFile,
   }) async {
     try {
-      // Получаем обновлённый токен, если это необходимо
       String effectiveToken = token;
       if (await _isTokenAboutToExpire(token)) {
         final newToken = await refreshToken();
@@ -629,11 +604,12 @@ class ApiService {
 
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl/admin/maps/upload'),
+        Uri.parse(AppConfig.uploadMapUrl),
       );
       request.headers['Authorization'] = 'Bearer $effectiveToken';
       request.fields['city'] = city;
       request.fields['description'] = description;
+
       if (await geoJsonFile.exists()) {
         final file = await http.MultipartFile.fromPath(
           'geojson_file',
@@ -644,8 +620,10 @@ class ApiService {
       } else {
         throw Exception('GeoJSON file does not exist');
       }
+
       final response = await request.send();
       final resp = await http.Response.fromStream(response);
+
       if (resp.statusCode != 200 && resp.statusCode != 201) {
         throw Exception(
             'Failed to upload map: ${resp.statusCode} - ${utf8.decode(resp.bodyBytes)}');
@@ -663,7 +641,7 @@ class ApiService {
     try {
       final response = await _authorizedRequest((token) async {
         return await http.delete(
-          Uri.parse('$baseUrl/admin/maps/$mapId'),
+          Uri.parse(AppConfig.deleteMapUrl(mapId)),
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
@@ -688,7 +666,7 @@ class ApiService {
     try {
       final response = await _authorizedRequest((token) async {
         return await http.get(
-          Uri.parse('$baseUrl/admin/maps/$mapId'),
+          Uri.parse(AppConfig.getMapByIdUrl(mapId)),
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
@@ -710,11 +688,9 @@ class ApiService {
 
   Future<bool> _isTokenAboutToExpire(String token) async {
     try {
-      // Декодируем payload токена (без проверки подписи)
       final parts = token.split('.');
-      if (parts.length != 3) return true; // Невалидный формат токена
+      if (parts.length != 3) return true;
       final payload = parts[1];
-      // Добавляем '=' для корректного base64 декодирования, если необходимо
       final normalizedPayload = base64Url.normalize(payload);
       final payloadBytes = base64Url.decode(normalizedPayload);
       final payloadJson = utf8.decode(payloadBytes);
@@ -722,14 +698,12 @@ class ApiService {
       final exp = payloadMap['exp'];
       if (exp is int) {
         final expirationTime = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
-        // Считаем токен "почти истёкшим" за 30 секунд до фактического истечения
         return DateTime.now()
             .isAfter(expirationTime.subtract(const Duration(seconds: 30)));
       }
     } catch (e) {
       debugPrint('Error checking token expiration: $e');
     }
-    // В случае ошибки считаем, что токен мог истечь
     return true;
   }
 }

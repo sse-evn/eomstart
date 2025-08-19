@@ -46,15 +46,11 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   Future<void> _initializeData() async {
     if (!mounted) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       _token = await _storage.read(key: 'jwt_token');
-      if (_token == null) {
-        throw Exception('Требуется авторизация');
-      }
+      if (_token == null) throw Exception('Требуется авторизация');
 
       final profile = await _apiService.getUserProfile(_token!);
       final serverPositions = await _apiService.getAvailablePositions(_token!);
@@ -69,48 +65,43 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
               ? List<String>.from(serverTimeSlots)
               : ['07:00 - 15:00', '15:00 - 23:00'];
 
+          // ✅ Берём из профиля, если есть
           _position = profile['position'] as String? ??
               (_positions.isNotEmpty ? _positions.first : null);
           _zone = profile['zone'] as String? ??
               (_zones.isNotEmpty ? _zones.first : null);
+          _selectedTime = _timeSlots.isNotEmpty ? _timeSlots.first : null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          // Fallback
-          _positions = ['Курьер', 'Оператор', 'Менеджер', 'Скаут'];
+          // ❌ Резервные значения только если сервер недоступен
+          _positions = ['Оператор', 'Менеджер', 'Скаут'];
           _zones = ['Центр', 'Север', 'Юг', 'Запад', 'Восток'];
           _timeSlots = ['07:00 - 15:00', '15:00 - 23:00'];
           _position = _positions.first;
           _zone = _zones.first;
+          _selectedTime = _timeSlots.first;
         });
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
 
   Future<void> _takeSelfie() async {
     if (_isLoading) return;
-
     try {
       final image = await _picker.pickImage(
         source: ImageSource.camera,
         maxWidth: 800,
         imageQuality: 80,
       );
-
-      if (image != null) {
-        if (mounted) {
-          setState(() {
-            _selfie = image;
-          });
-        }
+      if (image != null && mounted) {
+        setState(() => _selfie = image);
       }
     } catch (e) {
       if (mounted) {
@@ -133,12 +124,12 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
 
     if (_position == null) {
-      _showError('Должность не указана');
+      _showError('Выберите должность');
       return;
     }
 
     if (_zone == null) {
-      _showError('Зона не указана');
+      _showError('Выберите зону');
       return;
     }
 
@@ -147,11 +138,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       return;
     }
 
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-      });
-    }
+    setState(() => _isLoading = true);
 
     try {
       final compressedFile = await _compressImage(File(_selfie!.path));
@@ -177,9 +164,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -294,9 +279,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             child: GestureDetector(
               onTap: () {
                 if (mounted) {
-                  setState(() {
-                    _selfie = null;
-                  });
+                  setState(() => _selfie = null);
                 }
               },
               child: Container(
@@ -384,9 +367,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                   ? null
                   : () {
                       if (mounted) {
-                        setState(() {
-                          _selectedTime = timeSlot;
-                        });
+                        setState(() => _selectedTime = timeSlot);
                       }
                     },
               style: ElevatedButton.styleFrom(
@@ -447,9 +428,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           ? null
           : (String? value) {
               if (mounted && value != null) {
-                setState(() {
-                  _zone = value;
-                });
+                setState(() => _zone = value);
               }
             },
       decoration: InputDecoration(
@@ -502,9 +481,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           ? null
           : (String? value) {
               if (mounted && value != null) {
-                setState(() {
-                  _position = value;
-                });
+                setState(() => _position = value);
               }
             },
       decoration: InputDecoration(

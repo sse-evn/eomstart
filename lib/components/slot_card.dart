@@ -1,5 +1,4 @@
 // lib/components/slot_card.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +7,7 @@ import 'package:micro_mobility_app/models/active_shift.dart';
 import '../../providers/shift_provider.dart';
 import '../modals/slot_setup_modal.dart';
 import '../../utils/time_utils.dart';
+import '../../config.dart';
 
 class SlotCard extends StatefulWidget {
   const SlotCard({super.key});
@@ -85,11 +85,9 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
     return Consumer<ShiftProvider>(
       builder: (context, provider, child) {
         final theme = Theme.of(context);
-        final screenWidth = MediaQuery.of(context).size.width;
         final isDarkMode = theme.brightness == Brightness.dark;
-
-        final ActiveShift? activeShift = provider.activeShift;
-        final bool hasActiveShift = activeShift != null;
+        final activeShift = provider.activeShift;
+        final hasActiveShift = activeShift != null;
 
         if (!_isDataLoaded) {
           return const Center(child: CircularProgressIndicator());
@@ -109,16 +107,12 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Container(
-                    width: screenWidth * 0.9,
                     decoration: BoxDecoration(
                       gradient: hasActiveShift
                           ? LinearGradient(
                               colors: isDarkMode
                                   ? [Colors.green[900]!, Colors.green[800]!]
-                                  : [
-                                      const Color(0xFF4CAF50),
-                                      const Color(0xFF2E7D32)
-                                    ],
+                                  : [Colors.green[500]!, Colors.green[700]!],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             )
@@ -137,7 +131,6 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                           else
                             _buildInactiveShiftUI(context, theme, isDarkMode),
                           const SizedBox(height: 20),
-                          _buildShiftReport(provider, theme, isDarkMode),
                         ],
                       ),
                     ),
@@ -152,17 +145,34 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
   }
 
   Widget _buildActiveShiftUI(
-      ActiveShift activeShift, ThemeData theme, bool isDarkMode) {
+      ActiveShift
+          activeShift, // ← параметр не опциональный, но мы уверены, что он не null
+      ThemeData theme,
+      bool isDarkMode) {
+    // Проверка на null startTimeString
+    final String serverTime = activeShift.startTimeString != null
+        ? extractTimeFromIsoString(activeShift.startTimeString!)
+        : '--:--';
+
+    final String slotTime = activeShift.slotTimeRange.isNotEmpty
+        ? activeShift.slotTimeRange
+        : 'Не указан';
+
     if (activeShift.startTimeString == null) {
       return Text(
-        'Ошибка: Данные активной смены не определены',
-        style: theme.textTheme.bodySmall?.copyWith(color: Colors.white),
+        'Время начала неизвестно',
+        style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
       );
     }
 
-    final serverTime = extractTimeFromIsoString(activeShift.startTimeString);
+    final startTime = DateTime.parse(activeShift.startTimeString!);
+    final duration = DateTime.now().difference(startTime);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final durationStr = '${hours}ч ${minutes}м';
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -175,9 +185,10 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: Colors.white.withOpacity(0.9),
                     fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   'Вы на смене',
                   style: theme.textTheme.headlineSmall?.copyWith(
@@ -187,14 +198,14 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                 ),
               ],
             ),
-            FloatingActionButton(
+            CircleAvatar(
+              radius: 20,
               backgroundColor: Colors.red[400],
-              mini: true,
-              tooltip: 'Завершить смену',
               child: _isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Icon(Icons.power_settings_new, color: Colors.white),
-              onPressed: _isLoading ? null : () => _confirmEndSlot(context),
+                  ? const CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2)
+                  : const Icon(Icons.power_settings_new,
+                      color: Colors.white, size: 20),
             ),
           ],
         ),
@@ -202,21 +213,55 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isDarkMode
-                ? Colors.white.withOpacity(0.1)
-                : Colors.green[100]!.withOpacity(0.3),
+            color: Colors.white.withOpacity(0.2),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildInfoItem('Начало', serverTime, theme, Colors.white),
-              _buildInfoItem(
-                  'Слот', activeShift.slotTimeRange, theme, Colors.white),
+              Flexible(
+                child:
+                    _buildInfoItem('Начало', serverTime, theme, Colors.white),
+              ),
+              Flexible(
+                child:
+                    _buildInfoItem('Длит.', durationStr, theme, Colors.white),
+              ),
+              Flexible(
+                child: _buildInfoItem('Слот', slotTime, theme, Colors.white),
+              ),
             ],
           ),
         ),
+        const SizedBox(height: 16),
+        _buildSelfiePreview(activeShift),
       ],
+    );
+  }
+
+  Widget _buildSelfiePreview(ActiveShift activeShift) {
+    final photoUrl = '${AppConfig.mediaBaseUrl}${activeShift.selfie}';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 60,
+        width: 60,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.white, width: 2),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: activeShift.selfie.isNotEmpty
+            ? Image.network(
+                photoUrl,
+                loadingBuilder: (ctx, child, loading) =>
+                    loading == null ? child : const CircularProgressIndicator(),
+                errorBuilder: (_, __, ___) =>
+                    const Icon(Icons.error, color: Colors.white),
+                fit: BoxFit.cover,
+              )
+            : const Icon(Icons.person, color: Colors.white),
+      ),
     );
   }
 
@@ -225,9 +270,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
     return InkWell(
       onTap: () => _openSlotSetupModal(context),
       borderRadius: BorderRadius.circular(16),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+      child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDarkMode
@@ -263,52 +306,13 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                 ),
               ),
             ),
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: isDarkMode ? Colors.green[800]! : Colors.green[100]!,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.chevron_right,
-                color: isDarkMode ? Colors.green[300]! : Colors.green[600]!,
-                size: 24,
-              ),
+            Icon(
+              Icons.chevron_right,
+              color: isDarkMode ? Colors.green[300]! : Colors.green[600]!,
+              size: 24,
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildShiftReport(
-      ShiftProvider provider, ThemeData theme, bool isDarkMode) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[800] : Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.report,
-            size: 24,
-            color: isDarkMode ? Colors.grey[400]! : Colors.grey[600]!,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              provider.shiftHistory.isEmpty
-                  ? 'Нет данных о предыдущих сменах'
-                  : 'Последняя смена: ${DateFormat.yMd().format(provider.shiftHistory.last.date)}',
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? Colors.grey[300]! : Colors.grey[800]!,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -320,7 +324,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
         Text(
           title,
           style: theme.textTheme.bodySmall
-              ?.copyWith(color: color.withOpacity(0.8)),
+              ?.copyWith(color: color.withOpacity(0.8), fontSize: 11),
         ),
         const SizedBox(height: 4),
         Text(
@@ -328,6 +332,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
             color: color,
+            fontSize: 14,
           ),
         ),
       ],
@@ -369,45 +374,6 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _confirmEndSlot(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Завершить смену?'),
-        content: const Text('Вы уверены, что хотите завершить текущую смену?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Завершить'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      setState(() => _isLoading = true);
-      try {
-        await Provider.of<ShiftProvider>(context, listen: false).endSlot();
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            _errorMessage = 'Ошибка при завершении смены: ${e.toString()}';
-            _showError = true;
-          });
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
-      }
-    }
-  }
-
   Future<void> _openSlotSetupModal(BuildContext context) async {
     try {
       final result = await showModalBottomSheet(
@@ -422,7 +388,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Ошибка при старте смены: ${e.toString()}';
+          _errorMessage = 'Ошибка: ${e.toString()}';
           _showError = true;
         });
       }
