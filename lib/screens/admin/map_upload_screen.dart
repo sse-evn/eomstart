@@ -1,4 +1,5 @@
 // lib/screens/admin/map_upload_screen.dart
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -6,8 +7,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+import 'package:micro_mobility_app/config.dart'; // ✅ Подключаем конфиг
+
 class MapUploadScreen extends StatefulWidget {
-  final Function(File) onGeoJsonLoaded;
+  final void Function(File) onGeoJsonLoaded;
 
   const MapUploadScreen({super.key, required this.onGeoJsonLoaded});
 
@@ -31,34 +34,36 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
   }
 
   Future<void> _loadUploadedMaps() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     try {
       final token = await _storage.read(key: 'jwt_token');
-      if (token != null) {
-        final response = await http.get(
-          Uri.parse('https://eom-sharing.duckdns.org/api/admin/maps'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
+      if (token == null) throw Exception('Токен не найден');
 
-        if (response.statusCode == 200) {
-          final dynamic body = jsonDecode(response.body);
-          if (body is List) {
+      final response = await http.get(
+        Uri.parse(AppConfig.adminMapsUrl), // ✅ Из конфига
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body is List) {
+          if (mounted) {
             setState(() {
               _uploadedMaps = body;
             });
           }
-        } else {
-          throw Exception('Ошибка загрузки: ${response.statusCode}');
         }
+      } else {
+        throw Exception('Ошибка загрузки: ${response.statusCode}');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка загрузки списка карт: $e'),
+            content: Text('Ошибка: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -72,43 +77,40 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
 
   Future<void> _pickGeoJson() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['geojson', 'json'],
       );
 
-      if (result != null) {
-        final pickedFile = File(result.files.single.path!);
-        final fileStat = pickedFile.statSync();
-        final fileSizeMB = fileStat.size / (1024 * 1024);
+      if (result == null) return;
 
-        // Проверка размера файла (максимум 40 МБ)
-        if (fileSizeMB > 40) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content:
-                    Text('Файл слишком большой. Максимальный размер: 40 МБ'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          return;
+      final pickedFile = File(result.files.single.path!);
+      final fileSizeMB = pickedFile.statSync().size / (1024 * 1024);
+
+      if (fileSizeMB > 40) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Файл слишком большой. Максимум: 40 МБ'),
+              backgroundColor: Colors.orange,
+            ),
+          );
         }
+        return;
+      }
 
+      if (mounted) {
         setState(() {
           _uploadedGeoJson = pickedFile;
         });
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Файл выбран: ${result.files.single.name} (${fileSizeMB.toStringAsFixed(1)} МБ)'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Файл выбран: ${result.files.single.name} (${fileSizeMB.toStringAsFixed(1)} МБ)'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -143,54 +145,51 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
       return;
     }
 
-    setState(() => _isUploading = true);
+    if (mounted) setState(() => _isUploading = true);
 
     try {
       final token = await _storage.read(key: 'jwt_token');
-      if (token != null) {
-        final request = http.MultipartRequest(
-          'POST',
-          Uri.parse('https://eom-sharing.duckdns.org/api/admin/maps/upload'),
-        );
+      if (token == null) throw Exception('Токен не найден');
 
-        request.headers['Authorization'] = 'Bearer $token';
-        request.fields['city'] = _cityController.text.trim();
-        request.fields['description'] = _descriptionController.text.trim();
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(AppConfig.uploadMapUrl), // ✅ Из конфига
+      );
 
-        final file = await http.MultipartFile.fromPath(
-          'geojson_file',
-          _uploadedGeoJson!.path,
-          filename: _uploadedGeoJson!.path.split('/').last,
-        );
-        request.files.add(file);
+      request.headers['Authorization'] = 'Bearer $token';
+      request.fields['city'] = _cityController.text.trim();
+      request.fields['description'] = _descriptionController.text.trim();
 
-        final response = await request.send();
-        final resp = await http.Response.fromStream(response);
+      final file = await http.MultipartFile.fromPath(
+        'geojson_file',
+        _uploadedGeoJson!.path,
+        filename: _uploadedGeoJson!.path.split('/').last,
+      );
+      request.files.add(file);
 
-        if (resp.statusCode == 200 || resp.statusCode == 201) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Карта успешно загружена на сервер'),
-                backgroundColor: Colors.green,
-              ),
-            );
+      final response = await request.send();
+      final resp = await http.Response.fromStream(response);
 
-            // Очищаем форму
-            _clearForm();
-            // Обновляем список карт
-            await _loadUploadedMaps();
-          }
-        } else {
-          throw Exception(
-              'Ошибка загрузки: ${resp.statusCode} - ${resp.reasonPhrase}');
+      if (resp.statusCode == 200 || resp.statusCode == 201) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Карта успешно загружена'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          _clearForm();
+          await _loadUploadedMaps();
         }
+      } else {
+        throw Exception('Ошибка: ${resp.statusCode} - ${resp.reasonPhrase}');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка загрузки на сервер: $e'),
+            content: Text('❌ Ошибка: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -210,15 +209,11 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
         content: const Text('Вы уверены, что хотите удалить эту карту?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Удалить',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -226,41 +221,38 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
 
     if (confirmed != true) return;
 
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
 
     try {
       final token = await _storage.read(key: 'jwt_token');
-      if (token != null) {
-        final response = await http.delete(
-          Uri.parse('https://eom-sharing.duckdns.org/api/admin/maps/$mapId'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
+      if (token == null) throw Exception('Токен не найден');
 
-        if (response.statusCode == 200 || response.statusCode == 204) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Карта успешно удалена'),
-                backgroundColor: Colors.green,
-              ),
-            );
+      final response = await http.delete(
+        Uri.parse(AppConfig.deleteMapUrl(mapId)), // ✅ Из конфига
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
-            // Обновляем список карт
-            await _loadUploadedMaps();
-          }
-        } else {
-          throw Exception(
-              'Ошибка удаления: ${response.statusCode} - ${response.body}');
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🗑️ Карта удалена'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          await _loadUploadedMaps();
         }
+      } else {
+        throw Exception('Ошибка удаления: ${response.statusCode}');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка удаления карты: $e'),
+            content: Text('❌ Ошибка: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -273,11 +265,13 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
   }
 
   void _clearForm() {
-    setState(() {
-      _uploadedGeoJson = null;
-      _cityController.clear();
-      _descriptionController.clear();
-    });
+    if (mounted) {
+      setState(() {
+        _uploadedGeoJson = null;
+        _cityController.clear();
+        _descriptionController.clear();
+      });
+    }
   }
 
   @override
@@ -289,6 +283,9 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.primaryColor; // ✅ Из темы
+
     return RefreshIndicator(
       onRefresh: _loadUploadedMaps,
       child: SingleChildScrollView(
@@ -297,21 +294,17 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // === Заголовок ===
-            const Text(
+            Text(
               'Управление картами',
-              style: TextStyle(
-                fontSize: 24,
+              style: theme.textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Загрузка, управление и настройка GeoJSON карт по городам',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
             ),
             const SizedBox(height: 24),
 
@@ -319,78 +312,73 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+                  borderRadius: BorderRadius.circular(16)),
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Загрузить новую карту',
-                      style: TextStyle(
-                        fontSize: 20,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: primaryColor,
                         fontWeight: FontWeight.bold,
-                        color: Colors.green,
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'Выберите файл GeoJSON и укажите город для загрузки на сервер',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                      ),
+                      style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 24),
 
-                    // Выбор файла
+                    // Кнопка выбора файла
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: _isLoading ? null : _pickGeoJson,
                         style: OutlinedButton.styleFrom(
+                          foregroundColor: primaryColor,
+                          side: BorderSide(color: primaryColor),
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          side: BorderSide(color: Colors.green[700]!),
+                              borderRadius: BorderRadius.circular(12)),
                         ),
-                        icon:
-                            const Icon(Icons.upload_file, color: Colors.green),
+                        icon: const Icon(Icons.upload_file),
                         label: Text(
                           _uploadedGeoJson != null
                               ? 'Файл выбран: ${_uploadedGeoJson!.path.split('/').last}'
                               : 'Выбрать GeoJSON файл',
-                          style: const TextStyle(color: Colors.green),
                         ),
                       ),
                     ),
 
                     const SizedBox(height: 16),
 
-                    // Информация о выбранном файле
+                    // Информация о файле
                     if (_uploadedGeoJson != null) ...[
-                      _buildSelectedFileInfo(),
+                      _buildSelectedFileInfo(primaryColor),
                       const SizedBox(height: 16),
                     ],
 
-                    // Город
+                    // Поле "Город"
                     _buildTextField(
                       controller: _cityController,
                       label: 'Город',
                       hint: 'Введите название города',
                       icon: Icons.location_city,
+                      primaryColor: primaryColor,
                     ),
                     const SizedBox(height: 16),
 
-                    // Описание
+                    // Поле "Описание"
                     _buildTextField(
                       controller: _descriptionController,
                       label: 'Описание (опционально)',
                       hint: 'Описание карты или зон',
                       maxLines: 2,
                       icon: Icons.description,
+                      primaryColor: primaryColor,
                     ),
                     const SizedBox(height: 24),
 
@@ -402,12 +390,11 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
                             ? null
                             : _uploadMapToServer,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[700],
+                          backgroundColor: primaryColor,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                         icon: _isUploading
                             ? const CircularProgressIndicator(
@@ -415,51 +402,36 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
                             : const Icon(Icons.cloud_upload),
                         label: Text(
                           _isUploading ? 'Загрузка...' : 'Загрузить на сервер',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
 
                     const SizedBox(height: 24),
 
-                    // Информация о ограничениях
+                    // Ограничения
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.green[50],
+                        color: primaryColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green[100]!),
+                        border:
+                            Border.all(color: primaryColor.withOpacity(0.2)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
+                        children: const [
+                          Text(
                             'ℹ️ Ограничения',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Colors.green,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            '• Поддерживаются файлы формата .geojson и .json',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          const Text(
-                            '• Максимальный размер файла: 40 МБ',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          const Text(
-                            '• Можно загружать карты по разным городам',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          const Text(
-                            '• Каждая карта должна содержать корректные геоданные',
-                            style: TextStyle(fontSize: 12),
-                          ),
+                          SizedBox(height: 8),
+                          Text('• Поддерживаются: .geojson, .json'),
+                          Text('• Макс. размер: 40 МБ'),
+                          Text('• Только корректные геоданные'),
                         ],
                       ),
                     ),
@@ -470,46 +442,38 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
 
             const SizedBox(height: 32),
 
-            // === Список загруженных карт ===
-            const Text(
+            // === Список карт ===
+            Text(
               'Загруженные карты',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
 
             _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _uploadedMaps.isEmpty
-                    ? _buildEmptyState()
-                    : _buildMapsList(),
+                    ? _buildEmptyState(primaryColor)
+                    : _buildMapsList(primaryColor),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSelectedFileInfo() {
-    final fileStat = _uploadedGeoJson!.statSync();
-    final fileSize = _formatFileSize(fileStat.size);
+  Widget _buildSelectedFileInfo(Color primaryColor) {
+    final fileSize = _formatFileSize(_uploadedGeoJson!.statSync().size);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.green[50],
+        color: primaryColor.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.green[200]!),
+        border: Border.all(color: primaryColor.withOpacity(0.2)),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.check_circle,
-            color: Colors.green,
-            size: 24,
-          ),
+          Icon(Icons.check_circle, color: primaryColor, size: 24),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -517,26 +481,17 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
               children: [
                 Text(
                   _uploadedGeoJson!.path.split('/').last,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
                   'Размер: $fileSize',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],
             ),
           ),
           IconButton(
-            onPressed: () {
-              setState(() {
-                _uploadedGeoJson = null;
-              });
-            },
+            onPressed: () => setState(() => _uploadedGeoJson = null),
             icon: const Icon(Icons.close, color: Colors.red),
           ),
         ],
@@ -550,17 +505,13 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
     required String hint,
     int maxLines = 1,
     IconData? icon,
+    required Color primaryColor,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        Text(label,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
@@ -574,7 +525,7 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.green[700]!),
+              borderSide: BorderSide(color: primaryColor),
             ),
           ),
         ),
@@ -582,20 +533,19 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
     );
   }
 
-  Widget _buildMapsList() {
+  Widget _buildMapsList(Color primaryColor) {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: _uploadedMaps.length,
       itemBuilder: (context, index) {
-        final map = _uploadedMaps[index];
-        return _buildMapCard(map);
+        final map = Map<String, dynamic>.from(_uploadedMaps[index]);
+        return _buildMapCard(map, primaryColor);
       },
     );
   }
 
-  Widget _buildMapCard(Map<String, dynamic> map) {
-    // Извлекаем данные из JSON ответа сервера
+  Widget _buildMapCard(Map<String, dynamic> map, Color primaryColor) {
     final id = map['id'] as int;
     final city = map['city'] as String? ?? 'Неизвестный город';
     final description = map['description'] as String? ?? '';
@@ -603,18 +553,12 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
     final fileSize = map['file_size'] as int? ?? 0;
     final uploadDate = map['upload_date'] as String? ?? '';
 
-    // Форматируем размер файла
     final formattedFileSize = _formatFileSize(fileSize);
-
-    // Извлекаем имя файла без пути
     final displayName = fileName.split('/').last;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -625,14 +569,10 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.green[100],
+                    color: primaryColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.map,
-                    color: Colors.green,
-                    size: 24,
-                  ),
+                  child: Icon(Icons.map, color: primaryColor, size: 24),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -640,19 +580,15 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        displayName.isNotEmpty ? displayName : 'Без названия',
+                        displayName,
                         style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '$city • $formattedFileSize',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                        ),
+                        style:
+                            const TextStyle(fontSize: 14, color: Colors.grey),
                       ),
                     ],
                   ),
@@ -661,21 +597,13 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
             ),
             const SizedBox(height: 12),
             if (description.isNotEmpty)
-              Text(
-                description,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-              ),
+              Text(description,
+                  style: const TextStyle(fontSize: 14, color: Colors.grey)),
             const SizedBox(height: 8),
             if (uploadDate.isNotEmpty)
               Text(
                 'Загружено: $uploadDate',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             const SizedBox(height: 16),
             Row(
@@ -683,15 +611,14 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      // Здесь можно добавить просмотр карты
+                      // Можно добавить preview карты
                     },
                     icon: const Icon(Icons.visibility, size: 16),
                     label: const Text('Просмотр'),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                          borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
                 ),
@@ -707,8 +634,7 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                          borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
                 ),
@@ -720,38 +646,27 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(Color primaryColor) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           children: [
-            Icon(
-              Icons.assignment_outlined,
-              size: 64,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.map, size: 64, color: primaryColor.withOpacity(0.3)),
             const SizedBox(height: 16),
             const Text(
               'Нет загруженных карт',
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey,
-              ),
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey),
             ),
             const SizedBox(height: 8),
             const Text(
               'Загрузите первую карту GeoJSON',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
               textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey),
             ),
           ],
         ),
@@ -760,12 +675,8 @@ class _MapUploadScreenState extends State<MapUploadScreen> {
   }
 
   String _formatFileSize(int bytes) {
-    if (bytes < 1024) {
-      return '$bytes байт';
-    } else if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} КБ';
-    } else {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} МБ';
-    }
+    if (bytes < 1024) return '$bytes байт';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} КБ';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} МБ';
   }
 }

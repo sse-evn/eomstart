@@ -1,3 +1,5 @@
+// lib/components/slot_card.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -5,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
 import '../../providers/shift_provider.dart';
 import '../modals/slot_setup_modal.dart';
-import '../../utils/time_utils.dart'; // Добавь импорт
+import '../../utils/time_utils.dart';
 
 class SlotCard extends StatefulWidget {
   const SlotCard({super.key});
@@ -41,12 +43,16 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
   Future<void> _loadInitialData() async {
     try {
       await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
-      setState(() => _isDataLoaded = true);
+      if (mounted) {
+        setState(() => _isDataLoaded = true);
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Ошибка загрузки данных: ${e.toString()}';
-        _showError = true;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Ошибка загрузки данных: ${e.toString()}';
+          _showError = true;
+        });
+      }
     }
   }
 
@@ -148,13 +154,12 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
   Widget _buildActiveShiftUI(
       ActiveShift activeShift, ThemeData theme, bool isDarkMode) {
     if (activeShift.startTimeString == null) {
-      return const Text(
+      return Text(
         'Ошибка: Данные активной смены не определены',
-        style: TextStyle(color: Colors.white),
+        style: theme.textTheme.bodySmall?.copyWith(color: Colors.white),
       );
     }
 
-    // ✅ Используем твою утилиту для извлечения времени
     final serverTime = extractTimeFromIsoString(activeShift.startTimeString);
 
     return Column(
@@ -320,8 +325,10 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
         const SizedBox(height: 4),
         Text(
           value,
-          style: theme.textTheme.titleLarge
-              ?.copyWith(fontWeight: FontWeight.bold, color: color),
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
         ),
       ],
     );
@@ -350,7 +357,11 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
             ),
             IconButton(
               icon: const Icon(Icons.close, color: Colors.white, size: 20),
-              onPressed: () => setState(() => _showError = false),
+              onPressed: () {
+                if (mounted) {
+                  setState(() => _showError = false);
+                }
+              },
             ),
           ],
         ),
@@ -378,17 +389,21 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed == true && mounted) {
       setState(() => _isLoading = true);
       try {
         await Provider.of<ShiftProvider>(context, listen: false).endSlot();
       } catch (e) {
-        setState(() {
-          _errorMessage = 'Ошибка при завершении смены: ${e.toString()}';
-          _showError = true;
-        });
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Ошибка при завершении смены: ${e.toString()}';
+            _showError = true;
+          });
+        }
       } finally {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }
@@ -405,10 +420,12 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
         await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Ошибка при старте смены: ${e.toString()}';
-        _showError = true;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Ошибка при старте смены: ${e.toString()}';
+          _showError = true;
+        });
+      }
     }
   }
 }

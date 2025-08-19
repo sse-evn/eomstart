@@ -1,13 +1,13 @@
 // lib/screens/admin/shifts_list/shift_details_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
-// Импорт для работы с временными зонами
-import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tz_data;
-import 'package:provider/provider.dart'; // Добавлено
-import 'package:micro_mobility_app/providers/shift_provider.dart'; // Добавлено
+import 'package:provider/provider.dart';
+import 'package:micro_mobility_app/providers/shift_provider.dart';
+import 'package:micro_mobility_app/utils/time_utils.dart';
+import 'package:micro_mobility_app/config.dart'; // ✅ Импортируем конфиг
 
 class ShiftDetailsScreen extends StatefulWidget {
   final ActiveShift shift;
@@ -52,17 +52,26 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Завершить смену сотрудника?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          '⚠️ Завершить смену?',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         content: Text(
-            'Вы уверены, что хотите завершить смену для "${widget.shift.username}"?'),
+          'Вы уверены, что хотите завершить смену для "${widget.shift.username}"? Это действие нельзя отменить.',
+          style: TextStyle(color: Colors.grey[700]),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Да, завершить',
-                style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Да, завершить',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w500),
+            ),
           ),
         ],
       ),
@@ -75,24 +84,29 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) throw Exception('Токен не найден');
 
+      // Используем конфиг!
       await _apiService.forceEndShift(token, widget.shift.userId);
 
-      // Показываем успех и закрываем экран
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('✅ Смена завершена'),
-              backgroundColor: Colors.green),
+            content: Text('✅ Смена успешно завершена'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
         );
-        Navigator.pop(context, true); // Вернём true, если нужно обновить список
-
-        // Обновляем данные в ShiftProvider
+        Navigator.pop(context, true);
         Provider.of<ShiftProvider>(context, listen: false).loadShifts();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Ошибка: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('❌ Ошибка: ${e.toString().split('.').first}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {
@@ -102,205 +116,335 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final primaryColor = theme.primaryColor;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Детали смены'),
-        backgroundColor: Colors.blue,
+        title: Text(
+          'Детали смены',
+          style: textTheme.titleLarge?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: primaryColor,
         elevation: 1,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Stack(
         children: [
-          SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Сотрудник
-                  const Text(
-                    'Сотрудник:',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.shift.username,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Фото
-                  const Text(
-                    'Фото смены',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  GestureDetector(
-                    onTap: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => Dialog(
-                          backgroundColor: Colors.black,
-                          child: Stack(
-                            children: [
-                              InteractiveViewer(
-                                child: Image.network(
-                                  'https://eom-sharing.duckdns.org${widget.shift.selfie}', // Исправлено
-                                  loadingBuilder:
-                                      (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return const Center(
-                                        child: CircularProgressIndicator());
-                                  },
-                                  errorBuilder: (_, __, ___) => const Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.error,
-                                          color: Colors.red, size: 48),
-                                      Text('Фото не загружено',
-                                          style:
-                                              TextStyle(color: Colors.white)),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                top: 20,
-                                right: 20,
-                                child: IconButton(
-                                  icon: const Icon(Icons.close,
-                                      color: Colors.white),
-                                  onPressed: () => Navigator.pop(ctx),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey, width: 1),
+          CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.all(16.0),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _buildUserCard(context, theme, primaryColor),
+                    const SizedBox(height: 24),
+                    _buildSelfieSection(context, theme),
+                    const SizedBox(height: 24),
+                    _buildInfoSection(context, theme, primaryColor),
+                    const SizedBox(height: 24),
+                    if (_currentUserRole == 'superadmin')
+                      _buildAdminAction(primaryColor),
+                  ]),
+                ),
+              ),
+            ],
+          ),
+          if (_isLoading)
+            IgnorePointer(
+              ignoring: true,
+              child: Container(
+                color: Colors.black.withOpacity(0.2),
+                child: const Center(
+                  child: SizedBox(
+                    width: 60,
+                    height: 60,
+                    child: Card(
+                      elevation: 4,
+                      child: Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: CircularProgressIndicator(),
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserCard(
+      BuildContext context, ThemeData theme, Color primaryColor) {
+    final photoUrl = '${AppConfig.mediaBaseUrl}${widget.shift.selfie}';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 36,
+            backgroundColor: Colors.grey[300],
+            backgroundImage: NetworkImage(photoUrl),
+            child: widget.shift.selfie.isEmpty
+                ? const Icon(Icons.person, size: 40, color: Colors.grey)
+                : null,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.shift.username,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: primaryColor,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${widget.shift.position} • ${widget.shift.zone}',
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelfieSection(BuildContext context, ThemeData theme) {
+    final photoUrl = '${AppConfig.mediaBaseUrl}${widget.shift.selfie}';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'Фото с начала смены',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => Dialog(
+                  backgroundColor: Colors.black,
+                  insetPadding: const EdgeInsets.all(20),
+                  child: Stack(
+                    children: [
+                      InteractiveViewer(
                         child: Image.network(
-                          'https://eom-sharing.duckdns.org${widget.shift.selfie}', // Исправлено
-                          height: 200,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
+                          photoUrl,
                           loadingBuilder: (context, child, loadingProgress) {
                             if (loadingProgress == null) return child;
                             return const Center(
                                 child: CircularProgressIndicator());
                           },
-                          errorBuilder: (_, __, ___) => const Icon(Icons.person,
-                              size: 100, color: Colors.grey),
+                          errorBuilder: (_, __, ___) => const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error, color: Colors.red, size: 48),
+                              Text('Фото недоступно',
+                                  style: TextStyle(color: Colors.white)),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Информация о смене
-                  const Text(
-                    'Информация о смене',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  _buildInfoRow('Позиция', widget.shift.position),
-                  _buildInfoRow('Зона', widget.shift.zone),
-                  _buildInfoRow('Слот времени', widget.shift.slotTimeRange),
-                  // Используем форматирование времени с секундами напрямую из startTime
-                  _buildInfoRow(
-                      'Начало смены',
-                      widget.shift.startTime != null
-                          ? widget.shift.startTime!.formatTimeDateWithSeconds()
-                          : 'Нет данных'),
-                  _buildInfoRow(
-                      'ID сотрудника', widget.shift.userId.toString()),
-
-                  const SizedBox(height: 32),
-
-                  // Кнопка завершения (только для superadmin)
-                  if (_currentUserRole == 'superadmin')
-                    ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _forceEndShift,
-                      icon: const Icon(Icons.close, size: 18),
-                      label: Text(
-                          _isLoading ? 'Завершение...' : 'Завершить смену'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      Positioned(
+                        top: 40,
+                        right: 20,
+                        child: IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () => Navigator.pop(ctx),
                         ),
                       ),
-                    ),
-                ],
+                    ],
+                  ),
+                ),
+              );
+            },
+            child: ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(16)),
+              child: Image.network(
+                photoUrl,
+                height: 220,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return const Center(child: CircularProgressIndicator());
+                },
+                errorBuilder: (_, __, ___) => Container(
+                  height: 220,
+                  color: Colors.grey[200],
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                      Text('Фото не загружено',
+                          style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(child: CircularProgressIndicator()),
-            ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildInfoSection(
+      BuildContext context, ThemeData theme, Color primaryColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Информация о смене',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildInfoRow('Позиция', widget.shift.position, primaryColor),
+          _buildInfoRow('Зона', widget.shift.zone, primaryColor),
+          _buildInfoRow(
+              'Слот времени', widget.shift.slotTimeRange, primaryColor),
+          _buildInfoRow(
+            'Начало смены',
+            '${extractTimeFromIsoString(widget.shift.startTimeString)} '
+                'от ${extractDateFromIsoString(widget.shift.startTimeString)}',
+            primaryColor,
+          ),
+          _buildInfoRow(
+              'ID сотрудника', widget.shift.userId.toString(), primaryColor),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, Color primaryColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 130, // Увеличил ширину для размещения "Начало смены:"
+            width: 120,
             child: Text(
               '$label:',
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600, color: Colors.grey),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: primaryColor,
+                fontSize: 14,
+              ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontSize: 15),
+              style: const TextStyle(fontSize: 14, color: Colors.black87),
+              softWrap: true,
+              overflow: TextOverflow.fade,
             ),
           ),
         ],
       ),
     );
   }
-}
 
-// Расширение для форматирования времени с секундами
-extension TimeFormat on DateTime {
-  String formatTimeDateWithSeconds() {
-    final date =
-        '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}';
-    final time =
-        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:${second.toString().padLeft(2, '0')}';
-    return '$date $time';
+  Widget _buildAdminAction(Color primaryColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '⚠️ Только для суперадмина',
+            style: TextStyle(
+              color: Colors.red,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isLoading ? null : _forceEndShift,
+              icon: const Icon(Icons.power_settings_new, size: 18),
+              label: Text(
+                _isLoading ? 'Завершение...' : 'Принудительно завершить смену',
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -1,5 +1,4 @@
-// lib/main.dart
-
+// lib/main.prod.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -21,7 +20,6 @@ import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 import 'package:micro_mobility_app/screens/splash/splash_screen.dart';
 
 import 'providers/shift_provider.dart';
-import 'config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,46 +53,12 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Оператор микромобильности',
       theme: ThemeData(
-        // ✅ Устанавливаем зелёную схему цветов
-        colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.green[700]!, brightness: Brightness.light),
+        primarySwatch: Colors.green,
         scaffoldBackgroundColor: Colors.grey[100],
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.green[700], // ✅ Зелёный AppBar
-          foregroundColor: Colors.white,
-          elevation: 1,
-          titleTextStyle: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-          iconTheme: const IconThemeData(color: Colors.white),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green[700],
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        cardTheme: const CardThemeData(
-          elevation: 1,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.grey),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.green[700]!),
-          ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
         ),
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),

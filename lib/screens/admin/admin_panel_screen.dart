@@ -2,6 +2,7 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/config.dart';
 import 'package:micro_mobility_app/screens/admin/tasks_screen.dart';
 import 'package:micro_mobility_app/screens/admin/map_upload_screen.dart';
 import 'package:micro_mobility_app/screens/admin/shift_monitoring_screen.dart';
@@ -26,16 +27,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     'Смены',
   ];
 
-  // Ключи для принудительного обновления вкладок (опционально)
   final List<GlobalKey<RefreshIndicatorState>> _refreshKeys = [
-    GlobalKey<RefreshIndicatorState>(), // для вкладки "Пользователи"
-    GlobalKey(), // Задания
-    GlobalKey(), // Карта
-    GlobalKey(), // Смены
+    GlobalKey<RefreshIndicatorState>(),
+    GlobalKey(),
+    GlobalKey(),
+    GlobalKey(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // ✅ ИСПРАВЛЕНО: используем colorScheme.primary
+    final primaryColor = theme.colorScheme.primary;
+
     Widget currentBody;
 
     switch (_currentIndex) {
@@ -48,7 +52,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       case 2:
         currentBody = MapUploadScreen(
           onGeoJsonLoaded: (File file) {
-            // После загрузки GeoJSON — переходим на экран карты
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -67,26 +70,41 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_titles[_currentIndex]),
+        title: Text(
+          _titles[_currentIndex],
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+          ),
+        ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF388E3C),
+        backgroundColor: primaryColor, // ✅ Теперь точно зелёный
         elevation: 4,
-        leading: null, // УДАЛЯЕМ КНОПКУ "НАЗАД"
+        leading: null,
         actions: [
-          // Кнопка обновления — вызывает pull-to-refresh на текущей вкладке
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              // Пример: вызываем обновление только для вкладки "Пользователи"
-              if (_currentIndex == 0) {
-                final key = _refreshKeys[0];
-                if (key.currentState != null) {
-                  key.currentState!.show();
-                }
+              if (_currentIndex == 0 && _refreshKeys[0].currentState != null) {
+                _refreshKeys[0].currentState!.show();
               }
-              // Можно добавить обновление для других вкладок
             },
             tooltip: 'Обновить',
+          ),
+          PopupMenuButton(
+            icon:
+                const Icon(Icons.info_outline, size: 18, color: Colors.white70),
+            tooltip: 'Информация о среде',
+            onSelected: (value) {
+              if (value == 'env') {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(AppConfig.environmentInfo)),
+                );
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(value: 'env', child: Text('Показать среду')),
+            ],
           ),
         ],
       ),
@@ -122,12 +140,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             });
           },
           type: BottomNavigationBarType.fixed,
-          selectedItemColor: const Color(0xFF388E3C),
+          selectedItemColor: primaryColor, // ✅ Цвет теперь из схемы
           unselectedItemColor: Colors.grey[600],
           backgroundColor: Colors.white,
           elevation: 0,
-          showSelectedLabels: true,
-          showUnselectedLabels: true,
           selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
           unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
           items: const [
@@ -137,8 +153,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               label: 'Пользователи',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.assignment_outlined),
-              activeIcon: Icon(Icons.assignment),
+              icon: Icon(Icons.calendar_today_outlined),
+              activeIcon: Icon(Icons.calendar_today),
               label: 'Генератор смен',
             ),
             BottomNavigationBarItem(
