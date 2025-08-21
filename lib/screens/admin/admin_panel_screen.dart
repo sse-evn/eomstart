@@ -1,14 +1,13 @@
-// lib/screens/admin/admin_panel_screen.dart
-
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/config.dart';
+import 'package:micro_mobility_app/screens/admin/shift_history_screen.dart';
+import 'package:micro_mobility_app/screens/admin/shift_monitoring_screen.dart';
 import 'package:micro_mobility_app/screens/admin/tasks_screen.dart';
 import 'package:micro_mobility_app/screens/admin/map_upload_screen.dart';
-import 'package:micro_mobility_app/screens/admin/shift_monitoring_screen.dart';
+import 'package:micro_mobility_app/screens/generator_shifts.dart';
 import 'package:micro_mobility_app/widgets/admin_users_list.dart';
 import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
-import 'package:micro_mobility_app/screens/generatorshift.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -17,7 +16,8 @@ class AdminPanelScreen extends StatefulWidget {
   State<AdminPanelScreen> createState() => _AdminPanelScreenState();
 }
 
-class _AdminPanelScreenState extends State<AdminPanelScreen> {
+class _AdminPanelScreenState extends State<AdminPanelScreen>
+    with SingleTickerProviderStateMixin {
   int _currentIndex = 0;
 
   final List<String> _titles = [
@@ -27,17 +27,23 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     'Смены',
   ];
 
-  final List<GlobalKey<RefreshIndicatorState>> _refreshKeys = [
-    GlobalKey<RefreshIndicatorState>(),
-    GlobalKey(),
-    GlobalKey(),
-    GlobalKey(),
-  ];
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // ✅ ИСПРАВЛЕНО: используем colorScheme.primary
     final primaryColor = theme.colorScheme.primary;
 
     Widget currentBody;
@@ -47,22 +53,49 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         currentBody = const AdminUsersList();
         break;
       case 1:
-        currentBody = const Generatorshift();
+        currentBody = const GeneratorShiftScreen();
         break;
       case 2:
-        currentBody = MapUploadScreen(
-          onGeoJsonLoaded: (File file) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => MapScreen(customGeoJsonFile: file),
-              ),
-            );
-          },
-        );
+        currentBody = MapAndZoneScreen();
+        // onGeoJsonLoaded: (File file) {
+        //   Navigator.pushReplacement(
+        //       context,
+        //       MaterialPageRoute(
+        //         builder: (context) => MapScreen(customGeoJsonFile: file),
+        //       ),
+        //     );
+        //   },
+        // );
         break;
       case 3:
-        currentBody = const ShiftMonitoringScreen();
+        currentBody = Column(
+          children: [
+            Material(
+              color: primaryColor,
+              child: TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(text: 'Активные', icon: Icon(Icons.play_arrow, size: 18)),
+                  Tab(text: 'История', icon: Icon(Icons.history, size: 18)),
+                ],
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                indicator: UnderlineTabIndicator(
+                  borderSide: BorderSide(color: Colors.white, width: 2.0),
+                ),
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: const [
+                  ShiftMonitoringScreen(),
+                  ShiftHistoryScreen(),
+                ],
+              ),
+            ),
+          ],
+        );
         break;
       default:
         currentBody = const AdminUsersList();
@@ -72,22 +105,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       appBar: AppBar(
         title: Text(
           _titles[_currentIndex],
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
         ),
         centerTitle: true,
-        backgroundColor: primaryColor, // ✅ Теперь точно зелёный
+        backgroundColor: primaryColor,
         elevation: 4,
-        leading: null,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              if (_currentIndex == 0 && _refreshKeys[0].currentState != null) {
-                _refreshKeys[0].currentState!.show();
-              }
+              final state1 =
+                  context.findAncestorStateOfType<ShiftMonitoringScreenState>();
+              final state2 =
+                  context.findAncestorStateOfType<ShiftHistoryScreenState>();
+              state1?.refresh();
+              state2?.refresh();
             },
             tooltip: 'Обновить',
           ),
@@ -113,62 +145,43 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.grey[50]!,
-              Colors.white,
-            ],
+            colors: [Colors.grey[50]!, Colors.white],
           ),
         ),
         child: currentBody,
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.3),
-              spreadRadius: 1,
-              blurRadius: 8,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: primaryColor, // ✅ Цвет теперь из схемы
-          unselectedItemColor: Colors.grey[600],
-          backgroundColor: Colors.white,
-          elevation: 0,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
-          items: const [
-            BottomNavigationBarItem(
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: primaryColor,
+        unselectedItemColor: Colors.grey[600],
+        backgroundColor: Colors.white,
+        elevation: 0,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+        items: const [
+          BottomNavigationBarItem(
               icon: Icon(Icons.people_outline),
               activeIcon: Icon(Icons.people),
-              label: 'Пользователи',
-            ),
-            BottomNavigationBarItem(
+              label: 'Пользователи'),
+          BottomNavigationBarItem(
               icon: Icon(Icons.calendar_today_outlined),
               activeIcon: Icon(Icons.calendar_today),
-              label: 'Генератор смен',
-            ),
-            BottomNavigationBarItem(
+              label: 'Генератор смен'),
+          BottomNavigationBarItem(
               icon: Icon(Icons.map_outlined),
               activeIcon: Icon(Icons.map),
-              label: 'Карта',
-            ),
-            BottomNavigationBarItem(
+              label: 'Карта'),
+          BottomNavigationBarItem(
               icon: Icon(Icons.access_time_outlined),
               activeIcon: Icon(Icons.access_time),
-              label: 'Смены',
-            ),
-          ],
-        ),
+              label: 'Смены'),
+        ],
       ),
     );
   }

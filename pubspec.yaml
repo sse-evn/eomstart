@@ -33,6 +33,9 @@ dependencies:
   win32: ^5.14.0
   image: ^4.1.5          # Для сжатия фото
 
+
+
+  
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
@@ -49,6 +52,7 @@ dependencies:
   audioplayers: ^6.5.0
   timezone: ^0.10.1
   jwt_decode: ^0.3.1
+  web_socket_channel: ^3.0.3
 
 flutter:
   uses-material-design: true

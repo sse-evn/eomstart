@@ -12,6 +12,8 @@ class ActiveShift {
   final DateTime? startTime;
   final bool isActive;
   final String selfie;
+  final String? endTimeString; // Новое поле
+  final DateTime? endTime; // Используется в UI
 
   ActiveShift({
     required this.id,
@@ -24,6 +26,8 @@ class ActiveShift {
     this.startTime,
     required this.isActive,
     required this.selfie,
+    this.endTimeString,
+    this.endTime,
   });
 
   factory ActiveShift.fromJson(Map<String, dynamic> json) {
@@ -36,6 +40,18 @@ class ActiveShift {
         parsedStartTime = DateTime.parse(originalStartTimeStr);
       } catch (e) {
         parsedStartTime = null;
+      }
+    }
+
+    String? originalEndTimeStr;
+    DateTime? parsedEndTime;
+
+    if (json['end_time'] != null) {
+      originalEndTimeStr = json['end_time'].toString();
+      try {
+        parsedEndTime = DateTime.parse(originalEndTimeStr);
+      } catch (e) {
+        parsedEndTime = null;
       }
     }
 
@@ -56,6 +72,8 @@ class ActiveShift {
       isActive: json['is_active'] is bool
           ? json['is_active'] as bool
           : (json['is_active']?.toString().toLowerCase() == 'true'),
+      endTimeString: originalEndTimeStr,
+      endTime: parsedEndTime,
     );
   }
 
@@ -67,7 +85,8 @@ class ActiveShift {
       'slot_time_range': slotTimeRange,
       'position': position,
       'zone': zone,
-      'start_time': startTime?.toIso8601String(),
+      'start_time': startTime?.toIso8601String(), // ✅ исправлено
+      'end_time': endTime?.toIso8601String(), // ✅ исправлено
       'is_active': isActive,
       'selfie': selfie,
     };

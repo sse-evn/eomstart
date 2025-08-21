@@ -1,16 +1,14 @@
-// lib/providers/shift_provider.dart
-
 import 'dart:async';
 import 'dart:io';
-import 'dart:convert'; // ✅ Обязательно для jsonEncode / jsonDecode
-
+import 'dart:convert';
+import 'dart:math' show e;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show WidgetsBinding, AppLifecycleState;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:connectivity_plus/connectivity_plus.dart'; // 🔄 Мониторинг сети
-import 'package:jwt_decode/jwt_decode.dart'; // 🔐 Проверка JWT
-
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:jwt_decode/jwt_decode.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:micro_mobility_app/models/active_shift.dart' as model;
 import '../models/shift_data.dart';
@@ -26,26 +24,18 @@ class ShiftProvider with ChangeNotifier {
   model.ActiveShift? _activeShift;
   List<ShiftData> _shiftHistory = [];
   DateTime _selectedDate = _toAlmatyTime(DateTime.now());
-
-  Timer? _timer;
   bool _isEndingSlot = false;
   bool _isStartingSlot = false;
-
-  // === Статистика бота ===
   Map<String, dynamic>? _botStatsData;
   bool _isLoadingBotStats = false;
   DateTime? _lastBotStatsFetchTime;
-
-  // === Пользователь ===
   String? _currentUsername;
-
-  // 🔄 Сетевое состояние — ✅ ИСПРАВЛЕНО: теперь List<ConnectivityResult>
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   bool _isOnline = true;
-
-  // 📱 Кэширование
   static const String _shiftsCacheKey = 'shifts_cache';
   static const String _lastCacheTimeKey = 'shifts_cache_time';
+  bool _isLoadingActiveShift = false;
+  DateTime? _lastActiveShiftFetchTime;
 
   ShiftProvider({
     required ApiService apiService,
@@ -60,7 +50,6 @@ class ShiftProvider with ChangeNotifier {
     _setupConnectivityListener();
   }
 
-  // === Вспомогательные функции времени (Almaty) ===
   static DateTime _toAlmatyTime(DateTime dateTime) {
     final almatyLocation = tz.getLocation('Asia/Almaty');
     final tzDateTime = tz.TZDateTime.from(dateTime, almatyLocation);
@@ -72,16 +61,6 @@ class ShiftProvider with ChangeNotifier {
     return tz.TZDateTime.now(almatyLocation).toLocal();
   }
 
-  void _startTimer() {
-    _timer?.cancel();
-    if (_activeShift?.startTime != null) {
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        notifyListeners();
-      });
-    }
-  }
-
-  // 🔐 Проверка срока действия токена
   bool _isTokenValid(String token) {
     try {
       final payload = Jwt.parseJwt(token);
@@ -94,7 +73,6 @@ class ShiftProvider with ChangeNotifier {
     }
   }
 
-  // 🔄 Подписка на изменение сети
   void _setupConnectivityListener() {
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
       (List<ConnectivityResult> results) {
@@ -104,17 +82,23 @@ class ShiftProvider with ChangeNotifier {
 
         if (isCurrentlyOnline && !_isOnline) {
           debugPrint('🌐 Интернет восстановлен. Перезагрузка смен...');
-          loadShifts();
+          // Безопасный вызов loadShifts
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            loadShifts();
+          });
         }
         _isOnline = isCurrentlyOnline;
+        // Безопасный вызов notifyListeners
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          notifyListeners();
+        });
       },
       onError: (error) {
-        debugPrint('❌ Ошибка мониторинга сети: $error');
+        debugPrint('❌ Ошибка мониторинга сети: $e');
       },
     );
   }
 
-  // 📱 Сохранение в кэш (SharedPreferences)
   Future<void> _saveToCache() async {
     try {
       final data = {
@@ -130,7 +114,6 @@ class ShiftProvider with ChangeNotifier {
     }
   }
 
-  // 📱 Загрузка из кэша
   Future<void> _loadFromCache() async {
     try {
       final cached = _prefs.getString(_shiftsCacheKey);
@@ -154,33 +137,33 @@ class ShiftProvider with ChangeNotifier {
       _currentUsername = data['username'] as String?;
       _botStatsData = data['botStatsData'] as Map<String, dynamic>?;
 
-      if (_activeShift != null) {
-        _startTimer();
-      }
-
       debugPrint('✅ Данные загружены из кэша');
-      notifyListeners();
+      // Безопасный вызов notifyListeners
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+      });
     } catch (e) {
       debugPrint('❌ Ошибка загрузки из кэша: $e');
     }
   }
 
-  // === Геттеры ===
   model.ActiveShift? get activeShift => _activeShift;
   List<ShiftData> get shiftHistory => _shiftHistory;
   List<ShiftData> get activeShifts =>
       _shiftHistory.where((shift) => shift.isActive).toList();
   DateTime get selectedDate => _selectedDate;
-
-  // ✅ Для BotStatsCard
   Map<String, dynamic>? get botStatsData => _botStatsData;
   bool get isLoadingBotStats => _isLoadingBotStats;
   String? get currentUsername => _currentUsername;
 
   String get formattedWorkTime {
     if (_activeShift?.startTime == null) return '0ч 0мин 0с';
-    final time = _activeShift!.startTime!;
-    return '${time.hour}ч ${time.minute}мин ${time.second}с';
+    final now = _nowInAlmaty();
+    final duration = now.difference(_activeShift!.startTime!);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    final seconds = duration.inSeconds % 60;
+    return '${hours}ч ${minutes}мин ${seconds}с';
   }
 
   Future<void> setToken(String token) async {
@@ -203,8 +186,66 @@ class ShiftProvider with ChangeNotifier {
     await _loadFromCache();
 
     if (_isOnline && _token != null) {
-      await loadShifts();
+      // Безопасный вызов loadShifts
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        loadShifts();
+      });
     }
+  }
+
+  Future<model.ActiveShift?> getActiveShift() async {
+    if (_token == null || _isLoadingActiveShift) return _activeShift;
+
+    if (_lastActiveShiftFetchTime != null) {
+      final now = DateTime.now();
+      final difference = now.difference(_lastActiveShiftFetchTime!);
+      if (difference < const Duration(seconds: 30) && _activeShift != null) {
+        debugPrint('ShiftProvider: getActiveShift skipped (cache hit).');
+        return _activeShift;
+      }
+    }
+
+    try {
+      _isLoadingActiveShift = true;
+      // Безопасный вызов notifyListeners только если это безопасно
+      _safeNotifyListeners();
+
+      final activeShift =
+          await _retryApiCall(() => _apiService.getActiveShift(_token!));
+      _activeShift = activeShift;
+      _lastActiveShiftFetchTime = DateTime.now();
+      if (activeShift != null) {
+        _currentUsername = activeShift.username;
+      } else {
+        _currentUsername = null;
+      }
+      await _saveToCache();
+      return _activeShift;
+    } catch (e) {
+      debugPrint('❌ Ошибка получения активной смены: $e');
+      return _activeShift;
+    } finally {
+      _isLoadingActiveShift = false;
+      // Безопасный вызов notifyListeners
+      _safeNotifyListeners();
+    }
+  }
+
+  Future<T> _retryApiCall<T>(Future<T> Function() apiCall) async {
+    const maxRetries = 3;
+    const retryDelay = Duration(seconds: 2);
+    for (var i = 0; i < maxRetries; i++) {
+      try {
+        return await apiCall();
+      } catch (e) {
+        if (e.toString().contains('502') && i < maxRetries - 1) {
+          await Future.delayed(retryDelay);
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw Exception('API call failed after $maxRetries retries');
   }
 
   Future<void> loadShifts() async {
@@ -212,8 +253,8 @@ class ShiftProvider with ChangeNotifier {
       _shiftHistory = [];
       _activeShift = null;
       _currentUsername = null;
-      _timer?.cancel();
-      notifyListeners();
+      // Безопасный вызов notifyListeners
+      _safeNotifyListeners();
       return;
     }
 
@@ -224,7 +265,8 @@ class ShiftProvider with ChangeNotifier {
     }
 
     try {
-      final dynamic shiftsData = await _apiService.getShifts(_token!);
+      final dynamic shiftsData =
+          await _retryApiCall(() => _apiService.getShifts(_token!));
       if (shiftsData is List) {
         _shiftHistory = shiftsData
             .whereType<Map<String, dynamic>>()
@@ -234,37 +276,28 @@ class ShiftProvider with ChangeNotifier {
         _shiftHistory = [];
       }
 
-      final activeShift = await _apiService.getActiveShift(_token!);
-      _activeShift = activeShift;
-
-      if (activeShift != null) {
-        _currentUsername = activeShift.username;
-        _startTimer();
-      } else {
-        _currentUsername = null;
-        _timer?.cancel();
-      }
-
+      await getActiveShift();
       await _saveToCache();
-      notifyListeners();
+      // Безопасный вызов notifyListeners
+      _safeNotifyListeners();
     } catch (e) {
       debugPrint('ShiftProvider.loadShifts error: $e');
-
       if (!_isOnline) {
         await _loadFromCache();
       } else {
         _shiftHistory = [];
         _activeShift = null;
         _currentUsername = null;
-        _timer?.cancel();
       }
-      notifyListeners();
+      // Безопасный вызов notifyListeners
+      _safeNotifyListeners();
     }
   }
 
   void selectDate(DateTime date) {
     _selectedDate = _toAlmatyTime(DateTime(date.year, date.month, date.day));
-    notifyListeners();
+    // Безопасный вызов notifyListeners
+    _safeNotifyListeners();
   }
 
   Future<void> startSlot({
@@ -277,24 +310,29 @@ class ShiftProvider with ChangeNotifier {
 
     final File imageFile = File(selfie.path);
     _isStartingSlot = true;
-    notifyListeners();
+    // Безопасный вызов notifyListeners
+    _safeNotifyListeners();
 
     try {
-      await _apiService.startSlot(
-        token: _token!,
-        slotTimeRange: slotTimeRange,
-        position: position,
-        zone: zone,
-        selfieImage: imageFile,
-      );
+      // ✅ Сначала выполнить работу, потом обновить состояние
+      await _retryApiCall(() => _apiService.startSlot(
+            token: _token!,
+            slotTimeRange: slotTimeRange,
+            position: position,
+            zone: zone,
+            selfieImage: imageFile,
+          ));
       debugPrint('✅ Смена начата');
-      await loadShifts();
+
+      // ✅ Обновляем состояние после успешного API-вызова
+      await loadShifts(); // это синхронизирует _activeShift и _shiftHistory
     } catch (e) {
       debugPrint('❌ Ошибка старта смены: $e');
       rethrow;
     } finally {
       _isStartingSlot = false;
-      notifyListeners();
+      // Безопасный вызов notifyListeners
+      _safeNotifyListeners();
     }
   }
 
@@ -302,27 +340,33 @@ class ShiftProvider with ChangeNotifier {
     if (_isEndingSlot || _token == null || _activeShift == null) return;
 
     _isEndingSlot = true;
-    notifyListeners();
+    // Безопасный вызов notifyListeners
+    _safeNotifyListeners();
 
     try {
-      await _apiService.endSlot(_token!);
+      await _retryApiCall(() => _apiService.endSlot(_token!));
       debugPrint('✅ Смена завершена');
+
+      // ✅ Сбрасываем кэш активной смены
+      _lastActiveShiftFetchTime = null;
       _activeShift = null;
       _currentUsername = null;
-      _timer?.cancel();
-      unawaited(loadShifts());
-      notifyListeners();
+
+      // ✅ Обновляем историю
+      await loadShifts();
+      // Безопасный вызов notifyListeners
+      _safeNotifyListeners();
     } catch (e) {
       debugPrint('❌ Ошибка завершения смены: $e');
       await loadShifts();
       rethrow;
     } finally {
       _isEndingSlot = false;
-      notifyListeners();
+      // Безопасный вызов notifyListeners
+      _safeNotifyListeners();
     }
   }
 
-  // ✅ Публичный метод для UI
   Future<void> fetchBotStats() async {
     if (_isLoadingBotStats) {
       debugPrint('ShiftProvider: Bot stats fetch already in progress.');
@@ -334,7 +378,10 @@ class ShiftProvider with ChangeNotifier {
       final difference = now.difference(_lastBotStatsFetchTime!);
       if (difference < const Duration(seconds: 30)) {
         debugPrint('ShiftProvider: Bot stats fetch skipped (cache hit).');
-        if (_botStatsData != null) notifyListeners();
+        if (_botStatsData != null) {
+          // Безопасный вызов notifyListeners
+          _safeNotifyListeners();
+        }
         return;
       }
     }
@@ -342,16 +389,19 @@ class ShiftProvider with ChangeNotifier {
     if (_token == null) {
       debugPrint('ShiftProvider: Cannot fetch bot stats, no token.');
       _botStatsData = null;
-      notifyListeners();
+      // Безопасный вызов notifyListeners
+      _safeNotifyListeners();
       return;
     }
 
     _isLoadingBotStats = true;
-    notifyListeners();
+    // Безопасный вызов notifyListeners
+    _safeNotifyListeners();
 
     try {
       debugPrint('ShiftProvider: Fetching bot stats...');
-      final stats = await _apiService.getScooterStatsForShift(_token!);
+      final stats = await _retryApiCall(
+          () => _apiService.getScooterStatsForShift(_token!));
       _botStatsData = stats;
       _lastBotStatsFetchTime = DateTime.now();
       debugPrint('✅ Bot stats fetched successfully.');
@@ -360,26 +410,50 @@ class ShiftProvider with ChangeNotifier {
       debugPrint('❌ ShiftProvider.fetchBotStats error: $e');
     } finally {
       _isLoadingBotStats = false;
-      notifyListeners();
+      // Безопасный вызов notifyListeners
+      _safeNotifyListeners();
     }
   }
 
-  // 🔐 Выход из аккаунта
   Future<void> logout() async {
     _token = null;
     _activeShift = null;
     _currentUsername = null;
     _botStatsData = null;
-    _timer?.cancel();
     await _storage.delete(key: 'jwt_token');
     await _prefs.remove(_shiftsCacheKey);
-    notifyListeners();
+    // Безопасный вызов notifyListeners
+    _safeNotifyListeners();
+  }
+
+  // Метод для безопасного вызова notifyListeners
+  void _safeNotifyListeners() {
+    try {
+      // Проверяем, можно ли безопасно вызвать notifyListeners
+      if (WidgetsBinding.instance?.lifecycleState ==
+          AppLifecycleState.resumed) {
+        notifyListeners();
+      } else {
+        // Откладываем вызов на следующий кадр
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          notifyListeners();
+        });
+      }
+    } catch (e) {
+      // Если все же произошла ошибка, откладываем вызов
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          notifyListeners();
+        } catch (innerE) {
+          debugPrint('Ошибка при отложенном notifyListeners: $innerE');
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
-    _connectivitySubscription?.cancel(); // ✅ Отписываемся от сети
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 }

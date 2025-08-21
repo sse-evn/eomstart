@@ -1,4 +1,3 @@
-// lib/services/api_service.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart' show debugPrint;
@@ -6,12 +5,11 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/active_shift.dart' as active_shift;
 import '../models/shift_data.dart' as shift_data;
-import '../config.dart'; // ✅ Подключаем конфиг
+import '../config.dart';
 
 class ApiService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  /// === УНИВЕРСАЛЬНЫЙ ЗАПРОС С АВТО-ОБНОВЛЕНИЕМ ТОКЕНА ===
   Future<http.Response> _authorizedRequest(
     Future<http.Response> Function(String token) requestFunction,
     String originalToken,
@@ -24,8 +22,6 @@ class ApiService {
       if (newToken != null) {
         debugPrint('✅ Token refreshed, retrying request...');
         response = await requestFunction(newToken);
-        // Опционально: сохраняем новый токен
-        // await _storage.write(key: 'jwt_token', value: newToken);
       } else {
         debugPrint('❌ Token refresh failed');
       }
@@ -34,7 +30,6 @@ class ApiService {
     return response;
   }
 
-  /// === REFRESH TOKEN MECHANISM ===
   Future<String?> refreshToken() async {
     try {
       final refreshToken = await _storage.read(key: 'refresh_token');
@@ -71,7 +66,6 @@ class ApiService {
     return null;
   }
 
-  /// === AUTHENTICATION ===
   Future<Map<String, dynamic>> login(String username, String password) async {
     final response = await http.post(
       Uri.parse(AppConfig.loginUrl),
@@ -110,7 +104,6 @@ class ApiService {
     }
   }
 
-  /// === ДОБАВЛЕНО: Получение статистики самокатов из Telegram-бота ===
   Future<Map<String, dynamic>> getScooterStatsForShift(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
@@ -130,7 +123,6 @@ class ApiService {
     }
   }
 
-  /// === ДОБАВЛЕНО: Получение telegram_user_id для пользователя ===
   Future<int?> getUserTelegramId(String token, int userId) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
@@ -152,7 +144,6 @@ class ApiService {
     }
   }
 
-  /// === PROFILE ===
   Future<Map<String, dynamic>> getUserProfile(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
@@ -172,7 +163,6 @@ class ApiService {
     }
   }
 
-  /// === ADMIN USERS ===
   Future<List<dynamic>> getAdminUsers(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
@@ -302,7 +292,6 @@ class ApiService {
     }
   }
 
-  /// === SHIFTS & SLOTS ===
   Future<List<shift_data.ShiftData>> getShifts(String token) async {
     try {
       final response = await _authorizedRequest((token) async {
@@ -351,11 +340,8 @@ class ApiService {
         }
       }
 
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(AppConfig.startSlotUrl),
-      );
-
+      final request =
+          http.MultipartRequest('POST', Uri.parse(AppConfig.startSlotUrl));
       request.headers['Authorization'] = 'Bearer $effectiveToken';
       request.fields['slot_time_range'] = slotTimeRange;
       request.fields['position'] = position;
@@ -425,7 +411,6 @@ class ApiService {
 
       try {
         final dynamic body = jsonDecode(response.body);
-
         if (body is Map<String, dynamic>) {
           debugPrint('✅ Parsed single active shift object');
           return active_shift.ActiveShift.fromJson(body);
@@ -438,7 +423,6 @@ class ApiService {
           debugPrint('📡 Empty array response, no active shift');
           return null;
         }
-
         debugPrint('❌ Unexpected response format: ${body.runtimeType}');
         return null;
       } catch (e) {
@@ -486,6 +470,32 @@ class ApiService {
       }
     } else {
       throw Exception('Failed to load active shifts: ${response.statusCode}');
+    }
+  }
+
+  // ✅ НОВЫЙ МЕТОД: Получение завершённых смен
+  Future<List<active_shift.ActiveShift>> getEndedShifts(String token) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/admin/ended-shifts'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+    }, token);
+
+    if (response.statusCode == 200) {
+      final dynamic body = jsonDecode(response.body);
+      if (body is List) {
+        return body
+            .whereType<Map<String, dynamic>>()
+            .map((item) => active_shift.ActiveShift.fromJson(item))
+            .toList();
+      }
+      return [];
+    } else {
+      throw Exception('Failed to load ended shifts: ${response.statusCode}');
     }
   }
 
@@ -553,12 +563,60 @@ class ApiService {
       }
       return [];
     } else {
-      throw Exception(
-          'Failed to load zones: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      throw Exception('Failed to load zones: ${response.statusCode}');
     }
   }
 
-  /// === MAPS ===
+  Future<void> createZone(String token, String name) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.post(
+        Uri.parse(AppConfig.adminZonesUrl),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'name': name}),
+      );
+    }, token);
+
+    if (response.statusCode != 201) {
+      throw Exception('Failed to create zone');
+    }
+  }
+
+  Future<void> updateZone(String token, int id, String name) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.put(
+        Uri.parse(AppConfig.updateZoneUrl(id)),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'name': name}),
+      );
+    }, token);
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update zone');
+    }
+  }
+
+  Future<void> deleteZone(String token, int id) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.delete(
+        Uri.parse(AppConfig.updateZoneUrl(id)),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+    }, token);
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete zone');
+    }
+  }
+
   Future<List<dynamic>> getUploadedMaps(String token) async {
     try {
       final response = await _authorizedRequest((token) async {
@@ -602,10 +660,8 @@ class ApiService {
         }
       }
 
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(AppConfig.uploadMapUrl),
-      );
+      final request =
+          http.MultipartRequest('POST', Uri.parse(AppConfig.uploadMapUrl));
       request.headers['Authorization'] = 'Bearer $effectiveToken';
       request.fields['city'] = city;
       request.fields['description'] = description;
@@ -705,5 +761,48 @@ class ApiService {
       debugPrint('Error checking token expiration: $e');
     }
     return true;
+  }
+
+  Future<void> generateShifts({
+    required String token,
+    required DateTime date,
+    required int morningCount,
+    required int eveningCount,
+    required List<int> selectedScoutIds,
+  }) async {
+    if (morningCount == 0 && eveningCount == 0) {
+      throw Exception('Укажите хотя бы одну смену');
+    }
+
+    if (selectedScoutIds.isEmpty) {
+      throw Exception('Не выбрано ни одного скаута');
+    }
+
+    final body = {
+      'date':
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+      'morning_count': morningCount,
+      'evening_count': eveningCount,
+      'scout_ids': selectedScoutIds,
+    };
+
+    debugPrint('📤 Отправляю на генерацию смен: $body');
+
+    final response = await _authorizedRequest((token) async {
+      return await http.post(
+        Uri.parse(AppConfig.generateShiftsUrl),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+    }, token);
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      final message = utf8.decode(response.bodyBytes);
+      debugPrint('❌ Ошибка генерации смен: $message');
+      throw Exception('Ошибка: $message');
+    }
   }
 }

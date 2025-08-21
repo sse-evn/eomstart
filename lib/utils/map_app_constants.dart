@@ -15,32 +15,34 @@ class AppConstants {
 
   static const List<String> supportedCities = ['Алматы', 'Астана'];
 
-  static const Map<String, LatLng> cityCenters = {
-    'Алматы': LatLng(43.2389, 76.8897),
-    'Астана': LatLng(51.1605, 71.4704),
+  // Используем const LatLng и final Map
+  static const LatLng _almaty = LatLng(43.2389, 76.8897);
+  static const LatLng _astana = LatLng(51.1605, 71.4704);
+
+  static final Map<String, LatLng> cityCenters = {
+    'Алматы': _almaty,
+    'Астана': _astana,
   };
 
   static const String almatyGeoJson = 'assets/geojson/almaty_zone.geojson';
   static const String astanaGeoJson = 'assets/geojson/astana_zone.geojson';
-
-  // Слои запретных зон
   static const String restrictedZonesGeoJson =
       'assets/geojson/restricted_zones.geojson';
 
-  // Типы геометрий в GeoJSON для разных слоев
-  static const String featureTypeZone = 'zone'; // Основные зоны обслуживания
-  static const String featureTypeRestricted = 'restricted'; // Запретные зоны
-  static const String featureTypeDanger = 'danger'; // Опасные зоны
-  static const String featureTypeParking = 'parking'; // Зоны парковки
+  // Типы геометрий
+  static const String featureTypeZone = 'zone';
+  static const String featureTypeRestricted = 'restricted';
+  static const String featureTypeDanger = 'danger';
+  static const String featureTypeParking = 'parking';
 
-  // Свойства GeoJSON для определения типа зоны
+  // Свойства GeoJSON
   static const String propertyType = 'type';
   static const String propertyName = 'name';
   static const String propertyDescription = 'description';
   static const String propertyColor = 'color';
   static const String propertyOpacity = 'opacity';
 
-  // Настройки отображения маркеров
+  // Настройки маркеров
   static const double markerWidth = 30;
   static const double markerHeight = 30;
   static const double markerFontSize = 14;
@@ -48,41 +50,40 @@ class AppConstants {
   // Настройки карты
   static const double minZoom = 10.0;
   static const double maxZoom = 18.0;
-  static const double zoneLabelZoomThreshold =
-      14.0; // Минимальный зум для отображения подписей
+  static const double zoneLabelZoomThreshold = 14.0;
 
-  // Цвета для разных типов зон
-  static Map<String, ZoneStyle> get zoneStyles => {
-        'zone': ZoneStyle(
-          borderColor: Colors.blue,
-          fillColor: Colors.blueAccent.withOpacity(0.1),
-          borderWidth: 1.5,
-        ),
-        'restricted': ZoneStyle(
-          borderColor: Colors.red,
-          fillColor: Colors.red.withOpacity(0.2),
-          borderWidth: 2.0,
-        ),
-        'danger': ZoneStyle(
-          borderColor: Colors.orange,
-          fillColor: Colors.orange.withOpacity(0.3),
-          borderWidth: 2.5,
-        ),
-        'parking': ZoneStyle(
-          borderColor: Colors.green,
-          fillColor: Colors.green.withOpacity(0.15),
-          borderWidth: 1.5,
-        ),
-      };
+  // Стили зон — теперь const
+  static const Map<String, ZoneStyle> zoneStyles = {
+    'zone': ZoneStyle(
+      borderColor: Colors.blue,
+      fillColor: Colors.blueAccent,
+      borderWidth: 1.5,
+    ),
+    'restricted': ZoneStyle(
+      borderColor: Colors.red,
+      fillColor: Colors.red,
+      borderWidth: 2.0,
+    ),
+    'danger': ZoneStyle(
+      borderColor: Colors.orange,
+      fillColor: Colors.orange,
+      borderWidth: 2.5,
+    ),
+    'parking': ZoneStyle(
+      borderColor: Colors.green,
+      fillColor: Colors.green,
+      borderWidth: 1.5,
+    ),
+  };
 }
 
-// Класс для стилей зон
+// Конструктор ZoneStyle — теперь const
 class ZoneStyle {
   final Color borderColor;
   final Color fillColor;
   final double borderWidth;
 
-  ZoneStyle({
+  const ZoneStyle({
     required this.borderColor,
     required this.fillColor,
     required this.borderWidth,

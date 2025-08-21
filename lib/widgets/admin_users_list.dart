@@ -1,10 +1,11 @@
-// lib/widgets/admin_users_list.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:micro_mobility_app/config.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AdminUsersList extends StatefulWidget {
   const AdminUsersList({super.key});
@@ -365,287 +366,576 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // === Профиль администратора ===
-          Card(
-            elevation: 4,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 36,
-                    backgroundColor: Colors.green[700],
-                    child: Icon(Icons.person, size: 36, color: Colors.white),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Пользователи'),
+        elevation: 0,
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        child: CustomScrollView(
+          slivers: [
+            // === Профиль администратора ===
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Card(
+                  elevation: 3,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
                       children: [
-                        Text(
-                          _currentUsername,
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
+                        CircleAvatar(
+                          radius: 36,
+                          backgroundColor: Colors.green[700],
+                          child:
+                              Icon(Icons.person, size: 36, color: Colors.white),
                         ),
-                        Text(
-                          '$_currentUserFirstName • $_currentUserRoleLabel',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                        Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.green[100],
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'Вы: $_currentUserRoleLabel',
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.green[800]),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _currentUsername,
+                                style: const TextStyle(
+                                    fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                '$_currentUserFirstName • $_currentUserRoleLabel',
+                                style: const TextStyle(color: Colors.grey),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.green[100],
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Вы: $_currentUserRoleLabel',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.green[800]),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
 
-          const SizedBox(height: 24),
-
-          // === Поиск и фильтры ===
-          Card(
-            elevation: 4,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Поиск по логину или имени...',
-                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                    ),
-                    onChanged: (value) => setState(() {}),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: _selectedRoleFilter,
-                    items: [
-                      const DropdownMenuItem(
-                          value: 'all', child: Text('Все роли')),
-                      ..._roleLabels.entries.map((e) => DropdownMenuItem(
-                            value: e.key,
-                            child: Text(e.value),
-                          )),
-                    ],
-                    onChanged: (value) =>
-                        setState(() => _selectedRoleFilter = value!),
-                    decoration: InputDecoration(
-                      labelText: 'Фильтр по ролям',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (_currentUserRole == 'superadmin')
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _showCreateUserDialog,
-                        icon: const Icon(Icons.person_add, size: 18),
-                        label: const Text('Добавить пользователя'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[700],
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+            // === Поиск и фильтры ===
+            SliverToBoxAdapter(
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Card(
+                  elevation: 3,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Поиск по логину или имени...',
+                            prefixIcon:
+                                const Icon(Icons.search, color: Colors.grey),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[100],
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onChanged: (value) => setState(() {}),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: _selectedRoleFilter,
+                          items: [
+                            const DropdownMenuItem(
+                                value: 'all', child: Text('Все роли')),
+                            ..._roleLabels.entries.map((e) => DropdownMenuItem(
+                                  value: e.key,
+                                  child: Text(e.value),
+                                )),
+                          ],
+                          onChanged: (value) =>
+                              setState(() => _selectedRoleFilter = value!),
+                          decoration: InputDecoration(
+                            labelText: 'Фильтр по ролям',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[100],
                           ),
                         ),
-                      ),
+                      ],
                     ),
+                  ),
+                ),
+              ),
+            ),
+
+            // === Журнал действий ===
+            if (_auditLog.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    child: ExpansionTile(
+                      title: const Text('Журнал действий',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      children: _auditLog
+                          .take(10)
+                          .map((log) => ListTile(
+                                leading: const Icon(Icons.history,
+                                    size: 16, color: Colors.grey),
+                                title: Text(log,
+                                    style: const TextStyle(
+                                        fontSize: 12, fontFamily: 'monospace')),
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                ),
+              ),
+
+            // === Список пользователей ===
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: FutureBuilder<List<dynamic>>(
+                  future: _usersFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    } else if (!snapshot.hasData || snapshot.hasError) {
+                      return Center(
+                          child: Text(
+                              'Ошибка: ${snapshot.error ?? 'Нет данных'}'));
+                    }
+
+                    final query = _searchController.text.toLowerCase();
+                    final filteredUsers = snapshot.data!.where((user) {
+                      final role =
+                          (user['role']?.toString().toLowerCase() ?? '');
+                      final name = ((user['firstName'] ??
+                              user['first_name'] ??
+                              '') as String)
+                          .toLowerCase();
+                      final username =
+                          (user['username'] as String).toLowerCase();
+                      final matchesSearch = query.isEmpty ||
+                          name.contains(query) ||
+                          username.contains(query);
+                      final matchesRole = _selectedRoleFilter == 'all' ||
+                          role == _selectedRoleFilter;
+                      return matchesSearch && matchesRole;
+                    }).toList();
+
+                    if (filteredUsers.isEmpty) {
+                      return const Center(
+                          child: Text('Пользователи не найдены'));
+                    }
+
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: filteredUsers.length,
+                      itemBuilder: (context, index) {
+                        final user = filteredUsers[index];
+                        final userId = user['id'];
+                        final username = user['username'] as String;
+                        final firstName = user['firstName'] ??
+                            user['first_name'] ??
+                            'Без имени';
+                        final role = (user['role']?.toString().toLowerCase() ??
+                            'unknown');
+                        final status =
+                            (user['status']?.toString().toLowerCase() ??
+                                'pending');
+                        final displayRole = _roleLabels[role] ?? role;
+                        final statusColor =
+                            _statusColors[status] ?? Colors.grey;
+
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: statusColor,
+                              child: Text('$userId',
+                                  style: const TextStyle(color: Colors.white)),
+                            ),
+                            title: Text(username,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold)),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('$firstName • $displayRole'),
+                                Text(
+                                  status == 'active'
+                                      ? 'Активен'
+                                      : status == 'pending'
+                                          ? 'Ожидание'
+                                          : 'Удалён',
+                                  style: TextStyle(
+                                      color: statusColor, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                            trailing: PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert),
+                              itemBuilder: (ctx) {
+                                return [
+                                  ..._roleLabels.entries
+                                      .map((e) => PopupMenuItem(
+                                            value: 'role:${e.key}',
+                                            child:
+                                                Text('Назначить: ${e.value}'),
+                                          )),
+                                  if (_currentUserRole == 'superadmin') ...[
+                                    const PopupMenuDivider(),
+                                    if (status == 'pending')
+                                      const PopupMenuItem(
+                                          value: 'activate',
+                                          child: Text('Активировать')),
+                                    if (status == 'active')
+                                      const PopupMenuItem(
+                                        value: 'deactivate',
+                                        child: Text('Отправить в ожидание',
+                                            style: TextStyle(
+                                                color: Colors.orange)),
+                                      ),
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Text('Удалить',
+                                          style: TextStyle(color: Colors.red)),
+                                    ),
+                                  ]
+                                ];
+                              },
+                              onSelected: (action) {
+                                if (action.startsWith('role:')) {
+                                  final newRole =
+                                      action.replaceFirst('role:', '');
+                                  _updateUserRole(userId, newRole, username);
+                                } else if (action == 'activate') {
+                                  _activateUser(userId, username);
+                                } else if (action == 'deactivate') {
+                                  _deactivateUser(userId, username);
+                                } else if (action == 'delete') {
+                                  _deleteUser(userId, username);
+                                }
+                              },
+                            ),
+                            onTap: () => _showUserProfile(user),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      // === Кнопка "Добавить" ===
+      floatingActionButton: _currentUserRole == 'superadmin'
+          ? FloatingActionButton(
+              onPressed: _showCreateUserDialog,
+              backgroundColor: Colors.green,
+              child: const Icon(Icons.person_add, color: Colors.white),
+            )
+          : null,
+    );
+  }
+
+  void _showUserProfile(Map<String, dynamic> user) {
+    final roleLabel =
+        _roleLabels[user['role']?.toString().toLowerCase()] ?? 'Неизвестно';
+    final status = (user['status']?.toString().toLowerCase() ?? 'pending');
+    final statusColor = _statusColors[status] ?? Colors.grey;
+
+    final String? avatarUrl = user['avatar'] as String?;
+    final String? firstName = user['firstName'] ?? user['first_name'];
+    final String? lastName = user['lastName'] ?? user['last_name'];
+    final String fullName =
+        [firstName, lastName].where((s) => s != null && s.isNotEmpty).join(' ');
+    final username = user['username'] as String;
+
+    final hasActiveShift = user['has_active_shift'] == true;
+    final shiftZone = user['current_zone'] as String? ?? '—';
+    final shiftTime = user['shift_time'] as String? ?? '—';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Container(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          left: 24,
+          right: 24,
+          top: 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 16),
+            CircleAvatar(
+              radius: 50,
+              backgroundColor: Colors.grey[300],
+              backgroundImage: avatarUrl != null
+                  ? NetworkImage('${AppConfig.mediaBaseUrl}$avatarUrl')
+                  : null,
+              child: avatarUrl == null
+                  ? Icon(Icons.person, size: 60, color: Colors.grey[600])
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              fullName.isEmpty ? username : fullName,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            Text('@$username',
+                style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[100],
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    roleLabel,
+                    style: TextStyle(
+                        color: Colors.blue[800],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: statusColor, width: 1),
+                  ),
+                  child: Text(
+                    status == 'active' ? 'Активен' : 'Ожидание',
+                    style: TextStyle(color: statusColor, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            if (hasActiveShift)
+              _buildInfoRow(Icons.access_time, 'Смена активна', Colors.green),
+            if (shiftZone != '—')
+              _buildInfoRow(Icons.location_on, 'Зона: $shiftZone', Colors.blue),
+            if (shiftTime != '—')
+              _buildInfoRow(Icons.schedule, 'Время: $shiftTime', Colors.orange),
+            _buildInfoRow(Icons.badge, 'ID: ${user['id']}', Colors.grey),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                      child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Закрыть'))),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _updateUserRole(user['id'], user['role'], username);
+                    },
+                    style:
+                        ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                    child: const Text('Изменить роль'),
+                  ),
                 ],
               ),
             ),
-          ),
+            const SizedBox(height: 24),
+            _buildSectionTitle('📊 История смен'),
+            _buildShiftHistory(user['id']),
+            const SizedBox(height: 24),
+            _buildSectionTitle('📍 Найти на карте'),
+            _buildMapButton(user),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
 
-          const SizedBox(height: 24),
-
-          // === Журнал действий ===
-          if (_auditLog.isNotEmpty)
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              child: ExpansionTile(
-                title: const Text('Журнал действий',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                children: _auditLog
-                    .take(10)
-                    .map((log) => ListTile(
-                          leading: const Icon(Icons.history,
-                              size: 16, color: Colors.grey),
-                          title: Text(log,
-                              style: const TextStyle(
-                                  fontSize: 12, fontFamily: 'monospace')),
-                        ))
-                    .toList(),
-              ),
-            ),
-
-          const SizedBox(height: 24),
-
-          // === Список пользователей ===
-          RefreshIndicator(
-            onRefresh: _refreshData,
-            child: FutureBuilder<List<dynamic>>(
-              future: _usersFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                } else if (!snapshot.hasData || snapshot.hasError) {
-                  return Center(
-                      child: Text('Ошибка: ${snapshot.error ?? 'Нет данных'}'));
-                }
-
-                final query = _searchController.text.toLowerCase();
-                final filteredUsers = snapshot.data!.where((user) {
-                  final role = (user['role']?.toString().toLowerCase() ?? '');
-                  final name = ((user['firstName'] ?? user['first_name'] ?? '')
-                          as String)
-                      .toLowerCase();
-                  final username = (user['username'] as String).toLowerCase();
-                  final matchesSearch = query.isEmpty ||
-                      name.contains(query) ||
-                      username.contains(query);
-                  final matchesRole = _selectedRoleFilter == 'all' ||
-                      role == _selectedRoleFilter;
-                  return matchesSearch && matchesRole;
-                }).toList();
-
-                if (filteredUsers.isEmpty) {
-                  return const Center(child: Text('Пользователи не найдены'));
-                }
-
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: filteredUsers.length,
-                  itemBuilder: (context, index) {
-                    final user = filteredUsers[index];
-                    final userId = user['id'];
-                    final username = user['username'] as String;
-                    final firstName =
-                        user['firstName'] ?? user['first_name'] ?? 'Без имени';
-                    final role =
-                        (user['role']?.toString().toLowerCase() ?? 'unknown');
-                    final status =
-                        (user['status']?.toString().toLowerCase() ?? 'pending');
-                    final displayRole = _roleLabels[role] ?? role;
-                    final statusColor = _statusColors[status] ?? Colors.grey;
-
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      elevation: 3,
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: statusColor,
-                          child: Text('$userId',
-                              style: const TextStyle(color: Colors.white)),
-                        ),
-                        title: Text(username,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('$firstName • $displayRole'),
-                            Text(
-                              status == 'active'
-                                  ? 'Активен'
-                                  : status == 'pending'
-                                      ? 'Ожидание'
-                                      : 'Удалён',
-                              style:
-                                  TextStyle(color: statusColor, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                        trailing: PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert),
-                          itemBuilder: (ctx) {
-                            return [
-                              ..._roleLabels.entries.map((e) => PopupMenuItem(
-                                    value: 'role:${e.key}',
-                                    child: Text('Назначить: ${e.value}'),
-                                  )),
-                              if (_currentUserRole == 'superadmin') ...[
-                                const PopupMenuDivider(),
-                                if (status == 'pending')
-                                  const PopupMenuItem(
-                                      value: 'activate',
-                                      child: Text('Активировать')),
-                                if (status == 'active')
-                                  const PopupMenuItem(
-                                    value: 'deactivate',
-                                    child: Text('Отправить в ожидание',
-                                        style: TextStyle(color: Colors.orange)),
-                                  ),
-                                const PopupMenuItem(
-                                  value: 'delete',
-                                  child: Text('Удалить',
-                                      style: TextStyle(color: Colors.red)),
-                                ),
-                              ]
-                            ];
-                          },
-                          onSelected: (action) {
-                            if (action.startsWith('role:')) {
-                              final newRole = action.replaceFirst('role:', '');
-                              _updateUserRole(userId, newRole, username);
-                            } else if (action == 'activate') {
-                              _activateUser(userId, username);
-                            } else if (action == 'deactivate') {
-                              _deactivateUser(userId, username);
-                            } else if (action == 'delete') {
-                              _deleteUser(userId, username);
-                            }
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
+  Widget _buildInfoRow(IconData icon, String text, Color color) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(text, style: TextStyle(fontSize: 14, color: Colors.black87)),
         ],
       ),
     );
+  }
+
+  Widget _buildSectionTitle(String text) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(text,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildShiftHistory(int userId) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _getUserShifts(userId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Text('Нет истории смен');
+        }
+
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: snapshot.data!.length,
+          itemBuilder: (context, index) {
+            final shift = snapshot.data![index];
+            final startTime = DateTime.parse(shift['start_time']);
+            final endTime = DateTime.parse(shift['end_time']);
+            final duration = Duration(seconds: shift['duration'] ?? 0);
+
+            return ListTile(
+              leading: const Icon(Icons.access_time, color: Colors.blue),
+              title: Text(
+                '${startTime.formatTime()} – ${endTime.formatTime()}',
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+              subtitle: Text(
+                'Зона: ${shift['zone']} • ${formatDuration(duration.inSeconds)}',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMapButton(Map<String, dynamic> user) {
+    return ElevatedButton.icon(
+      onPressed: () => _navigateToMap(user),
+      icon: const Icon(Icons.map, size: 18),
+      label: const Text('Найти на карте'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.green,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  Future<void> _navigateToMap(Map<String, dynamic> user) async {
+    final lat = user['lat'] as double?;
+    final lng = user['lng'] as double?;
+
+    if (lat != null && lng != null) {
+      final url = 'https://www.google.com/maps?q=$lat,$lng';
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось открыть карту')),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Координаты недоступны')),
+      );
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _getUserShifts(int userId) async {
+    try {
+      final token = await _storage.read(key: 'jwt_token');
+      if (token == null) throw Exception('Токен не найден');
+
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/users/$userId/shifts'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonList = jsonDecode(response.body);
+        return jsonList
+            .map((json) => {
+                  'id': json['id'],
+                  'start_time': json['start_time'],
+                  'end_time': json['end_time'],
+                  'duration': json['worked_duration'],
+                  'zone': json['zone'],
+                  'slot_time_range': json['slot_time_range'],
+                })
+            .toList();
+      } else {
+        throw Exception('Ошибка загрузки смен: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+      return [];
+    }
   }
 
   void _showCreateUserDialog() {
@@ -697,4 +987,16 @@ extension TimeFormat on DateTime {
   String formatTime() {
     return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
   }
+
+  String formatDate() {
+    return '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.${year}';
+  }
+}
+
+String formatDuration(int seconds) {
+  if (seconds <= 0) return '0 мин';
+  final hours = seconds ~/ 3600;
+  final mins = (seconds % 3600) ~/ 60;
+  if (hours > 0) return '$hours ч $mins мин';
+  return '$mins мин';
 }
