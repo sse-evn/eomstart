@@ -107,7 +107,7 @@ class _ReportCardState extends State<ReportCard> {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: Colors.grey[100],
+        color: Colors.grey[300],
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -116,74 +116,125 @@ class _ReportCardState extends State<ReportCard> {
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _currentMode = ReportMode.day),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: _currentMode == ReportMode.day
-                      ? Colors.green
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(
-                    'День',
-                    style: TextStyle(
-                      color: _currentMode == ReportMode.day
-                          ? Colors.white
-                          : Colors.black87,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+              child: Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  decoration: BoxDecoration(
+                    gradient: _currentMode == ReportMode.day
+                        ? const LinearGradient(
+                            colors: [
+                              Color.fromARGB(255, 18, 120, 118),
+                              Color.fromARGB(255, 63, 114, 66),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: _currentMode == ReportMode.day
+                        ? null
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 300),
+                      style: TextStyle(
+                        color: _currentMode == ReportMode.day
+                            ? Colors.white
+                            : Colors.black87,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                      child: const Text('День'),
                     ),
                   ),
                 ),
               ),
             ),
           ),
+
           // Кнопка "Период"
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _currentMode = ReportMode.period),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: _currentMode == ReportMode.period
-                      ? Colors.green
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(
-                    'Период',
-                    style: TextStyle(
-                      color: _currentMode == ReportMode.period
-                          ? Colors.white
-                          : Colors.black87,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+              child: Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  decoration: BoxDecoration(
+                    gradient: _currentMode == ReportMode.period
+                        ? const LinearGradient(
+                            colors: [
+                              Color.fromARGB(255, 18, 120, 118),
+                              Color.fromARGB(255, 63, 114, 66),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: _currentMode == ReportMode.period
+                        ? null
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 300),
+                      style: TextStyle(
+                        color: _currentMode == ReportMode.period
+                            ? Colors.white
+                            : Colors.black87,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                      child: const Text('Период'),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-          // === ДОБАВЛЕНО: Кнопка "Бот" ===
+
+          // Кнопка "Бот"
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _currentMode = ReportMode.bot),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: _currentMode == ReportMode.bot
-                      ? Colors.green
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(
-                    'Бот',
-                    style: TextStyle(
-                      color: _currentMode == ReportMode.bot
-                          ? Colors.white
-                          : Colors.black87,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+              child: Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  decoration: BoxDecoration(
+                    gradient: _currentMode == ReportMode.bot
+                        ? const LinearGradient(
+                            colors: [
+                              Color.fromARGB(255, 18, 120, 118),
+                              Color.fromARGB(255, 63, 114, 66),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: _currentMode == ReportMode.bot
+                        ? null
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+
+                  ),
+                  child: Center(
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 300),
+                      style: TextStyle(
+                        color: _currentMode == ReportMode.bot
+                            ? Colors.white
+                            : Colors.black87,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                      child: const Text('Бот'),
                     ),
                   ),
                 ),
@@ -191,7 +242,8 @@ class _ReportCardState extends State<ReportCard> {
             ),
           ),
         ],
-      ),
+      )
+
     );
   }
 
