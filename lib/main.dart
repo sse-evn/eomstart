@@ -1,5 +1,3 @@
-// lib/main.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -60,11 +58,11 @@ class MyApp extends StatelessWidget {
             seedColor: Colors.green[700]!, brightness: Brightness.light),
         scaffoldBackgroundColor: Colors.grey[100],
         appBarTheme: AppBarTheme(
-          backgroundColor: Colors.green[700], // ✅ Зелёный AppBar
+          // backgroundColor: Colors.green[700], // ✅ Зелёный AppBar
           foregroundColor: Colors.white,
           elevation: 1,
           titleTextStyle: const TextStyle(
-            color: Colors.white,
+            color: Colors.black,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
