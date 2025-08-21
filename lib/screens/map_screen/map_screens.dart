@@ -410,8 +410,8 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Карта зон'),
-        centerTitle: true,
-        backgroundColor: Colors.green[700],
+        // centerTitle: true,
+        // backgroundColor: Colors.green[700],
         automaticallyImplyLeading: false,
         actions: [
           if (_availableMaps.isNotEmpty)

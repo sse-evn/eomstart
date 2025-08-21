@@ -93,52 +93,52 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
           return const Center(child: CircularProgressIndicator());
         }
 
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              if (_showError) _buildErrorBanner(),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-                child: Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: hasActiveShift
-                          ? LinearGradient(
-                              colors: isDarkMode
-                                  ? [Colors.green[900]!, Colors.green[800]!]
-                                  : [Colors.green[500]!, Colors.green[700]!],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            )
-                          : null,
-                      borderRadius: BorderRadius.circular(20),
-                      border: hasActiveShift
-                          ? Border.all(color: Colors.green[700]!, width: 2)
-                          : null,
+        return Column(
+          children: [
+            if (_showError) _buildErrorBanner(),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: hasActiveShift
+                      ? LinearGradient(
+                          colors: isDarkMode
+                              ? [Colors.green[900]!, Colors.green[800]!]
+                              : [const Color.fromARGB(255, 10, 80, 79)!, const Color.fromARGB(255, 63, 114, 66)!],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  borderRadius: BorderRadius.circular(20),
+                  // border: hasActiveShift
+                  //     ? Border.all(color: Colors.green[700]!, width: 2)
+                  //     : null,
+
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey,
+                      spreadRadius: 1,
+                      blurRadius: 12,
+                      offset: const Offset(4,4),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        children: [
-                          if (hasActiveShift)
-                            _buildActiveShiftUI(activeShift, theme, isDarkMode)
-                          else
-                            _buildInactiveShiftUI(context, theme, isDarkMode),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ),
+                  ]
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    children: [
+                      if (hasActiveShift)
+                        _buildActiveShiftUI(activeShift, theme, isDarkMode)
+                      else
+                        _buildInactiveShiftUI(context, theme, isDarkMode),
+                      const SizedBox(height: 20),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
@@ -248,7 +248,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
         height: 60,
         width: 60,
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.white, width: 2),
+          // border: Border.all(color: Colors.white, width: 2),
           borderRadius: BorderRadius.circular(8),
         ),
         child: activeShift.selfie.isNotEmpty
