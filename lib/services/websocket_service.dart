@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/location.dart';
-import 'package:flutter/foundation.dart';
 
 class WebSocketService {
-  static final _storage = const FlutterSecureStorage();
+  static final _storage = FlutterSecureStorage();
   WebSocketChannel? _channel;
   final void Function(List<Location>) onLocationsUpdated;
   bool _isConnected = false;
@@ -16,7 +15,7 @@ class WebSocketService {
 
   Future<void> connect() async {
     if (_isConnecting || _isConnected) {
-      print('WebSocket: уже подключен или подключается...');
+      print('WebSocket: уже подключён или подключается...');
       return;
     }
 
@@ -26,25 +25,16 @@ class WebSocketService {
     try {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) {
-        throw Exception('Токен не найден');
+        throw Exception('Токен не найден в хранилище');
       }
 
-      // ✅ ИСПРАВЛЕНО: Тщательная очистка токена
       final cleanToken = _cleanToken(token);
-      print('Оригинальный токен: "$token"');
-      print('Очищенный токен: "$cleanToken"');
-
-      // ✅ ИСПРАВЛЕНО: Правильный URL без лишних символов
       final baseUrl = 'wss://eom-sharing.duckdns.org/ws';
       final encodedToken = Uri.encodeQueryComponent(cleanToken);
       final url = '$baseUrl?token=$encodedToken';
 
-      print('WebSocket URL: $url');
-
-      // Создаем канал
-      final uri = Uri.parse(url);
-      print('Parsed URI: $uri');
-      _channel = WebSocketChannel.connect(uri);
+      print('Подключение к WebSocket: $url');
+      _channel = WebSocketChannel.connect(Uri.parse(url));
 
       _isConnected = true;
       _isConnecting = false;
@@ -52,93 +42,116 @@ class WebSocketService {
       _channel!.stream.listen(
         (message) {
           try {
-            final data = jsonDecode(message);
-            print('Получено сообщение WebSocket: $data');
-            if (data['type'] == 'online_users') {
-              final users = (data['users'] as List)
-                  .map((u) => Location.fromJson(u))
-                  .toList();
-              _safeCallCallback(() => onLocationsUpdated(users));
+            final dynamic data = jsonDecode(message);
+            print('WebSocket получено: $data');
+
+            if (data is Map<String, dynamic> &&
+                data['type'] == 'online_users') {
+              final users = _parseOnlineUsers(data['users']);
+              _safeCall(() => onLocationsUpdated(users));
             }
-          } catch (e) {
-            print('Ошибка обработки сообщения WebSocket: $e');
+          } catch (e, stack) {
+            print('Ошибка обработки сообщения WebSocket: $e\n$stack');
           }
         },
-        onError: (err) {
-          print('WS Error: $err');
-          _handleConnectionError();
+        onError: (error) {
+          print('WebSocket ошибка: $error');
+          _handleDisconnect();
         },
         onDone: () {
-          print('WS Disconnected');
-          _handleConnectionError();
+          print('WebSocket соединение закрыто');
+          _handleDisconnect();
         },
       );
+    } catch (e, stack) {
+      print('Ошибка инициализации WebSocket: $e\n$stack');
+      _handleDisconnect();
+    }
+  }
+
+  List<Location> _parseOnlineUsers(dynamic usersData) {
+    if (usersData == null) return [];
+    if (usersData is! List) return [];
+
+    try {
+      return usersData
+          .map((item) {
+            if (item is! Map<String, dynamic>) {
+              print('Пропущен некорректный элемент: $item');
+              return null;
+            }
+            return Location.fromJson(item);
+          })
+          .where((u) => u != null)
+          .cast<Location>()
+          .toList();
     } catch (e) {
-      print('Ошибка подключения к WebSocket: $e');
-      _handleConnectionError();
+      print('Ошибка парсинга списка пользователей: $e');
+      return [];
     }
   }
 
-  // Метод для очистки токена от лишних символов
-  String _cleanToken(String token) {
-    // Убираем все пробельные символы и лишние данные
-    String clean = token.trim();
-
-    // Если токен содержит "HTTP/1.1", убираем всё после него
-    if (clean.contains('HTTP/1.1')) {
-      clean = clean.split('HTTP/1.1').first.trim();
+  // ✅ ИСПРАВЛЕНО: Убран `mounted`, используется только WidgetsBinding
+  void _safeCall(Function() callback) {
+    try {
+      final binding = WidgetsBinding.instance;
+      if (binding != null &&
+          binding.lifecycleState == AppLifecycleState.resumed) {
+        callback();
+      } else {
+        // Откладываем до следующего кадра, если приложение не в активном состоянии
+        binding?.addPostFrameCallback((_) {
+          callback();
+        });
+      }
+    } catch (e) {
+      print('Ошибка при вызове callback: $e');
     }
-
-    // Убираем лишние пробелы и специальные символы
-    clean = clean.replaceAll(RegExp(r'\s+'), '');
-    clean = clean.replaceAll('"', '');
-    clean = clean.replaceAll("'", '');
-
-    return clean;
   }
 
-  void _handleConnectionError() {
-    _isConnected = false;
-    _isConnecting = false;
-    _safeCallCallback(() => onLocationsUpdated([]));
-  }
-
-  Future<void> sendLocation(Location location) async {
+  void sendLocation(Location location) {
     if (_channel == null || !_isConnected) {
-      print('WebSocket канал не подключен');
+      print('WebSocket не подключён. Пропущена отправка локации.');
       return;
     }
 
     try {
-      _channel!.sink.add(jsonEncode(location.toJson()));
+      final message = jsonEncode(location.toJson());
+      _channel!.sink.add(message);
+      print('Локация отправлена: $message');
     } catch (e) {
       print('Ошибка отправки локации: $e');
       _isConnected = false;
     }
   }
 
-  void disconnect() {
+  void _handleDisconnect() {
     _isConnected = false;
     _isConnecting = false;
+
+    disconnect();
+
+    // Повторное подключение
+    Future.delayed(const Duration(seconds: 3), () {
+      if (_isConnected || _isConnecting) return;
+      connect();
+    });
+  }
+
+  void disconnect() {
     _channel?.sink.close();
     _channel = null;
   }
 
+  String _cleanToken(String token) {
+    return token
+        .trim()
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll('"', '')
+        .replaceAll("'", '')
+        .replaceAll(RegExp(r'[\r\n\t]'), '');
+  }
+
   bool get isConnected => _isConnected;
   bool get isConnecting => _isConnecting;
-
-  void _safeCallCallback(Function callback) {
-    try {
-      if (WidgetsBinding.instance?.lifecycleState ==
-          AppLifecycleState.resumed) {
-        callback();
-      } else {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          callback();
-        });
-      }
-    } catch (e) {
-      print('Ошибка при безопасном вызове callback: $e');
-    }
-  }
 }
