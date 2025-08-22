@@ -62,6 +62,24 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
       final profile =
           await _retryApiCall(() => _apiService.getUserProfile(_token!));
+      debugPrint('Полный профиль пользователя: $profile');
+
+      String? positionFromProfile;
+      final possibleKeys = [
+        'position',
+        'job_title',
+        'role',
+        'dolzhnost',
+        'должность'
+      ];
+      for (var key in possibleKeys) {
+        if (profile.containsKey(key) && profile[key] != null) {
+          positionFromProfile = profile[key].toString();
+          debugPrint('Найдена позиция по ключу "$key": $positionFromProfile');
+          break;
+        }
+      }
+
       final serverZones =
           await _retryApiCall(() => _apiService.getAvailableZones(_token!));
       final serverTimeSlots =
@@ -74,7 +92,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         setState(() {
           _zones = uniqueZones;
           _timeSlots = serverTimeSlots;
-          _position = profile['position'] as String? ?? 'Не указана';
+          _position = positionFromProfile ?? 'Не указана';
           _zone = defaultZone;
           _selectedTime = _timeSlots.isNotEmpty ? _timeSlots.first : null;
         });
@@ -149,10 +167,18 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       return;
     }
 
+    if (_position == null || _position!.isEmpty) {
+      _showError(
+          'Не удалось определить вашу должность. Обратитесь к администратору.');
+      return;
+    }
+
     final provider = Provider.of<ShiftProvider>(context, listen: false);
 
     try {
       final compressedFile = await _compressImage(File(_selfie!.path));
+      debugPrint(
+          'Отправка данных на сервер: slotTimeRange=$_selectedTime, position=$_position, zone=$_zone');
       await _retryApiCall(() => provider.startSlot(
             slotTimeRange: _selectedTime!,
             position: _position!,
@@ -170,7 +196,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             ? 'Сервер временно недоступен (502). Пожалуйста, попробуйте позже.'
             : e.toString().contains('active')
                 ? 'У вас уже есть активная смена'
-                : 'Ошибка: ${e.toString()}';
+                : 'Ошибка при старте смены: ${e.toString()}';
         _showError(errorMessage);
         if (e.toString().contains('active')) {
           setState(() => _backendConflict = true);

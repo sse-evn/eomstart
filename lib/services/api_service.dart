@@ -15,18 +15,12 @@ class ApiService {
     String originalToken,
   ) async {
     http.Response response = await requestFunction(originalToken);
-
     if (response.statusCode == 401) {
-      debugPrint('🚨 401 received, attempting token refresh...');
       final newToken = await refreshToken();
       if (newToken != null) {
-        debugPrint('✅ Token refreshed, retrying request...');
         response = await requestFunction(newToken);
-      } else {
-        debugPrint('❌ Token refresh failed');
       }
     }
-
     return response;
   }
 
@@ -34,34 +28,25 @@ class ApiService {
     try {
       final refreshToken = await _storage.read(key: 'refresh_token');
       if (refreshToken == null) {
-        debugPrint('No refresh token found');
         return null;
       }
-
-      debugPrint('🔄 Attempting to refresh token...');
       final response = await http.post(
         Uri.parse(AppConfig.refreshTokenUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh_token': refreshToken}),
       );
-
-      debugPrint('🔄 Refresh response status: ${response.statusCode}');
-
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
         final newAccessToken = body['access_token'];
         if (newAccessToken != null) {
           await _storage.write(key: 'jwt_token', value: newAccessToken);
-          debugPrint('✅ Access token refreshed and saved.');
           return newAccessToken as String;
         }
       } else {
-        debugPrint(
-            '🔄 Failed to refresh token: ${response.statusCode} - ${response.body}');
         await _storage.delete(key: 'refresh_token');
       }
     } catch (e) {
-      debugPrint('🔄 Exception during token refresh: $e');
+      debugPrint('Exception during token refresh: $e');
     }
     return null;
   }
@@ -75,7 +60,6 @@ class ApiService {
         'password': password,
       }),
     );
-
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       await _storage.write(key: 'jwt_token', value: body['token']);
@@ -114,7 +98,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } else {
@@ -133,13 +116,10 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       return body['telegram_user_id'] as int?;
     } else {
-      debugPrint(
-          'getUserTelegramId: Failed for user $userId. Status: ${response.statusCode}, Body: ${response.body}');
       return null;
     }
   }
@@ -154,7 +134,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } else {
@@ -173,7 +152,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       final dynamic body = jsonDecode(response.body);
       if (body is List) return body;
@@ -195,7 +173,6 @@ class ApiService {
         body: jsonEncode({'role': newRole}),
       );
     }, token);
-
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(
           'Failed to update role: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
@@ -217,7 +194,6 @@ class ApiService {
         }),
       );
     }, token);
-
     if (response.statusCode != 201) {
       throw Exception('Ошибка: ${utf8.decode(response.bodyBytes)}');
     }
@@ -233,7 +209,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(
           'Failed to delete user: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
@@ -251,7 +226,6 @@ class ApiService {
         body: jsonEncode({'is_active': true}),
       );
     }, token);
-
     if (response.statusCode != 200) {
       throw Exception('Failed to activate user');
     }
@@ -268,7 +242,6 @@ class ApiService {
         body: jsonEncode({'is_active': false}),
       );
     }, token);
-
     if (response.statusCode != 200) {
       throw Exception('Failed to deactivate user');
     }
@@ -284,7 +257,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode != 200 && response.statusCode != 204) {
       final message = utf8.decode(response.bodyBytes);
       throw Exception(
@@ -303,7 +275,6 @@ class ApiService {
           },
         );
       }, token);
-
       if (response.statusCode == 200) {
         final dynamic body = jsonDecode(response.body);
         if (body is List) {
@@ -339,24 +310,20 @@ class ApiService {
           throw Exception('Token expired and refresh failed');
         }
       }
-
       final request =
           http.MultipartRequest('POST', Uri.parse(AppConfig.startSlotUrl));
       request.headers['Authorization'] = 'Bearer $effectiveToken';
       request.fields['slot_time_range'] = slotTimeRange;
       request.fields['position'] = position;
       request.fields['zone'] = zone;
-
       if (await selfieImage.exists()) {
         request.files
             .add(await http.MultipartFile.fromPath('selfie', selfieImage.path));
       } else {
         throw Exception('Selfie file does not exist');
       }
-
       final response = await request.send();
       final resp = await http.Response.fromStream(response);
-
       if (resp.statusCode != 200 && resp.statusCode != 201) {
         throw Exception(
             'Failed to start slot: ${resp.reasonPhrase} - ${utf8.decode(resp.bodyBytes)}');
@@ -378,7 +345,6 @@ class ApiService {
           },
         );
       }, token);
-
       if (response.statusCode != 200 && response.statusCode != 204) {
         throw Exception(
             'Failed to end slot: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
@@ -400,37 +366,26 @@ class ApiService {
       );
     }, token);
 
-    debugPrint('📡 GetUserActiveShift API status: ${response.statusCode}');
-    debugPrint('📡 GetUserActiveShift API body: ${response.body}');
-
     if (response.statusCode == 200) {
       if (response.body == 'null' || response.body.trim().isEmpty) {
-        debugPrint('📡 No active shift found (null response)');
         return null;
       }
-
       try {
         final dynamic body = jsonDecode(response.body);
         if (body is Map<String, dynamic>) {
-          debugPrint('✅ Parsed single active shift object');
           return active_shift.ActiveShift.fromJson(body);
         } else if (body is List &&
             body.isNotEmpty &&
             body[0] is Map<String, dynamic>) {
-          debugPrint('✅ Parsed active shift from array[0]');
           return active_shift.ActiveShift.fromJson(body[0]);
         } else if (body is List && body.isEmpty) {
-          debugPrint('📡 Empty array response, no active shift');
           return null;
         }
-        debugPrint('❌ Unexpected response format: ${body.runtimeType}');
         return null;
       } catch (e) {
-        debugPrint('❌ Error parsing active shift: $e');
         return null;
       }
     } else {
-      debugPrint('❌ API error: ${response.statusCode} - ${response.body}');
       return null;
     }
   }
@@ -446,14 +401,10 @@ class ApiService {
       );
     }, token);
 
-    debugPrint('📡 GetActiveShifts API status: ${response.statusCode}');
-    debugPrint('📡 GetActiveShifts API body: ${response.body}');
-
     if (response.statusCode == 200) {
       if (response.body == 'null' || response.body.trim().isEmpty) {
         return [];
       }
-
       try {
         final dynamic body = jsonDecode(response.body);
         if (body is List) {
@@ -462,10 +413,8 @@ class ApiService {
               .map((item) => active_shift.ActiveShift.fromJson(item))
               .toList();
         }
-        debugPrint('❌ Expected array but got: ${body.runtimeType}');
         return [];
       } catch (e) {
-        debugPrint('❌ Error parsing active shifts list: $e');
         return [];
       }
     } else {
@@ -473,7 +422,6 @@ class ApiService {
     }
   }
 
-  // ✅ НОВЫЙ МЕТОД: Получение завершённых смен
   Future<List<active_shift.ActiveShift>> getEndedShifts(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(
@@ -484,7 +432,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       final dynamic body = jsonDecode(response.body);
       if (body is List) {
@@ -509,7 +456,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       final dynamic body = jsonDecode(response.body);
       if (body is List) {
@@ -532,7 +478,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       final dynamic body = jsonDecode(response.body);
       if (body is List) {
@@ -555,7 +500,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       final dynamic body = jsonDecode(response.body);
       if (body is List) {
@@ -578,7 +522,6 @@ class ApiService {
         body: jsonEncode({'name': name}),
       );
     }, token);
-
     if (response.statusCode != 201) {
       throw Exception('Failed to create zone');
     }
@@ -595,7 +538,6 @@ class ApiService {
         body: jsonEncode({'name': name}),
       );
     }, token);
-
     if (response.statusCode != 200) {
       throw Exception('Failed to update zone');
     }
@@ -611,7 +553,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode != 200) {
       throw Exception('Failed to delete zone');
     }
@@ -628,7 +569,6 @@ class ApiService {
           },
         );
       }, token);
-
       if (response.statusCode == 200) {
         final dynamic body = jsonDecode(response.body);
         if (body is List) return body;
@@ -638,7 +578,6 @@ class ApiService {
             'Failed to load maps: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
       }
     } catch (e) {
-      debugPrint('Error loading maps: $e');
       rethrow;
     }
   }
@@ -659,13 +598,11 @@ class ApiService {
           throw Exception('Token expired and refresh failed');
         }
       }
-
       final request =
           http.MultipartRequest('POST', Uri.parse(AppConfig.uploadMapUrl));
       request.headers['Authorization'] = 'Bearer $effectiveToken';
       request.fields['city'] = city;
       request.fields['description'] = description;
-
       if (await geoJsonFile.exists()) {
         final file = await http.MultipartFile.fromPath(
           'geojson_file',
@@ -676,16 +613,13 @@ class ApiService {
       } else {
         throw Exception('GeoJSON file does not exist');
       }
-
       final response = await request.send();
       final resp = await http.Response.fromStream(response);
-
       if (resp.statusCode != 200 && resp.statusCode != 201) {
         throw Exception(
             'Failed to upload map: ${resp.statusCode} - ${utf8.decode(resp.bodyBytes)}');
       }
     } catch (e) {
-      debugPrint('Error uploading map: $e');
       rethrow;
     }
   }
@@ -704,13 +638,11 @@ class ApiService {
           },
         );
       }, token);
-
       if (response.statusCode != 200 && response.statusCode != 204) {
         throw Exception(
             'Failed to delete map: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
       }
     } catch (e) {
-      debugPrint('Error deleting map: $e');
       rethrow;
     }
   }
@@ -729,7 +661,6 @@ class ApiService {
           },
         );
       }, token);
-
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
@@ -737,7 +668,6 @@ class ApiService {
             'Failed to load map: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
       }
     } catch (e) {
-      debugPrint('Error loading map by id: $e');
       rethrow;
     }
   }
@@ -773,11 +703,9 @@ class ApiService {
     if (morningCount == 0 && eveningCount == 0) {
       throw Exception('Укажите хотя бы одну смену');
     }
-
     if (selectedScoutIds.isEmpty) {
       throw Exception('Не выбрано ни одного скаута');
     }
-
     final body = {
       'date':
           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
@@ -785,9 +713,6 @@ class ApiService {
       'evening_count': eveningCount,
       'scout_ids': selectedScoutIds,
     };
-
-    debugPrint('📤 Отправляю на генерацию смен: $body');
-
     final response = await _authorizedRequest((token) async {
       return await http.post(
         Uri.parse(AppConfig.generateShiftsUrl),
@@ -798,10 +723,8 @@ class ApiService {
         body: jsonEncode(body),
       );
     }, token);
-
     if (response.statusCode != 200 && response.statusCode != 201) {
       final message = utf8.decode(response.bodyBytes);
-      debugPrint('❌ Ошибка генерации смен: $message');
       throw Exception('Ошибка: $message');
     }
   }

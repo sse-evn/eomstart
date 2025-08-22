@@ -1,4 +1,5 @@
 // lib/screens/map_screen/map_screens.dart
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -11,6 +12,10 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:micro_mobility_app/models/location.dart';
+import 'package:micro_mobility_app/services/websocket_service.dart';
+import 'package:provider/provider.dart';
+import 'package:micro_mobility_app/providers/shift_provider.dart';
 
 class MapScreen extends StatefulWidget {
   final File? customGeoJsonFile;
@@ -31,26 +36,43 @@ class _MapScreenState extends State<MapScreen> {
   int _selectedMapId = -1;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  // Состояние видимости слоев
   bool _showRestrictedZones = true;
   bool _showParkingZones = true;
   bool _showSpeedLimitZones = true;
   bool _showBoundaries = true;
 
+  late WebSocketService _webSocketService;
+  bool _isWebSocketConnected = false;
+  Timer? _locationSendTimer;
+
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
-    _fetchCurrentLocation();
-    _loadAvailableMaps().then((_) {
-      _loadAndParseGeoJson();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initMap();
     });
   }
 
-  @override
-  void dispose() {
-    _mapController.dispose();
-    super.dispose();
+  Future<void> _initMap() async {
+    try {
+      await _fetchCurrentLocation();
+      await _loadAvailableMaps();
+      await _loadAndParseGeoJson();
+      await _connectWebSocket();
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка инициализации: $e')),
+          );
+        });
+      }
+    }
   }
 
   Future<void> _fetchCurrentLocation() async {
@@ -72,6 +94,64 @@ class _MapScreenState extends State<MapScreen> {
         );
       }
     }
+  }
+
+  Future<void> _connectWebSocket() async {
+    final token = await _storage.read(key: 'jwt_token');
+    if (token == null) return;
+
+    // === ПОЛУЧАЕМ РЕАЛЬНЫЕ ДАННЫЕ ИЗ PROVIDER ===
+    final provider = Provider.of<ShiftProvider>(context, listen: false);
+    final username = provider.currentUsername ?? 'worker';
+    final userId = provider.activeShift?.userId ?? 123;
+
+    _webSocketService = WebSocketService(onLocationsUpdated: (users) {
+      debugPrint("MapScreen: Получен список онлайн пользователей");
+    });
+
+    try {
+      await _webSocketService.connect();
+      _startPeriodicLocationSending(userId, username);
+
+      if (_currentLocation != null) {
+        final location = Location(
+          userID: userId,
+          username: username,
+          lat: _currentLocation!.latitude,
+          lng: _currentLocation!.longitude,
+          timestamp: DateTime.now(),
+        );
+        _webSocketService.sendLocation(location);
+      }
+
+      if (mounted) {
+        setState(() => _isWebSocketConnected = true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isWebSocketConnected = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка WebSocket: $e')),
+        );
+      }
+    }
+  }
+
+  void _startPeriodicLocationSending(int userId, String username) {
+    _locationSendTimer?.cancel();
+    _locationSendTimer =
+        Timer.periodic(const Duration(seconds: 20), (timer) async {
+      if (_webSocketService.isConnected && _currentLocation != null) {
+        final location = Location(
+          userID: userId,
+          username: username,
+          lat: _currentLocation!.latitude,
+          lng: _currentLocation!.longitude,
+          timestamp: DateTime.now(),
+        );
+        _webSocketService.sendLocation(location);
+      }
+    });
   }
 
   Future<void> _loadAvailableMaps() async {
@@ -123,9 +203,7 @@ class _MapScreenState extends State<MapScreen> {
         final firstMap = _availableMaps.first;
         if (firstMap is Map<String, dynamic> && firstMap.containsKey('id')) {
           final mapId = firstMap['id'] as int;
-          setState(() {
-            _selectedMapId = mapId;
-          });
+          setState(() => _selectedMapId = mapId);
           geoJsonString = await _loadGeoJsonFromServer(mapId);
         } else {
           throw Exception('Нет доступных карт');
@@ -134,9 +212,7 @@ class _MapScreenState extends State<MapScreen> {
         throw Exception('Нет доступных карт');
       }
 
-      // Очищаем предыдущие данные
       _geoJsonParser.parseGeoJsonAsString(geoJsonString);
-
       if (mounted) setState(() {});
     } catch (e) {
       if (mounted) {
@@ -222,6 +298,207 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _locationSendTimer?.cancel();
+    _webSocketService.disconnect();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Карта зон'),
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isWebSocketConnected ? Icons.wifi : Icons.wifi_off,
+              color: _isWebSocketConnected ? Colors.green : Colors.red,
+            ),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(_isWebSocketConnected
+                      ? 'WebSocket подключен'
+                      : 'WebSocket отключен'),
+                ),
+              );
+            },
+          ),
+          if (_availableMaps.isNotEmpty)
+            PopupMenuButton<int>(
+              icon: const Icon(Icons.map),
+              onSelected: _onMapChanged,
+              itemBuilder: (BuildContext context) {
+                return _availableMaps.map((map) {
+                  if (map is Map<String, dynamic>) {
+                    final id = map['id'] as int;
+                    final city = map['city'] as String? ?? 'Неизвестный город';
+                    final description = map['description'] as String? ?? '';
+                    final displayName =
+                        description.isNotEmpty ? '$city - $description' : city;
+                    return PopupMenuItem<int>(
+                        value: id, child: Text(displayName));
+                  }
+                  return const PopupMenuItem<int>(
+                      value: 0, child: Text('Некорректная карта'));
+                }).toList();
+              },
+            ),
+          if (_selectedMapId != -1)
+            IconButton(
+              icon: const Icon(Icons.download),
+              onPressed: () => _downloadMapLocally(_selectedMapId),
+              tooltip: 'Сохранить карту локально',
+            ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _currentLocation ?? AppConstants.defaultMapCenter,
+              initialZoom: AppConstants.defaultMapZoom,
+              minZoom: AppConstants.minZoom,
+              maxZoom: AppConstants.maxZoom,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              ),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: AppConstants.cartoDbPositronUrl,
+                subdomains: AppConstants.cartoDbSubdomains,
+                userAgentPackageName: AppConstants.userAgentPackageName,
+                retinaMode: MediaQuery.of(context).devicePixelRatio > 1.0,
+              ),
+              if (_geoJsonParser.polygons.isNotEmpty && _showRestrictedZones)
+                PolygonLayer(
+                  polygons: _geoJsonParser.polygons.map((polygon) {
+                    return Polygon(
+                      points: polygon.points,
+                      borderColor: Colors.red,
+                      color: Colors.red.withOpacity(0.2),
+                      borderStrokeWidth: 2.0,
+                    );
+                  }).toList(),
+                ),
+              if (_geoJsonParser.polylines.isNotEmpty && _showBoundaries)
+                PolylineLayer(
+                  polylines: _geoJsonParser.polylines.map((polyline) {
+                    return Polyline(
+                      points: polyline.points,
+                      color: Colors.blue,
+                      strokeWidth: 5,
+                    );
+                  }).toList(),
+                ),
+              if (_geoJsonParser.markers.isNotEmpty)
+                MarkerLayer(
+                  markers: _geoJsonParser.markers.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final marker = entry.value;
+                    return Marker(
+                      point: marker.point,
+                      width: 30,
+                      height: 30,
+                      child: Container(
+                        alignment: Alignment.center,
+                        child: Text(
+                          '${index + 1}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(
+                                blurRadius: 3.0,
+                                color: Colors.black,
+                                offset: Offset(1.0, 1.0),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              if (_currentLocation != null)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: _currentLocation!,
+                      width: 16,
+                      height: 16,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.blue[700],
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          Positioned(
+            bottom: 80,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: 'layersFab',
+              backgroundColor: Colors.green[700],
+              onPressed: _showLayerSettingsDialog,
+              child: const Icon(Icons.layers, color: Colors.white),
+            ),
+          ),
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: 'locationFab',
+              backgroundColor: Colors.green[700],
+              onPressed: _fetchCurrentLocation,
+              child: _isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Icon(Icons.my_location, color: Colors.white),
+            ),
+          ),
+          if (_isLoading) const Center(child: CircularProgressIndicator()),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _onMapChanged(int newMapId) async {
+    if (newMapId != _selectedMapId) {
+      setState(() {
+        _selectedMapId = newMapId;
+        _isLoading = true;
+      });
+
+      try {
+        final geoJsonString = await _loadGeoJsonFromServer(newMapId);
+        _geoJsonParser.parseGeoJsonAsString(geoJsonString);
+        if (mounted) setState(() {});
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка загрузки карты: $e')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    }
+  }
+
   Future<void> _downloadMapLocally(int mapId) async {
     try {
       final token = await _storage.read(key: 'jwt_token');
@@ -251,7 +528,6 @@ class _MapScreenState extends State<MapScreen> {
 
             if (fileResponse.statusCode == 200) {
               await _saveMapFileLocally(mapId, fileResponse.body);
-
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -273,32 +549,6 @@ class _MapScreenState extends State<MapScreen> {
             backgroundColor: Colors.red,
           ),
         );
-      }
-    }
-  }
-
-  Future<void> _onMapChanged(int newMapId) async {
-    if (newMapId != _selectedMapId) {
-      setState(() {
-        _selectedMapId = newMapId;
-        _isLoading = true;
-      });
-
-      try {
-        String geoJsonString = await _loadGeoJsonFromServer(newMapId);
-        _geoJsonParser.parseGeoJsonAsString(geoJsonString);
-
-        if (mounted) setState(() {});
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка загрузки карты: $e')),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
       }
     }
   }
@@ -402,186 +652,6 @@ class _MapScreenState extends State<MapScreen> {
           },
         );
       },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Карта зон'),
-        // centerTitle: true,
-        // backgroundColor: Colors.green[700],
-        automaticallyImplyLeading: false,
-        actions: [
-          if (_availableMaps.isNotEmpty)
-            PopupMenuButton<int>(
-              icon: const Icon(Icons.map),
-              onSelected: _onMapChanged,
-              itemBuilder: (BuildContext context) {
-                return _availableMaps.map((map) {
-                  if (map is Map<String, dynamic>) {
-                    final id = map['id'] as int;
-                    final city = map['city'] as String? ?? 'Неизвестный город';
-                    final description = map['description'] as String? ?? '';
-                    final displayName =
-                        description.isNotEmpty ? '$city - $description' : city;
-
-                    return PopupMenuItem<int>(
-                      value: id,
-                      child: Text(displayName),
-                    );
-                  }
-                  return const PopupMenuItem<int>(
-                    value: 0,
-                    child: Text('Некорректная карта'),
-                  );
-                }).toList();
-              },
-            ),
-          if (_selectedMapId != -1)
-            IconButton(
-              icon: const Icon(Icons.download),
-              onPressed: () => _downloadMapLocally(_selectedMapId),
-              tooltip: 'Сохранить карту локально',
-            ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _currentLocation ?? AppConstants.defaultMapCenter,
-              initialZoom: AppConstants.defaultMapZoom,
-              minZoom: AppConstants.minZoom,
-              maxZoom: AppConstants.maxZoom,
-              interactionOptions: const InteractionOptions(
-                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-              ),
-              onPositionChanged: (MapCamera position, bool hasGesture) {
-                // Обработчик изменения позиции карты
-              },
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: AppConstants.cartoDbPositronUrl,
-                subdomains: AppConstants.cartoDbSubdomains,
-                userAgentPackageName: AppConstants.userAgentPackageName,
-                retinaMode: MediaQuery.of(context).devicePixelRatio > 1.0,
-              ),
-
-              // Основные зоны из GeoJSON
-              if (_geoJsonParser.polygons.isNotEmpty && _showRestrictedZones)
-                PolygonLayer(
-                  polygons: _geoJsonParser.polygons.map((polygon) {
-                    return Polygon(
-                      points: polygon.points,
-                      borderColor: Colors.red,
-                      color: Colors.red.withOpacity(0.2),
-                      borderStrokeWidth: 2.0,
-                    );
-                  }).toList(),
-                ),
-
-              // Линии из GeoJSON (границы)
-              if (_geoJsonParser.polylines.isNotEmpty && _showBoundaries)
-                PolylineLayer(
-                  polylines: _geoJsonParser.polylines.map((polyline) {
-                    return Polyline(
-                      points: polyline.points,
-                      color: Colors.blue,
-                      strokeWidth: 5,
-                    );
-                  }).toList(),
-                ),
-
-              // Маркеры из GeoJSON с номерами зон
-              if (_geoJsonParser.markers.isNotEmpty)
-                MarkerLayer(
-                  markers: _geoJsonParser.markers.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final marker = entry.value;
-
-                    return Marker(
-                      point: marker.point,
-                      width: 30,
-                      height: 30,
-                      child: Container(
-                        alignment: Alignment.center,
-                        child: Text(
-                          '${index + 1}', // Номер зоны
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            shadows: [
-                              Shadow(
-                                blurRadius: 3.0,
-                                color: Colors.black,
-                                offset: Offset(1.0, 1.0),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-
-              // Маркер текущего местоположения
-              if (_currentLocation != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _currentLocation!,
-                      width: 16,
-                      height: 16,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blue[700],
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-
-          // Кнопка настроек слоев
-          Positioned(
-            bottom: 80,
-            right: 20,
-            child: FloatingActionButton(
-              heroTag: 'layersFab',
-              backgroundColor: Colors.green[700],
-              onPressed: _showLayerSettingsDialog,
-              child: const Icon(Icons.layers, color: Colors.white),
-            ),
-          ),
-
-          // Кнопка обновления местоположения
-          Positioned(
-            bottom: 20,
-            right: 20,
-            child: FloatingActionButton(
-              heroTag: 'locationFab',
-              backgroundColor: Colors.green[700],
-              onPressed: _fetchCurrentLocation,
-              child: _isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Icon(Icons.my_location, color: Colors.white),
-            ),
-          ),
-
-          if (_isLoading)
-            const Center(
-              child: CircularProgressIndicator(),
-            ),
-        ],
-      ),
     );
   }
 }

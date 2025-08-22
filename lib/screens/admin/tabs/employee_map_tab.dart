@@ -1,4 +1,5 @@
 // lib/screens/admin/tabs/employee_map_tab.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -9,6 +10,8 @@ import 'package:micro_mobility_app/models/location.dart';
 import 'package:micro_mobility_app/services/websocket_service.dart';
 import 'package:micro_mobility_app/utils/map_app_constants.dart'
     show AppConstants;
+import 'package:provider/provider.dart';
+import 'package:micro_mobility_app/providers/shift_provider.dart';
 
 class EmployeeMapTab extends StatefulWidget {
   const EmployeeMapTab({super.key});
@@ -25,27 +28,32 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
   bool _isLoading = true;
   String _error = '';
   bool _isRefreshing = false;
-  late MapController _mapController; // Добавлен контроллер
+  late MapController _mapController;
+  Timer? _locationUpdateTimer;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
-    _initMap();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initMap();
+    });
   }
 
   Future<void> _initMap() async {
     try {
       await _fetchCurrentLocation();
       await _connectWebSocket();
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _error = e.toString();
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = e.toString();
+        });
+      }
     }
   }
 
@@ -57,9 +65,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
         final lat = data['latitude'] as double?;
         final lng = data['longitude'] as double?;
         if (lat != null && lng != null && mounted) {
-          setState(() {
-            _currentLocation = LatLng(lat, lng);
-          });
+          setState(() => _currentLocation = LatLng(lat, lng));
         }
       }
     } catch (e) {
@@ -70,26 +76,34 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
   Future<void> _connectWebSocket() async {
     final token = await _storage.read(key: 'jwt_token');
     if (token == null) {
-      setState(() {
-        _error = 'Токен не найден';
-      });
+      if (mounted) {
+        setState(() => _error = 'Токен не найден');
+      }
       return;
     }
 
+    // === ПОЛУЧАЕМ РЕАЛЬНЫЕ ДАННЫЕ ИЗ PROVIDER ===
+    final provider = Provider.of<ShiftProvider>(context, listen: false);
+    final username = provider.currentUsername ?? 'admin';
+    final userId = provider.activeShift?.userId ?? 3;
+
     _webSocketService = WebSocketService(onLocationsUpdated: (users) {
       if (mounted) {
-        setState(() {
-          _onlineUsers = users;
-        });
+        setState(() => _onlineUsers = users);
       }
     });
 
     try {
       await _webSocketService.connect();
+
+      // Запускаем периодическую отправку
+      _startPeriodicLocationUpdates(userId, username);
+
+      // Отправляем начальную позицию
       if (_currentLocation != null) {
         final myLocation = Location(
-          userID: 3,
-          username: 'admin',
+          userID: userId,
+          username: username,
           lat: _currentLocation!.latitude,
           lng: _currentLocation!.longitude,
           timestamp: DateTime.now(),
@@ -97,24 +111,40 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
         _webSocketService.sendLocation(myLocation);
       }
     } catch (e) {
-      setState(() {
-        _error = 'Ошибка подключения: $e';
-      });
+      if (mounted) {
+        setState(() => _error = 'Ошибка подключения: $e');
+      }
     }
+  }
+
+  void _startPeriodicLocationUpdates(int userId, String username) {
+    _locationUpdateTimer?.cancel();
+    _locationUpdateTimer =
+        Timer.periodic(const Duration(seconds: 15), (timer) async {
+      if (_webSocketService.isConnected && _currentLocation != null) {
+        final location = Location(
+          userID: userId,
+          username: username,
+          lat: _currentLocation!.latitude,
+          lng: _currentLocation!.longitude,
+          timestamp: DateTime.now(),
+        );
+        _webSocketService.sendLocation(location);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _locationUpdateTimer?.cancel();
     _mapController.dispose();
     _webSocketService.disconnect();
     super.dispose();
   }
 
   Future<void> _refreshMap() async {
-    if (_isRefreshing) return;
-    setState(() {
-      _isRefreshing = true;
-    });
+    if (_isRefreshing || !mounted) return;
+    setState(() => _isRefreshing = true);
 
     try {
       await _fetchCurrentLocation();
@@ -126,37 +156,29 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка обновления: $e')),
+          SnackBar(content: Text('Ошибка: $e')),
         );
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isRefreshing = false;
-        });
+        setState(() => _isRefreshing = false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error.isNotEmpty) {
-      return Center(child: Text('Ошибка: $_error'));
-    }
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_error.isNotEmpty) return Center(child: Text('Ошибка: $_error'));
 
     return Column(
       children: [
-        // === КАРТА ===
         Expanded(
           flex: 3,
           child: Stack(
             children: [
               FlutterMap(
-                mapController: _mapController, // ✅ Подключаем контроллер
+                mapController: _mapController,
                 options: MapOptions(
                   initialCenter:
                       _currentLocation ?? const LatLng(43.2389, 76.8897),
@@ -173,29 +195,23 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                     subdomains: AppConstants.cartoDbSubdomains,
                     retinaMode: RetinaMode.isHighDensity(context),
                   ),
-
-                  // Моя позиция
                   if (_currentLocation != null)
                     MarkerLayer(
                       markers: [
                         Marker(
                           point: _currentLocation!,
-                          width: 30,
-                          height: 30,
+                          width: 16,
+                          height: 16,
                           child: Container(
-                            decoration: const BoxDecoration(
-                              color: Colors.blue,
+                            decoration: BoxDecoration(
+                              color: Colors.blue[700],
                               shape: BoxShape.circle,
-                              border: Border.fromBorderSide(
-                                BorderSide(color: Colors.white, width: 2),
-                              ),
+                              border: Border.all(color: Colors.white, width: 2),
                             ),
                           ),
                         ),
                       ],
                     ),
-
-                  // Онлайн пользователи
                   if (_onlineUsers.isNotEmpty)
                     MarkerLayer(
                       markers: _onlineUsers.map((u) {
@@ -225,14 +241,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                                 color: Colors.white,
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
-                                height: 1.2,
-                                shadows: [
-                                  Shadow(
-                                    blurRadius: 1.0,
-                                    color: Colors.black,
-                                    offset: Offset(0.5, 0.5),
-                                  ),
-                                ],
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -243,8 +251,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                     ),
                 ],
               ),
-
-              // Кнопка обновления
               Positioned(
                 bottom: 20,
                 right: 20,
@@ -267,8 +273,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
             ],
           ),
         ),
-
-        // === СПИСОК ПОДКЛЮЧЁННЫХ ===
         Expanded(
           flex: 2,
           child: Card(
@@ -368,7 +372,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                               trailing: const Icon(Icons.circle,
                                   color: Colors.green, size: 12),
                               onTap: () {
-                                // ✅ Центрировать карту на пользователе
                                 _mapController.move(
                                   LatLng(user.lat, user.lng),
                                   15.0,
@@ -389,15 +392,9 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
   String _formatTimeAgo(DateTime timestamp) {
     final now = DateTime.now();
     final diff = now.difference(timestamp);
-
-    if (diff.inSeconds < 60) {
-      return '${diff.inSeconds} сек назад';
-    } else if (diff.inMinutes < 60) {
-      return '${diff.inMinutes} мин назад';
-    } else if (diff.inHours < 24) {
-      return '${diff.inHours} ч назад';
-    } else {
-      return '${diff.inDays} дн назад';
-    }
+    if (diff.inSeconds < 60) return '${diff.inSeconds} сек назад';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} мин назад';
+    if (diff.inHours < 24) return '${diff.inHours} ч назад';
+    return '${diff.inDays} дн назад';
   }
 }
