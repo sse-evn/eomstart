@@ -53,6 +53,8 @@ dependencies:
   timezone: ^0.10.1
   jwt_decode: ^0.3.1
   web_socket_channel: ^3.0.3
+  location: ^8.0.1
+  upgrader: ^11.5.0
 
 flutter:
   uses-material-design: true

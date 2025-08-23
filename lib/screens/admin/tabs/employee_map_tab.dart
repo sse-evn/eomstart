@@ -7,7 +7,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:micro_mobility_app/models/location.dart';
 import 'package:micro_mobility_app/models/user_shift_location.dart';
-import 'package:micro_mobility_app/services/websocket_service.dart';
+import 'package:micro_mobility_app/services/websocket/global_websocket_service.dart';
+import 'package:micro_mobility_app/services/websocket/location_tracking_service.dart';
 import 'package:micro_mobility_app/utils/map_app_constants.dart'
     show AppConstants;
 import 'package:provider/provider.dart';
@@ -22,30 +23,66 @@ class EmployeeMapTab extends StatefulWidget {
 
 class _EmployeeMapTabState extends State<EmployeeMapTab> {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  late WebSocketService _webSocketService;
+  late GlobalWebSocketService _globalWebSocketService;
+  late LocationTrackingService _locationTrackingService;
   List<UserShiftLocation> _activeShifts = [];
+  List<Location> _users = [];
   LatLng? _currentLocation;
   bool _isLoading = true;
   String _error = '';
   bool _isRefreshing = false;
   late MapController _mapController;
-  Timer? _locationUpdateTimer;
   bool _connectionError = false;
   String _connectionErrorMessage = '';
+  bool _isWebSocketConnected = false;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
+    _globalWebSocketService =
+        Provider.of<GlobalWebSocketService>(context, listen: false);
+    _locationTrackingService =
+        Provider.of<LocationTrackingService>(context, listen: false);
+    _globalWebSocketService.addLocationsCallback(_updateUsers);
+    _globalWebSocketService.addShiftsCallback(_updateShifts);
+    _globalWebSocketService.addConnectionCallback(_updateConnectionStatus);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initMap();
     });
   }
 
+  @override
+  void dispose() {
+    _globalWebSocketService.removeLocationsCallback(_updateUsers);
+    _globalWebSocketService.removeShiftsCallback(_updateShifts);
+    _globalWebSocketService.removeConnectionCallback(_updateConnectionStatus);
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  void _updateUsers(List<Location> users) {
+    if (mounted) {
+      setState(() => _users = users);
+    }
+  }
+
+  void _updateShifts(List<UserShiftLocation> shifts) {
+    if (mounted) {
+      setState(() => _activeShifts = shifts);
+    }
+  }
+
+  void _updateConnectionStatus(bool isConnected) {
+    if (mounted) {
+      setState(() => _isWebSocketConnected = isConnected);
+    }
+  }
+
   Future<void> _initMap() async {
     try {
       await _fetchCurrentLocation();
-      await _connectWebSocket();
+      await _locationTrackingService.init(context);
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -75,100 +112,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
     } catch (e) {
       debugPrint('Ошибка получения локации: $e');
     }
-  }
-
-  Future<void> _connectWebSocket() async {
-    final token = await _storage.read(key: 'jwt_token');
-    if (token == null) {
-      if (mounted) {
-        setState(() {
-          _error = 'Токен не найден';
-          _connectionError = true;
-          _connectionErrorMessage = 'Токен не найден';
-        });
-      }
-      return;
-    }
-
-    final provider = Provider.of<ShiftProvider>(context, listen: false);
-    final username = provider.currentUsername ?? 'admin';
-    final userId = provider.activeShift?.userId ?? 3;
-
-    _webSocketService = WebSocketService(
-      onLocationsUpdated: (users) {
-        debugPrint("MapScreen: Получен список онлайн пользователей");
-      },
-      onActiveShiftsUpdated: (shifts) {
-        if (mounted) {
-          setState(() => _activeShifts = shifts);
-        }
-      },
-    );
-
-    try {
-      await _webSocketService.connect();
-      _startPeriodicLocationUpdates(userId, username);
-
-      if (_currentLocation != null) {
-        final myLocation = Location(
-          userID: userId,
-          username: username,
-          lat: _currentLocation!.latitude,
-          lng: _currentLocation!.longitude,
-          timestamp: DateTime.now(),
-        );
-        _webSocketService.sendLocation(myLocation);
-      }
-
-      if (mounted) {
-        setState(() {
-          _isWebSocketConnected = true;
-          _connectionError = false;
-          _connectionErrorMessage = '';
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Ошибка подключения: $e';
-          _connectionError = true;
-          _connectionErrorMessage = e.toString();
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка подключения WebSocket: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    }
-  }
-
-  void _startPeriodicLocationUpdates(int userId, String username) {
-    _locationUpdateTimer?.cancel();
-    _locationUpdateTimer =
-        Timer.periodic(const Duration(seconds: 15), (timer) async {
-      if (_webSocketService.isConnected && _currentLocation != null) {
-        final location = Location(
-          userID: userId,
-          username: username,
-          lat: _currentLocation!.latitude,
-          lng: _currentLocation!.longitude,
-          timestamp: DateTime.now(),
-        );
-        _webSocketService.sendLocation(location);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _locationUpdateTimer?.cancel();
-    _mapController.dispose();
-    _webSocketService.disconnect();
-    super.dispose();
   }
 
   Future<void> _refreshMap() async {
@@ -218,7 +161,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
         ),
       );
     }
-
     return Column(
       children: [
         Expanded(
@@ -259,6 +201,34 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                           ),
                         ),
                       ],
+                    ),
+                  if (_users.isNotEmpty)
+                    MarkerLayer(
+                      markers: _users.map((user) {
+                        return Marker(
+                          point: LatLng(user.lat, user.lng),
+                          width: 40,
+                          height: 40,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: Center(
+                              child: Text(
+                                user.username.isNotEmpty
+                                    ? user.username[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
                   if (_activeShifts.isNotEmpty)
                     MarkerLayer(
@@ -430,7 +400,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                             final timeAgo = shift.timestamp != null
                                 ? _formatTimeAgo(shift.timestamp!)
                                 : 'Данные не обновлялись';
-
                             Color statusColor = Colors.grey;
                             if (shift.hasLocation) {
                               final now = DateTime.now();

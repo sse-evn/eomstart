@@ -4,9 +4,10 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
-
 import 'package:micro_mobility_app/settings_provider.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
+import 'package:micro_mobility_app/services/websocket/global_websocket_service.dart';
+import 'package:micro_mobility_app/services/websocket/location_tracking_service.dart';
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/screens/auth_screen/pending_screen.dart';
 import 'package:micro_mobility_app/screens/dashboard_screen.dart';
@@ -17,7 +18,6 @@ import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
 import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.dart';
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 import 'package:micro_mobility_app/screens/splash/splash_screen.dart';
-
 import 'providers/shift_provider.dart';
 import 'config.dart';
 
@@ -30,6 +30,10 @@ void main() async {
   final _apiService = ApiService();
   final _prefs = await SharedPreferences.getInstance();
 
+  // Инициализируем глобальные сервисы
+  final _globalWebSocketService = GlobalWebSocketService();
+  final _locationTrackingService = LocationTrackingService();
+
   runApp(
     MultiProvider(
       providers: [
@@ -41,6 +45,10 @@ void main() async {
             prefs: _prefs,
           ),
         ),
+        // Добавляем глобальные сервисы в провайдеры
+        Provider<GlobalWebSocketService>.value(value: _globalWebSocketService),
+        Provider<LocationTrackingService>.value(
+            value: _locationTrackingService),
       ],
       child: MyApp(),
     ),
@@ -53,12 +61,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Оператор микромобильности',
       theme: ThemeData(
-        // ✅ Устанавливаем зелёную схему цветов
         colorScheme: ColorScheme.fromSeed(
             seedColor: Colors.green[700]!, brightness: Brightness.light),
         scaffoldBackgroundColor: Colors.grey[100],
         appBarTheme: AppBarTheme(
-          // backgroundColor: Colors.green[700], // ✅ Зелёный AppBar
           foregroundColor: Colors.white,
           elevation: 1,
           titleTextStyle: const TextStyle(

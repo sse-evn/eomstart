@@ -13,7 +13,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:micro_mobility_app/models/location.dart';
 import 'package:micro_mobility_app/models/user_shift_location.dart';
-import 'package:micro_mobility_app/services/websocket_service.dart';
+import 'package:micro_mobility_app/services/websocket/global_websocket_service.dart';
+import 'package:micro_mobility_app/services/websocket/location_tracking_service.dart';
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart';
 
@@ -38,20 +39,57 @@ class _MapScreenState extends State<MapScreen> {
   bool _showParkingZones = true;
   bool _showSpeedLimitZones = true;
   bool _showBoundaries = true;
-  late WebSocketService _webSocketService;
-  bool _isWebSocketConnected = false;
-  Timer? _locationSendTimer;
+  late GlobalWebSocketService _globalWebSocketService;
+  late LocationTrackingService _locationTrackingService;
   StreamSubscription<Location>? _locationSubscription;
   bool _connectionError = false;
   String _connectionErrorMessage = '';
+  List<Location> _users = [];
+  List<UserShiftLocation> _activeShifts = [];
+  bool _isWebSocketConnected = false;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
+    _globalWebSocketService =
+        Provider.of<GlobalWebSocketService>(context, listen: false);
+    _locationTrackingService =
+        Provider.of<LocationTrackingService>(context, listen: false);
+    _globalWebSocketService.addLocationsCallback(_updateUsers);
+    _globalWebSocketService.addShiftsCallback(_updateShifts);
+    _globalWebSocketService.addConnectionCallback(_updateConnectionStatus);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initMap();
     });
+  }
+
+  @override
+  void dispose() {
+    _globalWebSocketService.removeLocationsCallback(_updateUsers);
+    _globalWebSocketService.removeShiftsCallback(_updateShifts);
+    _globalWebSocketService.removeConnectionCallback(_updateConnectionStatus);
+    _locationSubscription?.cancel();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  void _updateUsers(List<Location> users) {
+    if (mounted) {
+      setState(() => _users = users);
+    }
+  }
+
+  void _updateShifts(List<UserShiftLocation> shifts) {
+    if (mounted) {
+      setState(() => _activeShifts = shifts);
+    }
+  }
+
+  void _updateConnectionStatus(bool isConnected) {
+    if (mounted) {
+      setState(() => _isWebSocketConnected = isConnected);
+    }
   }
 
   Future<void> _initMap() async {
@@ -59,7 +97,7 @@ class _MapScreenState extends State<MapScreen> {
       await _fetchCurrentLocation();
       await _loadAvailableMaps();
       await _loadAndParseGeoJson();
-      await _connectWebSocket();
+      await _locationTrackingService.init(context);
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -96,81 +134,6 @@ class _MapScreenState extends State<MapScreen> {
         );
       }
     }
-  }
-
-  Future<void> _connectWebSocket() async {
-    final token = await _storage.read(key: 'jwt_token');
-    if (token == null) return;
-
-    final provider = Provider.of<ShiftProvider>(context, listen: false);
-    final username = provider.currentUsername ?? 'worker';
-    final userId = provider.activeShift?.userId ?? 123;
-
-    _webSocketService = WebSocketService(
-      onLocationsUpdated: (users) {
-        debugPrint("MapScreen: Получен список онлайн пользователей");
-      },
-      onActiveShiftsUpdated: (shifts) {
-        debugPrint("MapScreen: Получен список активных смен");
-      },
-    );
-
-    try {
-      await _webSocketService.connect();
-      _startPeriodicLocationSending(userId, username);
-
-      if (_currentLocation != null) {
-        final location = Location(
-          userID: userId,
-          username: username,
-          lat: _currentLocation!.latitude,
-          lng: _currentLocation!.longitude,
-          timestamp: DateTime.now(),
-        );
-        _webSocketService.sendLocation(location);
-      }
-
-      if (mounted) {
-        setState(() {
-          _isWebSocketConnected = true;
-          _connectionError = false;
-          _connectionErrorMessage = '';
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isWebSocketConnected = false;
-          _connectionError = true;
-          _connectionErrorMessage = e.toString();
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка подключения WebSocket: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    }
-  }
-
-  void _startPeriodicLocationSending(int userId, String username) {
-    _locationSendTimer?.cancel();
-    _locationSendTimer =
-        Timer.periodic(const Duration(seconds: 20), (timer) async {
-      if (_webSocketService.isConnected && _currentLocation != null) {
-        final location = Location(
-          userID: userId,
-          username: username,
-          lat: _currentLocation!.latitude,
-          lng: _currentLocation!.longitude,
-          timestamp: DateTime.now(),
-        );
-        _webSocketService.sendLocation(location);
-      }
-    });
   }
 
   Future<void> _loadAvailableMaps() async {
@@ -309,15 +272,6 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   @override
-  void dispose() {
-    _locationSendTimer?.cancel();
-    _locationSubscription?.cancel();
-    _webSocketService.disconnect();
-    _mapController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -339,7 +293,6 @@ class _MapScreenState extends State<MapScreen> {
                   : _connectionError
                       ? 'Ошибка подключения: $_connectionErrorMessage'
                       : 'WebSocket отключен';
-
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(message),
@@ -443,6 +396,72 @@ class _MapScreenState extends State<MapScreen> {
                               ),
                             ],
                           ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              if (_users.isNotEmpty)
+                MarkerLayer(
+                  markers: _users.map((user) {
+                    return Marker(
+                      point: LatLng(user.lat, user.lng),
+                      width: 40,
+                      height: 40,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: Center(
+                          child: Text(
+                            user.username.isNotEmpty
+                                ? user.username[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              if (_activeShifts.isNotEmpty)
+                MarkerLayer(
+                  markers: _activeShifts
+                      .where((shift) => shift.hasLocation)
+                      .map((shift) {
+                    return Marker(
+                      point: LatLng(shift.lat!, shift.lng!),
+                      width: 60,
+                      height: 30,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white, width: 1.5),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black45,
+                              blurRadius: 3,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          shift.username,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     );
