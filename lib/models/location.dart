@@ -16,11 +16,11 @@ class Location {
 
   factory Location.fromJson(Map<String, dynamic> json) {
     return Location(
-      userID: json['user_id'] as int,
-      username: json['username'] as String,
-      lat: json['lat'] as double,
-      lng: json['lng'] as double,
-      timestamp: DateTime.parse(json['timestamp'] as String),
+      userID: json['user_id'],
+      username: json['username'],
+      lat: json['lat'],
+      lng: json['lng'],
+      timestamp: DateTime.parse(json['timestamp']),
     );
   }
 

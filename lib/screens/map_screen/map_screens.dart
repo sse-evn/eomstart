@@ -1,4 +1,3 @@
-// lib/screens/map_screen/map_screens.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -13,13 +12,13 @@ import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:micro_mobility_app/models/location.dart';
+import 'package:micro_mobility_app/models/user_shift_location.dart';
 import 'package:micro_mobility_app/services/websocket_service.dart';
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart';
 
 class MapScreen extends StatefulWidget {
   final File? customGeoJsonFile;
-
   const MapScreen({super.key, this.customGeoJsonFile});
 
   @override
@@ -35,15 +34,16 @@ class _MapScreenState extends State<MapScreen> {
   List<dynamic> _availableMaps = [];
   int _selectedMapId = -1;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
-
   bool _showRestrictedZones = true;
   bool _showParkingZones = true;
   bool _showSpeedLimitZones = true;
   bool _showBoundaries = true;
-
   late WebSocketService _webSocketService;
   bool _isWebSocketConnected = false;
   Timer? _locationSendTimer;
+  StreamSubscription<Location>? _locationSubscription;
+  bool _connectionError = false;
+  String _connectionErrorMessage = '';
 
   @override
   void initState() {
@@ -67,10 +67,12 @@ class _MapScreenState extends State<MapScreen> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка инициализации: $e')),
-          );
+          _connectionError = true;
+          _connectionErrorMessage = e.toString();
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка инициализации: $e')),
+        );
       }
     }
   }
@@ -100,14 +102,18 @@ class _MapScreenState extends State<MapScreen> {
     final token = await _storage.read(key: 'jwt_token');
     if (token == null) return;
 
-    // === ПОЛУЧАЕМ РЕАЛЬНЫЕ ДАННЫЕ ИЗ PROVIDER ===
     final provider = Provider.of<ShiftProvider>(context, listen: false);
     final username = provider.currentUsername ?? 'worker';
     final userId = provider.activeShift?.userId ?? 123;
 
-    _webSocketService = WebSocketService(onLocationsUpdated: (users) {
-      debugPrint("MapScreen: Получен список онлайн пользователей");
-    });
+    _webSocketService = WebSocketService(
+      onLocationsUpdated: (users) {
+        debugPrint("MapScreen: Получен список онлайн пользователей");
+      },
+      onActiveShiftsUpdated: (shifts) {
+        debugPrint("MapScreen: Получен список активных смен");
+      },
+    );
 
     try {
       await _webSocketService.connect();
@@ -125,13 +131,26 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       if (mounted) {
-        setState(() => _isWebSocketConnected = true);
+        setState(() {
+          _isWebSocketConnected = true;
+          _connectionError = false;
+          _connectionErrorMessage = '';
+        });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isWebSocketConnected = false);
+        setState(() {
+          _isWebSocketConnected = false;
+          _connectionError = true;
+          _connectionErrorMessage = e.toString();
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка WebSocket: $e')),
+          SnackBar(
+            content: Text('Ошибка подключения WebSocket: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     }
@@ -165,7 +184,6 @@ class _MapScreenState extends State<MapScreen> {
             'Content-Type': 'application/json',
           },
         );
-
         if (response.statusCode == 200) {
           final dynamic body = jsonDecode(response.body);
           if (body is List) {
@@ -194,7 +212,6 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _loadAndParseGeoJson() async {
     try {
       String geoJsonString;
-
       if (widget.customGeoJsonFile != null) {
         geoJsonString = await widget.customGeoJsonFile!.readAsString();
       } else if (_selectedMapId != -1) {
@@ -211,7 +228,6 @@ class _MapScreenState extends State<MapScreen> {
       } else {
         throw Exception('Нет доступных карт');
       }
-
       _geoJsonParser.parseGeoJsonAsString(geoJsonString);
       if (mounted) setState(() {});
     } catch (e) {
@@ -234,19 +250,16 @@ class _MapScreenState extends State<MapScreen> {
             'Content-Type': 'application/json',
           },
         );
-
         if (response.statusCode == 200) {
           final dynamic body = jsonDecode(response.body);
           if (body is Map<String, dynamic> && body.containsKey('file_name')) {
             final fileName = body['file_name'] as String;
             final fileUrl =
                 'https://eom-sharing.duckdns.org/api/admin/maps/files/$fileName';
-
             final localFile = await _getLocalMapFile(mapId);
             if (localFile != null && await localFile.exists()) {
               return await localFile.readAsString();
             }
-
             final fileResponse = await http.get(
               Uri.parse(fileUrl),
               headers: {
@@ -254,7 +267,6 @@ class _MapScreenState extends State<MapScreen> {
                 'Content-Type': 'application/geo+json',
               },
             );
-
             if (fileResponse.statusCode == 200) {
               await _saveMapFileLocally(mapId, fileResponse.body);
               return fileResponse.body;
@@ -264,13 +276,11 @@ class _MapScreenState extends State<MapScreen> {
       }
     } catch (e) {
       debugPrint('Ошибка загрузки GeoJSON с сервера: $e');
-
       final localFile = await _getLocalMapFile(mapId);
       if (localFile != null && await localFile.exists()) {
         return await localFile.readAsString();
       }
     }
-
     throw Exception('Не удалось загрузить карту');
   }
 
@@ -301,6 +311,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _locationSendTimer?.cancel();
+    _locationSubscription?.cancel();
     _webSocketService.disconnect();
     _mapController.dispose();
     super.dispose();
@@ -315,15 +326,25 @@ class _MapScreenState extends State<MapScreen> {
         actions: [
           IconButton(
             icon: Icon(
-              _isWebSocketConnected ? Icons.wifi : Icons.wifi_off,
-              color: _isWebSocketConnected ? Colors.green : Colors.red,
+              _isWebSocketConnected
+                  ? Icons.wifi
+                  : (_connectionError ? Icons.wifi_off : Icons.wifi_find),
+              color: _isWebSocketConnected
+                  ? Colors.green
+                  : (_connectionError ? Colors.red : Colors.orange),
             ),
             onPressed: () {
+              String message = _isWebSocketConnected
+                  ? 'WebSocket подключен'
+                  : _connectionError
+                      ? 'Ошибка подключения: $_connectionErrorMessage'
+                      : 'WebSocket отключен';
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(_isWebSocketConnected
-                      ? 'WebSocket подключен'
-                      : 'WebSocket отключен'),
+                  content: Text(message),
+                  backgroundColor:
+                      _isWebSocketConnected ? Colors.green : Colors.red,
                 ),
               );
             },
@@ -480,7 +501,6 @@ class _MapScreenState extends State<MapScreen> {
         _selectedMapId = newMapId;
         _isLoading = true;
       });
-
       try {
         final geoJsonString = await _loadGeoJsonFromServer(newMapId);
         _geoJsonParser.parseGeoJsonAsString(geoJsonString);
@@ -510,14 +530,12 @@ class _MapScreenState extends State<MapScreen> {
             'Content-Type': 'application/json',
           },
         );
-
         if (response.statusCode == 200) {
           final dynamic body = jsonDecode(response.body);
           if (body is Map<String, dynamic> && body.containsKey('file_name')) {
             final fileName = body['file_name'] as String;
             final fileUrl =
                 'https://eom-sharing.duckdns.org/api/admin/maps/files/$fileName';
-
             final fileResponse = await http.get(
               Uri.parse(fileUrl),
               headers: {
@@ -525,7 +543,6 @@ class _MapScreenState extends State<MapScreen> {
                 'Content-Type': 'application/geo+json',
               },
             );
-
             if (fileResponse.statusCode == 200) {
               await _saveMapFileLocally(mapId, fileResponse.body);
               if (mounted) {

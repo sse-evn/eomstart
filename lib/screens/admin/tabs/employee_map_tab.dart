@@ -1,4 +1,3 @@
-// lib/screens/admin/tabs/employee_map_tab.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -7,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:micro_mobility_app/models/location.dart';
+import 'package:micro_mobility_app/models/user_shift_location.dart';
 import 'package:micro_mobility_app/services/websocket_service.dart';
 import 'package:micro_mobility_app/utils/map_app_constants.dart'
     show AppConstants;
@@ -23,13 +23,15 @@ class EmployeeMapTab extends StatefulWidget {
 class _EmployeeMapTabState extends State<EmployeeMapTab> {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   late WebSocketService _webSocketService;
-  List<Location> _onlineUsers = [];
+  List<UserShiftLocation> _activeShifts = [];
   LatLng? _currentLocation;
   bool _isLoading = true;
   String _error = '';
   bool _isRefreshing = false;
   late MapController _mapController;
   Timer? _locationUpdateTimer;
+  bool _connectionError = false;
+  String _connectionErrorMessage = '';
 
   @override
   void initState() {
@@ -52,6 +54,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
         setState(() {
           _isLoading = false;
           _error = e.toString();
+          _connectionError = true;
+          _connectionErrorMessage = e.toString();
         });
       }
     }
@@ -77,29 +81,34 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
     final token = await _storage.read(key: 'jwt_token');
     if (token == null) {
       if (mounted) {
-        setState(() => _error = 'Токен не найден');
+        setState(() {
+          _error = 'Токен не найден';
+          _connectionError = true;
+          _connectionErrorMessage = 'Токен не найден';
+        });
       }
       return;
     }
 
-    // === ПОЛУЧАЕМ РЕАЛЬНЫЕ ДАННЫЕ ИЗ PROVIDER ===
     final provider = Provider.of<ShiftProvider>(context, listen: false);
     final username = provider.currentUsername ?? 'admin';
     final userId = provider.activeShift?.userId ?? 3;
 
-    _webSocketService = WebSocketService(onLocationsUpdated: (users) {
-      if (mounted) {
-        setState(() => _onlineUsers = users);
-      }
-    });
+    _webSocketService = WebSocketService(
+      onLocationsUpdated: (users) {
+        debugPrint("MapScreen: Получен список онлайн пользователей");
+      },
+      onActiveShiftsUpdated: (shifts) {
+        if (mounted) {
+          setState(() => _activeShifts = shifts);
+        }
+      },
+    );
 
     try {
       await _webSocketService.connect();
-
-      // Запускаем периодическую отправку
       _startPeriodicLocationUpdates(userId, username);
 
-      // Отправляем начальную позицию
       if (_currentLocation != null) {
         final myLocation = Location(
           userID: userId,
@@ -110,9 +119,29 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
         );
         _webSocketService.sendLocation(myLocation);
       }
+
+      if (mounted) {
+        setState(() {
+          _isWebSocketConnected = true;
+          _connectionError = false;
+          _connectionErrorMessage = '';
+        });
+      }
     } catch (e) {
       if (mounted) {
-        setState(() => _error = 'Ошибка подключения: $e');
+        setState(() {
+          _error = 'Ошибка подключения: $e';
+          _connectionError = true;
+          _connectionErrorMessage = e.toString();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка подключения WebSocket: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     }
   }
@@ -145,7 +174,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
   Future<void> _refreshMap() async {
     if (_isRefreshing || !mounted) return;
     setState(() => _isRefreshing = true);
-
     try {
       await _fetchCurrentLocation();
       if (mounted) {
@@ -169,7 +197,27 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_error.isNotEmpty) return Center(child: Text('Ошибка: $_error'));
+    if (_error.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Ошибка: $_error'),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                  _error = '';
+                });
+                _initMap();
+              },
+              child: const Text('Попробовать снова'),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Column(
       children: [
@@ -212,11 +260,13 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                         ),
                       ],
                     ),
-                  if (_onlineUsers.isNotEmpty)
+                  if (_activeShifts.isNotEmpty)
                     MarkerLayer(
-                      markers: _onlineUsers.map((u) {
+                      markers: _activeShifts
+                          .where((shift) => shift.hasLocation)
+                          .map((shift) {
                         return Marker(
-                          point: LatLng(u.lat, u.lng),
+                          point: LatLng(shift.lat!, shift.lng!),
                           width: 60,
                           height: 30,
                           child: Container(
@@ -236,7 +286,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                               ],
                             ),
                             child: Text(
-                              u.username,
+                              shift.username,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
@@ -250,6 +300,44 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                       }).toList(),
                     ),
                 ],
+              ),
+              Positioned(
+                top: 16,
+                right: 16,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _isWebSocketConnected
+                        ? Colors.green
+                        : (_connectionError ? Colors.red : Colors.orange),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isWebSocketConnected
+                            ? Icons.wifi
+                            : (_connectionError
+                                ? Icons.wifi_off
+                                : Icons.wifi_find),
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _isWebSocketConnected
+                            ? 'Подключено'
+                            : (_connectionError ? 'Ошибка' : 'Подключение...'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               Positioned(
                 bottom: 20,
@@ -296,7 +384,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                           color: Colors.white, size: 18),
                       const SizedBox(width: 8),
                       Text(
-                        'Онлайн: ${_onlineUsers.length}',
+                        'Активные смены: ${_activeShifts.length}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -324,30 +412,50 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                   ),
                 ),
                 Expanded(
-                  child: _onlineUsers.isEmpty
+                  child: _activeShifts.isEmpty
                       ? const Center(
                           child: Text(
-                            'Нет подключённых пользователей',
+                            'Нет активных смен',
                             style: TextStyle(color: Colors.grey),
                           ),
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.all(8),
-                          itemCount: _onlineUsers.length,
+                          itemCount: _activeShifts.length,
                           itemBuilder: (context, index) {
-                            final user = _onlineUsers[index];
-                            final timeAgo = _formatTimeAgo(user.timestamp);
+                            final shift = _activeShifts[index];
+                            final locationStatus = shift.hasLocation
+                                ? '📍 ${shift.lat!.toStringAsFixed(5)}, ${shift.lng!.toStringAsFixed(5)}'
+                                : 'Местоположение недоступно';
+                            final timeAgo = shift.timestamp != null
+                                ? _formatTimeAgo(shift.timestamp!)
+                                : 'Данные не обновлялись';
+
+                            Color statusColor = Colors.grey;
+                            if (shift.hasLocation) {
+                              final now = DateTime.now();
+                              final diff = now.difference(shift.timestamp!);
+                              if (diff.inMinutes < 5) {
+                                statusColor = Colors.green;
+                              } else if (diff.inMinutes < 15) {
+                                statusColor = Colors.yellow;
+                              } else {
+                                statusColor = Colors.orange;
+                              }
+                            }
                             return ListTile(
                               leading: Container(
                                 width: 40,
                                 height: 40,
-                                decoration: const BoxDecoration(
-                                  color: Colors.green,
+                                decoration: BoxDecoration(
+                                  color: shift.hasLocation
+                                      ? Colors.green
+                                      : Colors.grey,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Center(
                                   child: Text(
-                                    user.username[0].toUpperCase(),
+                                    shift.username[0].toUpperCase(),
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
@@ -356,26 +464,32 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                                 ),
                               ),
                               title: Text(
-                                user.username,
+                                shift.username,
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold),
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                      '📍 ${user.lat.toStringAsFixed(5)}, ${user.lng.toStringAsFixed(5)}'),
+                                  Text('Позиция: ${shift.position}'),
+                                  Text('Зона: ${shift.zone}'),
+                                  Text(locationStatus),
                                   Text('🕒 $timeAgo',
                                       style: const TextStyle(fontSize: 12)),
                                 ],
                               ),
-                              trailing: const Icon(Icons.circle,
-                                  color: Colors.green, size: 12),
+                              trailing: Icon(
+                                Icons.circle,
+                                color: statusColor,
+                                size: 12,
+                              ),
                               onTap: () {
-                                _mapController.move(
-                                  LatLng(user.lat, user.lng),
-                                  15.0,
-                                );
+                                if (shift.hasLocation) {
+                                  _mapController.move(
+                                    LatLng(shift.lat!, shift.lng!),
+                                    15.0,
+                                  );
+                                }
                               },
                             );
                           },
