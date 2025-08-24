@@ -1,5 +1,7 @@
+// lib/config/app_config.dart
+
 class AppConfig {
-  /// Основной хост бэкенда (без пробелов!)
+  /// Основной хост бэкенда (убраны лишние пробелы!)
   static const String backendHost = 'https://eom-sharing.duckdns.org';
 
   /// Базовый путь API
@@ -91,6 +93,10 @@ class AppConfig {
 
   /// URL получения карты по ID
   static String getMapByIdUrl(int mapId) => '$adminMapsUrl/$mapId';
+
+  /// URL получения файла карты
+  static String getMapFileUrl(String fileName) =>
+      '$adminMapsUrl/files/$fileName';
 
   /// URL удаления карты
   static String deleteMapUrl(int mapId) => '$adminMapsUrl/$mapId';

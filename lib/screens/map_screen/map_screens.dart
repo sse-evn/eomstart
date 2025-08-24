@@ -1,274 +1,37 @@
-import 'dart:async';
-import 'dart:io';
+// lib/screens/map_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:micro_mobility_app/services/location_service.dart';
 import 'package:micro_mobility_app/utils/map_app_constants.dart';
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
-import 'package:micro_mobility_app/models/location.dart';
-import 'package:micro_mobility_app/models/user_shift_location.dart';
-import 'package:micro_mobility_app/services/websocket/global_websocket_service.dart';
-import 'package:micro_mobility_app/services/websocket/location_tracking_service.dart';
-import 'package:provider/provider.dart';
-import 'package:micro_mobility_app/providers/shift_provider.dart';
+import 'package:micro_mobility_app/services/map_load/map_data_loader.dart';
 
 class MapScreen extends StatefulWidget {
-  final File? customGeoJsonFile;
-  const MapScreen({super.key, this.customGeoJsonFile});
+  final String? initialMapId; // опционально: начальная карта
+  const MapScreen({super.key, this.initialMapId});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
 
 class _MapScreenState extends State<MapScreen> {
-  LatLng? _currentLocation;
-  final LocationService _locationService = LocationService();
-  final GeoJsonParser _geoJsonParser = GeoJsonParser();
-  late final MapController _mapController;
-  bool _isLoading = false;
-  List<dynamic> _availableMaps = [];
-  int _selectedMapId = -1;
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  bool _showRestrictedZones = true;
-  bool _showParkingZones = true;
-  bool _showSpeedLimitZones = true;
-  bool _showBoundaries = true;
-  late GlobalWebSocketService _globalWebSocketService;
-  late LocationTrackingService _locationTrackingService;
-  StreamSubscription<Location>? _locationSubscription;
-  bool _connectionError = false;
-  String _connectionErrorMessage = '';
-  List<Location> _users = [];
-  List<UserShiftLocation> _activeShifts = [];
-  bool _isWebSocketConnected = false;
+  late MapLogic logic;
 
   @override
   void initState() {
     super.initState();
-    _mapController = MapController();
-    _globalWebSocketService =
-        Provider.of<GlobalWebSocketService>(context, listen: false);
-    _locationTrackingService =
-        Provider.of<LocationTrackingService>(context, listen: false);
-    _globalWebSocketService.addLocationsCallback(_updateUsers);
-    _globalWebSocketService.addShiftsCallback(_updateShifts);
-    _globalWebSocketService.addConnectionCallback(_updateConnectionStatus);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initMap();
-    });
+    logic = MapLogic(context);
+    logic.onStateChanged = () {
+      if (mounted) setState(() {});
+    };
+    logic.init();
   }
 
   @override
   void dispose() {
-    _globalWebSocketService.removeLocationsCallback(_updateUsers);
-    _globalWebSocketService.removeShiftsCallback(_updateShifts);
-    _globalWebSocketService.removeConnectionCallback(_updateConnectionStatus);
-    _locationSubscription?.cancel();
-    _mapController.dispose();
+    logic.dispose();
     super.dispose();
-  }
-
-  void _updateUsers(List<Location> users) {
-    if (mounted) {
-      setState(() => _users = users);
-    }
-  }
-
-  void _updateShifts(List<UserShiftLocation> shifts) {
-    if (mounted) {
-      setState(() => _activeShifts = shifts);
-    }
-  }
-
-  void _updateConnectionStatus(bool isConnected) {
-    if (mounted) {
-      setState(() => _isWebSocketConnected = isConnected);
-    }
-  }
-
-  Future<void> _initMap() async {
-    try {
-      await _fetchCurrentLocation();
-      await _loadAvailableMaps();
-      await _loadAndParseGeoJson();
-      await _locationTrackingService.init(context);
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _connectionError = true;
-          _connectionErrorMessage = e.toString();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка инициализации: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _fetchCurrentLocation() async {
-    setState(() => _isLoading = true);
-    try {
-      final position = await _locationService.determinePosition();
-      if (mounted) {
-        setState(() {
-          _currentLocation = LatLng(position.latitude, position.longitude);
-          _isLoading = false;
-          _mapController.move(_currentLocation!, _mapController.camera.zoom);
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ошибка получения местоположения')),
-        );
-      }
-    }
-  }
-
-  Future<void> _loadAvailableMaps() async {
-    try {
-      final token = await _storage.read(key: 'jwt_token');
-      if (token != null) {
-        final response = await http.get(
-          Uri.parse('https://eom-sharing.duckdns.org/api/admin/maps'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-        if (response.statusCode == 200) {
-          final dynamic body = jsonDecode(response.body);
-          if (body is List) {
-            setState(() {
-              _availableMaps = body;
-              if (_selectedMapId == -1 && _availableMaps.isNotEmpty) {
-                final firstMap = _availableMaps.first;
-                if (firstMap is Map<String, dynamic> &&
-                    firstMap.containsKey('id')) {
-                  _selectedMapId = firstMap['id'] as int;
-                }
-              }
-            });
-          }
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки списка карт: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _loadAndParseGeoJson() async {
-    try {
-      String geoJsonString;
-      if (widget.customGeoJsonFile != null) {
-        geoJsonString = await widget.customGeoJsonFile!.readAsString();
-      } else if (_selectedMapId != -1) {
-        geoJsonString = await _loadGeoJsonFromServer(_selectedMapId);
-      } else if (_availableMaps.isNotEmpty) {
-        final firstMap = _availableMaps.first;
-        if (firstMap is Map<String, dynamic> && firstMap.containsKey('id')) {
-          final mapId = firstMap['id'] as int;
-          setState(() => _selectedMapId = mapId);
-          geoJsonString = await _loadGeoJsonFromServer(mapId);
-        } else {
-          throw Exception('Нет доступных карт');
-        }
-      } else {
-        throw Exception('Нет доступных карт');
-      }
-      _geoJsonParser.parseGeoJsonAsString(geoJsonString);
-      if (mounted) setState(() {});
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки GeoJSON: $e')),
-        );
-      }
-    }
-  }
-
-  Future<String> _loadGeoJsonFromServer(int mapId) async {
-    try {
-      final token = await _storage.read(key: 'jwt_token');
-      if (token != null) {
-        final response = await http.get(
-          Uri.parse('https://eom-sharing.duckdns.org/api/admin/maps/$mapId'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-        if (response.statusCode == 200) {
-          final dynamic body = jsonDecode(response.body);
-          if (body is Map<String, dynamic> && body.containsKey('file_name')) {
-            final fileName = body['file_name'] as String;
-            final fileUrl =
-                'https://eom-sharing.duckdns.org/api/admin/maps/files/$fileName';
-            final localFile = await _getLocalMapFile(mapId);
-            if (localFile != null && await localFile.exists()) {
-              return await localFile.readAsString();
-            }
-            final fileResponse = await http.get(
-              Uri.parse(fileUrl),
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/geo+json',
-              },
-            );
-            if (fileResponse.statusCode == 200) {
-              await _saveMapFileLocally(mapId, fileResponse.body);
-              return fileResponse.body;
-            }
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Ошибка загрузки GeoJSON с сервера: $e');
-      final localFile = await _getLocalMapFile(mapId);
-      if (localFile != null && await localFile.exists()) {
-        return await localFile.readAsString();
-      }
-    }
-    throw Exception('Не удалось загрузить карту');
-  }
-
-  Future<File?> _getLocalMapFile(int mapId) async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final fileName = 'map_$mapId.geojson';
-      final filePath = path.join(dir.path, fileName);
-      return File(filePath);
-    } catch (e) {
-      debugPrint('Ошибка получения пути к локальному файлу: $e');
-      return null;
-    }
-  }
-
-  Future<void> _saveMapFileLocally(int mapId, String content) async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final fileName = 'map_$mapId.geojson';
-      final filePath = path.join(dir.path, fileName);
-      final file = File(filePath);
-      await file.writeAsString(content);
-    } catch (e) {
-      debugPrint('Ошибка сохранения файла локально: $e');
-    }
   }
 
   @override
@@ -280,34 +43,34 @@ class _MapScreenState extends State<MapScreen> {
         actions: [
           IconButton(
             icon: Icon(
-              _isWebSocketConnected
+              logic.isWebSocketConnected
                   ? Icons.wifi
-                  : (_connectionError ? Icons.wifi_off : Icons.wifi_find),
-              color: _isWebSocketConnected
+                  : (logic.connectionError ? Icons.wifi_off : Icons.wifi_find),
+              color: logic.isWebSocketConnected
                   ? Colors.green
-                  : (_connectionError ? Colors.red : Colors.orange),
+                  : (logic.connectionError ? Colors.red : Colors.orange),
             ),
             onPressed: () {
-              String message = _isWebSocketConnected
+              String message = logic.isWebSocketConnected
                   ? 'WebSocket подключен'
-                  : _connectionError
-                      ? 'Ошибка подключения: $_connectionErrorMessage'
+                  : logic.connectionError
+                      ? 'Ошибка подключения: ${logic.connectionErrorMessage}'
                       : 'WebSocket отключен';
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(message),
                   backgroundColor:
-                      _isWebSocketConnected ? Colors.green : Colors.red,
+                      logic.isWebSocketConnected ? Colors.green : Colors.red,
                 ),
               );
             },
           ),
-          if (_availableMaps.isNotEmpty)
+          if (logic.availableMaps.isNotEmpty)
             PopupMenuButton<int>(
               icon: const Icon(Icons.map),
-              onSelected: _onMapChanged,
+              onSelected: logic.onMapChanged,
               itemBuilder: (BuildContext context) {
-                return _availableMaps.map((map) {
+                return logic.availableMaps.map((map) {
                   if (map is Map<String, dynamic>) {
                     final id = map['id'] as int;
                     final city = map['city'] as String? ?? 'Неизвестный город';
@@ -315,17 +78,21 @@ class _MapScreenState extends State<MapScreen> {
                     final displayName =
                         description.isNotEmpty ? '$city - $description' : city;
                     return PopupMenuItem<int>(
-                        value: id, child: Text(displayName));
+                      value: id,
+                      child: Text(displayName),
+                    );
                   }
                   return const PopupMenuItem<int>(
-                      value: 0, child: Text('Некорректная карта'));
+                    value: 0,
+                    child: Text('Некорректная карта'),
+                  );
                 }).toList();
               },
             ),
-          if (_selectedMapId != -1)
+          if (logic.selectedMapId != -1)
             IconButton(
               icon: const Icon(Icons.download),
-              onPressed: () => _downloadMapLocally(_selectedMapId),
+              onPressed: () => logic.downloadMapLocally(logic.selectedMapId),
               tooltip: 'Сохранить карту локально',
             ),
         ],
@@ -333,9 +100,10 @@ class _MapScreenState extends State<MapScreen> {
       body: Stack(
         children: [
           FlutterMap(
-            mapController: _mapController,
+            mapController: logic.mapController,
             options: MapOptions(
-              initialCenter: _currentLocation ?? AppConstants.defaultMapCenter,
+              initialCenter:
+                  logic.currentLocation ?? AppConstants.defaultMapCenter,
               initialZoom: AppConstants.defaultMapZoom,
               minZoom: AppConstants.minZoom,
               maxZoom: AppConstants.maxZoom,
@@ -350,9 +118,10 @@ class _MapScreenState extends State<MapScreen> {
                 userAgentPackageName: AppConstants.userAgentPackageName,
                 retinaMode: MediaQuery.of(context).devicePixelRatio > 1.0,
               ),
-              if (_geoJsonParser.polygons.isNotEmpty && _showRestrictedZones)
+              if (logic.geoJsonParser.polygons.isNotEmpty &&
+                  logic.showRestrictedZones)
                 PolygonLayer(
-                  polygons: _geoJsonParser.polygons.map((polygon) {
+                  polygons: logic.geoJsonParser.polygons.map((polygon) {
                     return Polygon(
                       points: polygon.points,
                       borderColor: Colors.red,
@@ -361,9 +130,10 @@ class _MapScreenState extends State<MapScreen> {
                     );
                   }).toList(),
                 ),
-              if (_geoJsonParser.polylines.isNotEmpty && _showBoundaries)
+              if (logic.geoJsonParser.polylines.isNotEmpty &&
+                  logic.showBoundaries)
                 PolylineLayer(
-                  polylines: _geoJsonParser.polylines.map((polyline) {
+                  polylines: logic.geoJsonParser.polylines.map((polyline) {
                     return Polyline(
                       points: polyline.points,
                       color: Colors.blue,
@@ -371,9 +141,10 @@ class _MapScreenState extends State<MapScreen> {
                     );
                   }).toList(),
                 ),
-              if (_geoJsonParser.markers.isNotEmpty)
+              if (logic.geoJsonParser.markers.isNotEmpty)
                 MarkerLayer(
-                  markers: _geoJsonParser.markers.asMap().entries.map((entry) {
+                  markers:
+                      logic.geoJsonParser.markers.asMap().entries.map((entry) {
                     final index = entry.key;
                     final marker = entry.value;
                     return Marker(
@@ -401,9 +172,9 @@ class _MapScreenState extends State<MapScreen> {
                     );
                   }).toList(),
                 ),
-              if (_users.isNotEmpty)
+              if (logic.users.isNotEmpty)
                 MarkerLayer(
-                  markers: _users.map((user) {
+                  markers: logic.users.map((user) {
                     return Marker(
                       point: LatLng(user.lat, user.lng),
                       width: 40,
@@ -429,9 +200,9 @@ class _MapScreenState extends State<MapScreen> {
                     );
                   }).toList(),
                 ),
-              if (_activeShifts.isNotEmpty)
+              if (logic.activeShifts.isNotEmpty)
                 MarkerLayer(
-                  markers: _activeShifts
+                  markers: logic.activeShifts
                       .where((shift) => shift.hasLocation)
                       .map((shift) {
                     return Marker(
@@ -467,11 +238,11 @@ class _MapScreenState extends State<MapScreen> {
                     );
                   }).toList(),
                 ),
-              if (_currentLocation != null)
+              if (logic.currentLocation != null)
                 MarkerLayer(
                   markers: [
                     Marker(
-                      point: _currentLocation!,
+                      point: logic.currentLocation!,
                       width: 16,
                       height: 16,
                       child: Container(
@@ -492,7 +263,7 @@ class _MapScreenState extends State<MapScreen> {
             child: FloatingActionButton(
               heroTag: 'layersFab',
               backgroundColor: Colors.green[700],
-              onPressed: _showLayerSettingsDialog,
+              onPressed: logic.showLayerSettingsDialog,
               child: const Icon(Icons.layers, color: Colors.white),
             ),
           ),
@@ -502,192 +273,15 @@ class _MapScreenState extends State<MapScreen> {
             child: FloatingActionButton(
               heroTag: 'locationFab',
               backgroundColor: Colors.green[700],
-              onPressed: _fetchCurrentLocation,
-              child: _isLoading
+              onPressed: logic.fetchCurrentLocation,
+              child: logic.isLoading
                   ? const CircularProgressIndicator(color: Colors.white)
                   : const Icon(Icons.my_location, color: Colors.white),
             ),
           ),
-          if (_isLoading) const Center(child: CircularProgressIndicator()),
+          if (logic.isLoading) const Center(child: CircularProgressIndicator()),
         ],
       ),
-    );
-  }
-
-  Future<void> _onMapChanged(int newMapId) async {
-    if (newMapId != _selectedMapId) {
-      setState(() {
-        _selectedMapId = newMapId;
-        _isLoading = true;
-      });
-      try {
-        final geoJsonString = await _loadGeoJsonFromServer(newMapId);
-        _geoJsonParser.parseGeoJsonAsString(geoJsonString);
-        if (mounted) setState(() {});
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка загрузки карты: $e')),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
-      }
-    }
-  }
-
-  Future<void> _downloadMapLocally(int mapId) async {
-    try {
-      final token = await _storage.read(key: 'jwt_token');
-      if (token != null) {
-        final response = await http.get(
-          Uri.parse('https://eom-sharing.duckdns.org/api/admin/maps/$mapId'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-        if (response.statusCode == 200) {
-          final dynamic body = jsonDecode(response.body);
-          if (body is Map<String, dynamic> && body.containsKey('file_name')) {
-            final fileName = body['file_name'] as String;
-            final fileUrl =
-                'https://eom-sharing.duckdns.org/api/admin/maps/files/$fileName';
-            final fileResponse = await http.get(
-              Uri.parse(fileUrl),
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/geo+json',
-              },
-            );
-            if (fileResponse.statusCode == 200) {
-              await _saveMapFileLocally(mapId, fileResponse.body);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                        'Карта успешно сохранена для оффлайн использования'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка сохранения карты: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _showLayerSettingsDialog() {
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setState) {
-            return Container(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Настройки слоев',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 20),
-                  SwitchListTile(
-                    title: const Text('Запретные зоны'),
-                    subtitle:
-                        const Text('Красные зоны (запрет на проезд/парковку)'),
-                    value: _showRestrictedZones,
-                    onChanged: (bool value) {
-                      setState(() {
-                        _showRestrictedZones = value;
-                      });
-                    },
-                    secondary: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  SwitchListTile(
-                    title: const Text('Зоны парковки'),
-                    subtitle: const Text('Розовые зоны (запрет на парковку)'),
-                    value: _showParkingZones,
-                    onChanged: (bool value) {
-                      setState(() {
-                        _showParkingZones = value;
-                      });
-                    },
-                    secondary: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.pink.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  SwitchListTile(
-                    title: const Text('Ограничения скорости'),
-                    subtitle: const Text(
-                        'Зеленые и желтые зоны (ограничение скорости)'),
-                    value: _showSpeedLimitZones,
-                    onChanged: (bool value) {
-                      setState(() {
-                        _showSpeedLimitZones = value;
-                      });
-                    },
-                    secondary: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Colors.green, Colors.yellow],
-                        ),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  SwitchListTile(
-                    title: const Text('Границы'),
-                    subtitle: const Text('Синие линии (граница рабочей зоны)'),
-                    value: _showBoundaries,
-                    onChanged: (bool value) {
-                      setState(() {
-                        _showBoundaries = value;
-                      });
-                    },
-                    secondary: Container(
-                      width: 24,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }
