@@ -109,6 +109,13 @@ class AppConfig {
   /// URL генерации смен
   static String get generateShiftsUrl => '$apiBaseUrl/admin/generate-shifts';
 
+  /// Ссылка на скачивание APK (Android)
+  static String get apkDownloadUrl =>
+      '$backendHost/uploads/app/app-release.apk';
+
+  /// Ссылка на страницу приложения (iOS)
+  static String get iosAppUrl => '$backendHost/app/your-app';
+
   /// Информация о текущем окружении (для отладки)
   static String get environmentInfo {
     final env = backendHost.contains('duckdns') ? 'DEV' : 'PROD';

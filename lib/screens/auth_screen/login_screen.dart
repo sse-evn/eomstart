@@ -10,11 +10,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
-class AppConfig {
-  static const String backendUrl = 'https://eom-sharing.duckdns.org';
-  static const String telegramLoginUrl = '$backendUrl/telegram-login.html';
-}
+import 'package:micro_mobility_app/config.dart'
+    as AppConfig; // ✅ Правильный импорт с префиксом
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -58,7 +55,6 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
       } catch (e) {
-        // Токен недействителен, продолжаем показывать экран логина
         debugPrint('Недействительный токен: $e');
       }
     }
@@ -99,15 +95,12 @@ class _LoginScreenState extends State<LoginScreen> {
       if (response.containsKey('token')) {
         final token = response['token'] as String;
 
-        // Сохраняем токен в SecureStorage
         await _storage.write(key: 'jwt_token', value: token);
 
-        // Обновляем провайдер
         final shiftProvider =
             Provider.of<ShiftProvider>(context, listen: false);
         await shiftProvider.setToken(token);
 
-        // Переходим к нужному экрану
         final role = (response['role'] ?? 'user').toString().toLowerCase();
         final nextRoute = role == 'superadmin' ? '/admin' : '/dashboard';
 
@@ -144,7 +137,9 @@ class _LoginScreenState extends State<LoginScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (request) async {
-            if (request.url.contains('${AppConfig.backendUrl}/auth_callback')) {
+            // ✅ Исправлено: используется AppConfig.backendHost
+            if (request.url
+                .contains('${AppConfig.AppConfig.backendHost}/auth_callback')) {
               await _handleTelegramAuth(request.url);
               return NavigationDecision.prevent;
             }
@@ -152,7 +147,8 @@ class _LoginScreenState extends State<LoginScreen> {
           },
         ),
       )
-      ..loadRequest(Uri.parse(AppConfig.telegramLoginUrl));
+      // ✅ Используем telegramLoginUrl из общего конфига
+      ..loadRequest(Uri.parse(AppConfig.AppConfig.telegramLoginUrl));
 
     if (controller.platform is AndroidWebViewController) {
       (controller.platform as AndroidWebViewController)
@@ -177,8 +173,9 @@ class _LoginScreenState extends State<LoginScreen> {
         throw Exception('Недостаточно данных');
       }
 
+      // ✅ Исправлено: backendHost
       final response = await http.post(
-        Uri.parse('${AppConfig.backendUrl}/api/auth/telegram'),
+        Uri.parse('${AppConfig.AppConfig.backendHost}/api/auth/telegram'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(authData),
       );
@@ -218,8 +215,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
+      // ✅ Исправлено: backendHost
       final response = await http.post(
-        Uri.parse('${AppConfig.backendUrl}/api/auth/login'),
+        Uri.parse('${AppConfig.AppConfig.backendHost}/api/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'username': _usernameController.text,
@@ -275,9 +273,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(
                       'Вход через Telegram',
                       style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green[800]),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[800],
+                      ),
                     ),
                     IconButton(
                       onPressed:
@@ -342,18 +341,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: SvgPicture.asset(
                     'assets/eom.svg',
                     height: 120,
-                    // color: isDarkMode ? Colors.white : Colors.green[800],
                   ),
                 ),
-
                 const SizedBox(height: 32),
 
                 // Карточка входа
                 Card(
                   elevation: 8,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                      borderRadius: BorderRadius.circular(20)),
                   color: isDarkMode ? Colors.grey[800] : Colors.white,
                   child: Padding(
                     padding: const EdgeInsets.all(32),
@@ -372,8 +368,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 32),
-
-                          // Поле имени пользователя
                           _buildTextField(
                             controller: _usernameController,
                             label: 'Имя пользователя',
@@ -381,12 +375,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             enabled: !_isLoading,
                           ),
                           const SizedBox(height: 20),
-
-                          // Поле пароля
                           _buildPasswordField(),
                           const SizedBox(height: 32),
-
-                          // Кнопка входа
                           SizedBox(
                             width: double.infinity,
                             height: 55,
@@ -394,16 +384,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.green[700],
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
+                                    borderRadius: BorderRadius.circular(16)),
                                 elevation: 4,
                               ),
                               onPressed:
                                   _isLoading ? null : _handleRegularLogin,
                               child: _isLoading
                                   ? const CircularProgressIndicator(
-                                      color: Colors.white,
-                                    )
+                                      color: Colors.white)
                                   : const Text(
                                       'ВОЙТИ',
                                       style: TextStyle(
@@ -415,16 +403,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 24),
-
-                          // Разделитель
                           Row(
                             children: [
                               const Expanded(
-                                child: Divider(
-                                  color: Colors.grey,
-                                  thickness: 1,
-                                ),
-                              ),
+                                  child: Divider(
+                                      color: Colors.grey, thickness: 1)),
                               Padding(
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 12),
@@ -439,16 +422,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const Expanded(
-                                child: Divider(
-                                  color: Colors.grey,
-                                  thickness: 1,
-                                ),
-                              ),
+                                  child: Divider(
+                                      color: Colors.grey, thickness: 1)),
                             ],
                           ),
                           const SizedBox(height: 24),
-
-                          // Кнопка Telegram
                           SizedBox(
                             width: double.infinity,
                             height: 55,
@@ -476,8 +454,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: OutlinedButton.styleFrom(
                                 side: BorderSide(color: Colors.blue[400]!),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
+                                    borderRadius: BorderRadius.circular(16)),
                               ),
                               onPressed:
                                   _isLoading ? null : _showTelegramAuthDialog,
@@ -488,10 +465,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
-                // Информация
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -504,10 +478,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: const Text(
                     'Введите свои учетные данные для доступа к системе',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
                   ),
                 ),
               ],
@@ -531,53 +502,35 @@ class _LoginScreenState extends State<LoginScreen> {
       controller: controller,
       enabled: enabled,
       validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Поле не может быть пустым';
-        }
+        if (value == null || value.isEmpty) return 'Поле не может быть пустым';
         return null;
       },
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(
-          color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
-        ),
-        prefixIcon: Icon(
-          icon,
-          color: Colors.green[700],
-        ),
+        labelStyle:
+            TextStyle(color: isDarkMode ? Colors.grey[400] : Colors.grey[700]),
+        prefixIcon: Icon(icon, color: Colors.green[700]),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!,
-          ),
+              color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Colors.green[700]!,
-            width: 2,
-          ),
+          borderSide: BorderSide(color: Colors.green[700]!, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Colors.red,
-            width: 2,
-          ),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Colors.red,
-            width: 2,
-          ),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
         ),
         filled: true,
         fillColor: isDarkMode ? Colors.grey[900] : Colors.grey[50],
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 20,
-          horizontal: 20,
-        ),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
       ),
     );
   }
@@ -591,23 +544,16 @@ class _LoginScreenState extends State<LoginScreen> {
       obscureText: _obscurePassword,
       enabled: !_isLoading,
       validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Поле не может быть пустым';
-        }
-        if (value.length < 6) {
+        if (value == null || value.isEmpty) return 'Поле не может быть пустым';
+        if (value.length < 6)
           return 'Пароль должен содержать минимум 6 символов';
-        }
         return null;
       },
       decoration: InputDecoration(
         labelText: 'Пароль',
-        labelStyle: TextStyle(
-          color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
-        ),
-        prefixIcon: Icon(
-          Icons.lock_outline,
-          color: Colors.green[700],
-        ),
+        labelStyle:
+            TextStyle(color: isDarkMode ? Colors.grey[400] : Colors.grey[700]),
+        prefixIcon: Icon(Icons.lock_outline, color: Colors.green[700]),
         suffixIcon: IconButton(
           icon: Icon(
             _obscurePassword
@@ -624,36 +570,24 @@ class _LoginScreenState extends State<LoginScreen> {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!,
-          ),
+              color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Colors.green[700]!,
-            width: 2,
-          ),
+          borderSide: BorderSide(color: Colors.green[700]!, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Colors.red,
-            width: 2,
-          ),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Colors.red,
-            width: 2,
-          ),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
         ),
         filled: true,
         fillColor: isDarkMode ? Colors.grey[900] : Colors.grey[50],
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 20,
-          horizontal: 20,
-        ),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
       ),
     );
   }

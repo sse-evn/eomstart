@@ -1,10 +1,12 @@
 // lib/services/global_websocket_service.dart
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/location.dart';
 import 'package:micro_mobility_app/models/user_shift_location.dart';
+import 'package:micro_mobility_app/config.dart'; // ✅ Импортируем конфиг
 
 class GlobalWebSocketService {
   static final GlobalWebSocketService _instance =
@@ -41,7 +43,6 @@ class GlobalWebSocketService {
   // Добавить коллбэк для обновления местоположений
   void addLocationsCallback(void Function(List<Location>) callback) {
     _locationsCallbacks.add(callback);
-    // Сразу отправляем текущие данные
     if (_users.isNotEmpty) {
       callback(_users);
     }
@@ -55,7 +56,6 @@ class GlobalWebSocketService {
   // Добавить коллбэк для обновления смен
   void addShiftsCallback(void Function(List<UserShiftLocation>) callback) {
     _shiftsCallbacks.add(callback);
-    // Сразу отправляем текущие данные
     if (_activeShifts.isNotEmpty) {
       callback(_activeShifts);
     }
@@ -69,7 +69,6 @@ class GlobalWebSocketService {
   // Добавить коллбэк для обновления состояния соединения
   void addConnectionCallback(void Function(bool) callback) {
     _connectionCallbacks.add(callback);
-    // Сразу отправляем текущее состояние
     callback(_isConnected);
   }
 
@@ -104,7 +103,8 @@ class GlobalWebSocketService {
 
       print('✅ Token found, connecting...');
       final cleanToken = _cleanToken(token);
-      final url = 'wss://eom-sharing.duckdns.org/ws?token=$cleanToken';
+      final url =
+          '${AppConfig.websocketUrl}?token=$cleanToken'; // ✅ Используем AppConfig
       print('🌐 Connecting to: $url');
 
       // Закрываем существующее соединение, если есть
@@ -395,19 +395,15 @@ class GlobalWebSocketService {
     _pingTimer?.cancel();
     _locationUpdateTimer?.cancel();
 
-    // Уведомляем подписчиков об изменении состояния соединения
     _notifyConnectionCallbacks();
 
-    // Отменяем существующий таймер переподключения
     _reconnectTimer?.cancel();
 
-    // Если это явное отключение, не пытаемся переподключиться
     if (_isExplicitDisconnect) {
       print('🔌 Explicit disconnect, not attempting to reconnect');
       return;
     }
 
-    // Пытаемся переподключиться с экспоненциальной задержкой
     if (_reconnectAttempts < _maxReconnectAttempts) {
       _reconnectAttempts++;
       final delay = _initialReconnectDelay * (1 << (_reconnectAttempts - 1));
@@ -452,7 +448,6 @@ class GlobalWebSocketService {
       }
     }
 
-    // Уведомляем подписчиков об изменении состояния соединения
     _notifyConnectionCallbacks();
   }
 

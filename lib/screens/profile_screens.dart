@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
+import 'package:micro_mobility_app/config.dart';
 // 1. Импортируем TasksScreen
 // import 'package:micro_mobility_app/screens/tasks/tasks_screen.dart'; // Убедитесь, что путь правильный
 
@@ -194,13 +195,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       String downloadUrl = '';
 
       if (Platform.isAndroid) {
-        // Ссылка на APK файл или Google Play
-        downloadUrl =
-            'https://example.com/app-release.apk'; // Замените на реальную ссылку
+        downloadUrl = AppConfig.apkDownloadUrl; // ✅ Используем конфиг
       } else if (Platform.isIOS) {
-        // Ссылка на App Store
-        downloadUrl =
-            'https://apps.apple.com/app/your-app'; // Замените на реальную ссылку
+        downloadUrl = AppConfig.iosAppUrl; // ✅ Используем конфиг
       }
 
       if (await canLaunchUrl(Uri.parse(downloadUrl))) {

@@ -1,8 +1,11 @@
+// lib/services/websocket_service.dart
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:micro_mobility_app/config.dart'; // ✅ Импортируем конфиг
 import '../models/location.dart';
 import '../models/user_shift_location.dart';
 
@@ -41,7 +44,8 @@ class WebSocketService {
       }
       print('✅ Token found, connecting...');
       final cleanToken = _cleanToken(token);
-      final url = 'wss://eom-sharing.duckdns.org/ws?token=$cleanToken';
+      final url =
+          '${AppConfig.websocketUrl}?token=$cleanToken'; // ✅ Изменено: используем AppConfig
       print('🌐 Connecting to: $url');
 
       // Close any existing connection properly
@@ -84,7 +88,6 @@ class WebSocketService {
       _startPingTimer();
 
       // Запросить список активных смен и пользователей после подключения
-      // Добавим задержку перед отправкой запросов
       Future.delayed(const Duration(milliseconds: 500), () {
         if (_isConnected) {
           _requestActiveShifts();
@@ -102,18 +105,15 @@ class WebSocketService {
 
   Future<WebSocketChannel> _connectWithTimeout(String url) async {
     try {
-      // Create a future that completes with the WebSocket connection
       final connectionFuture = Future<WebSocketChannel>(() {
         return WebSocketChannel.connect(Uri.parse(url));
       });
 
-      // Create a timeout future
       final timeoutFuture = Future<WebSocketChannel>.delayed(
         const Duration(seconds: 10),
         () => throw TimeoutException('Connection timeout'),
       );
 
-      // Return whichever completes first
       return await Future.any([connectionFuture, timeoutFuture]);
     } on TimeoutException catch (_) {
       throw TimeoutException('Connection timeout');
@@ -271,17 +271,13 @@ class WebSocketService {
     _isConnected = false;
     _isConnecting = false;
     _pingTimer?.cancel();
-    // Cancel any existing reconnect timer
     _reconnectTimer?.cancel();
-    // If this is an explicit disconnect, don't try to reconnect
     if (_isExplicitDisconnect) {
       print('🔌 Explicit disconnect, not attempting to reconnect');
       return;
     }
-    // Attempt to reconnect with exponential backoff
     if (_reconnectAttempts < _maxReconnectAttempts) {
       _reconnectAttempts++;
-      // Calculate delay with exponential backoff (3s, 6s, 12s, 24s, 48s)
       final delay = _initialReconnectDelay * (1 << (_reconnectAttempts - 1));
       print(
           '🔄 Attempting to reconnect in ${delay.inSeconds} seconds (attempt $_reconnectAttempts/$_maxReconnectAttempts)');
@@ -289,7 +285,6 @@ class WebSocketService {
         if (!_isConnected && !_isConnecting) {
           connect().catchError((error) {
             print('❌ Reconnection failed: $error');
-            // Continue trying to reconnect
             _handleDisconnect(error: error);
           });
         }
