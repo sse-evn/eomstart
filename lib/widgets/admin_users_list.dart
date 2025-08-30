@@ -18,7 +18,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
   final ApiService _apiService = ApiService();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  late Future<List<dynamic>> _usersFuture;
+  late Future<List<Map<String, dynamic>>> _usersFuture;
   String _currentUserRole = '';
   String _currentUsername = '';
   String _currentUserFirstName = '';
@@ -57,9 +57,9 @@ class _AdminUsersListState extends State<AdminUsersList> {
       if (token == null) return;
 
       final profile = await _apiService.getUserProfile(token);
-      final role = (profile['role'] ?? 'user').toString().toLowerCase();
-      final username = profile['username'] as String? ?? 'User';
-      final firstName = profile['first_name'] as String? ?? 'Не указано';
+      final role = (profile['role'] as String?)?.toLowerCase() ?? 'user';
+      final username = (profile['username'] as String?) ?? 'User';
+      final firstName = (profile['first_name'] as String?) ?? 'Не указано';
 
       if (mounted) {
         setState(() {
@@ -74,13 +74,13 @@ class _AdminUsersListState extends State<AdminUsersList> {
     }
   }
 
-  Future<List<dynamic>> _fetchUsers() async {
+  Future<List<Map<String, dynamic>>> _fetchUsers() async {
     try {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) throw Exception('Токен не найден');
 
       final users = await _apiService.getAdminUsers(token);
-      return users;
+      return (users as List).map((u) => u as Map<String, dynamic>).toList();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -145,7 +145,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
       _addLog('🔄 $username → ${_roleLabels[newRole]}');
 
       if (mounted) {
-        setState(() => _usersFuture = _fetchUsers());
+        _usersFuture = _fetchUsers(); // Обновляем Future
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Роль обновлена'), backgroundColor: Colors.green),
@@ -169,7 +170,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
       _addLog('✅ Активирован: $username');
 
       if (mounted) {
-        setState(() => _usersFuture = _fetchUsers());
+        _usersFuture = _fetchUsers();
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Доступ активирован'),
@@ -216,7 +218,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
       _addLog('⏸️ Отправлен в ожидание: $username');
 
       if (mounted) {
-        setState(() => _usersFuture = _fetchUsers());
+        _usersFuture = _fetchUsers();
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Доступ отозван'), backgroundColor: Colors.orange),
@@ -263,7 +266,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
       _addLog('❌ Удалён: $username');
 
       if (mounted) {
-        setState(() => _usersFuture = _fetchUsers());
+        _usersFuture = _fetchUsers();
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Пользователь удалён'),
@@ -333,7 +337,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
       if (mounted) {
         Navigator.pop(context);
-        setState(() => _usersFuture = _fetchUsers());
+        _usersFuture = _fetchUsers();
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Пользователь добавлен'),
@@ -342,8 +347,9 @@ class _AdminUsersListState extends State<AdminUsersList> {
       }
     } catch (e) {
       String message = 'Ошибка: $e';
-      if (e.toString().contains('duplicate'))
+      if (e.toString().contains('duplicate')) {
         message = 'Пользователь с таким логином уже существует.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
@@ -352,7 +358,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
   Future<void> _refreshData() async {
     if (mounted) {
-      setState(() => _usersFuture = _fetchUsers());
+      _usersFuture = _fetchUsers();
+      setState(() {});
     }
   }
 
@@ -390,8 +397,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
                         CircleAvatar(
                           radius: 36,
                           backgroundColor: Colors.green[700],
-                          child:
-                              Icon(Icons.person, size: 36, color: Colors.white),
+                          child: const Icon(Icons.person,
+                              size: 36, color: Colors.white),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -523,7 +530,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: FutureBuilder<List<dynamic>>(
+                child: FutureBuilder<List<Map<String, dynamic>>>(
                   future: _usersFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
@@ -537,7 +544,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
                     final query = _searchController.text.toLowerCase();
                     final filteredUsers = snapshot.data!.where((user) {
                       final role =
-                          (user['role']?.toString().toLowerCase() ?? '');
+                          (user['role'] as String?)?.toLowerCase() ?? '';
                       final name = ((user['firstName'] ??
                               user['first_name'] ??
                               '') as String)
@@ -563,16 +570,16 @@ class _AdminUsersListState extends State<AdminUsersList> {
                       itemCount: filteredUsers.length,
                       itemBuilder: (context, index) {
                         final user = filteredUsers[index];
-                        final userId = user['id'];
+                        final userId = user['id'] as int;
                         final username = user['username'] as String;
-                        final firstName = user['firstName'] ??
+                        final firstName = (user['firstName'] ??
                             user['first_name'] ??
-                            'Без имени';
-                        final role = (user['role']?.toString().toLowerCase() ??
-                            'unknown');
+                            'Без имени') as String;
+                        final role = (user['role'] as String?)?.toLowerCase() ??
+                            'unknown';
                         final status =
-                            (user['status']?.toString().toLowerCase() ??
-                                'pending');
+                            (user['status'] as String?)?.toLowerCase() ??
+                                'pending';
                         final displayRole = _roleLabels[role] ?? role;
                         final statusColor =
                             _statusColors[status] ?? Colors.grey;
@@ -634,7 +641,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
                                       child: Text('Удалить',
                                           style: TextStyle(color: Colors.red)),
                                     ),
-                                  ]
+                                  ],
                                 ];
                               },
                               onSelected: (action) {
@@ -663,7 +670,6 @@ class _AdminUsersListState extends State<AdminUsersList> {
           ],
         ),
       ),
-      // === Кнопка "Добавить" ===
       floatingActionButton: _currentUserRole == 'superadmin'
           ? FloatingActionButton(
               onPressed: _showCreateUserDialog,
@@ -676,27 +682,33 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
   void _showUserProfile(Map<String, dynamic> user) {
     final roleLabel =
-        _roleLabels[user['role']?.toString().toLowerCase()] ?? 'Неизвестно';
-    final status = (user['status']?.toString().toLowerCase() ?? 'pending');
+        _roleLabels[(user['role'] as String?)?.toLowerCase() ?? ''] ??
+            'Неизвестно';
+    final status = (user['status'] as String?)?.toLowerCase() ?? 'pending';
     final statusColor = _statusColors[status] ?? Colors.grey;
 
     final String? avatarUrl = user['avatar'] as String?;
-    final String? firstName = user['firstName'] ?? user['first_name'];
-    final String? lastName = user['lastName'] ?? user['last_name'];
-    final String fullName =
-        [firstName, lastName].where((s) => s != null && s.isNotEmpty).join(' ');
+    final String? firstName =
+        (user['firstName'] ?? user['first_name']) as String?;
+    final String? lastName = (user['lastName'] ?? user['last_name']) as String?;
+    final String fullName = [firstName, lastName]
+        .where((s) => s != null && s!.isNotEmpty)
+        .join(' ');
     final username = user['username'] as String;
 
     final hasActiveShift = user['has_active_shift'] == true;
-    final shiftZone = user['current_zone'] as String? ?? '—';
-    final shiftTime = user['shift_time'] as String? ?? '—';
+    final shiftZone = (user['current_zone'] as String?) ?? '—';
+    final shiftTime = (user['shift_time'] as String?) ?? '—';
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) => Container(
+        constraints:
+            BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.9),
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(ctx).viewInsets.bottom,
           left: 24,
@@ -782,14 +794,17 @@ class _AdminUsersListState extends State<AdminUsersList> {
               child: Row(
                 children: [
                   Expanded(
-                      child: OutlinedButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: const Text('Закрыть'))),
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Закрыть'),
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   ElevatedButton(
                     onPressed: () {
                       Navigator.pop(ctx);
-                      _updateUserRole(user['id'], user['role'], username);
+                      _updateUserRole(
+                          user['id'] as int, user['role'] as String, username);
                     },
                     style:
                         ElevatedButton.styleFrom(backgroundColor: Colors.blue),
@@ -800,7 +815,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
             ),
             const SizedBox(height: 24),
             _buildSectionTitle('📊 История смен'),
-            _buildShiftHistory(user['id']),
+            _buildShiftHistory(user['id'] as int),
             const SizedBox(height: 24),
             _buildSectionTitle('📍 Найти на карте'),
             _buildMapButton(user),
@@ -818,7 +833,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
         children: [
           Icon(icon, size: 16, color: color),
           const SizedBox(width: 8),
-          Text(text, style: TextStyle(fontSize: 14, color: Colors.black87)),
+          Text(text,
+              style: const TextStyle(fontSize: 14, color: Colors.black87)),
         ],
       ),
     );
@@ -827,8 +843,10 @@ class _AdminUsersListState extends State<AdminUsersList> {
   Widget _buildSectionTitle(String text) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(text,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      ),
     );
   }
 
@@ -883,10 +901,10 @@ class _AdminUsersListState extends State<AdminUsersList> {
   }
 
   Future<void> _navigateToMap(Map<String, dynamic> user) async {
-    final lat = user['lat'] as double?;
-    final lng = user['lng'] as double?;
+    final lat = (user['lat'] as double?) ?? 0.0;
+    final lng = (user['lng'] as double?) ?? 0.0;
 
-    if (lat != null && lng != null) {
+    if (lat != 0.0 && lng != 0.0) {
       final url = 'https://www.google.com/maps?q=$lat,$lng';
       final uri = Uri.parse(url);
       if (await canLaunchUrl(uri)) {
@@ -918,11 +936,11 @@ class _AdminUsersListState extends State<AdminUsersList> {
         return jsonList
             .map((json) => {
                   'id': json['id'],
-                  'start_time': json['start_time'],
-                  'end_time': json['end_time'],
-                  'duration': json['worked_duration'],
-                  'zone': json['zone'],
-                  'slot_time_range': json['slot_time_range'],
+                  'start_time': json['start_time'] as String,
+                  'end_time': json['end_time'] as String,
+                  'duration': json['worked_duration'] as int?,
+                  'zone': json['zone'] as String,
+                  'slot_time_range': json['slot_time_range'] as String?,
                 })
             .toList();
       } else {

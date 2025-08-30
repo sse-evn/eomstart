@@ -1,8 +1,9 @@
 // lib/config/app_config.dart
 
 class AppConfig {
-  /// Основной хост бэкенда (убраны лишние пробелы!)
+  /// Основной хост бэкенда (меняй здесь для dev/prod)
   static const String backendHost = 'https://eom-sharing.duckdns.org';
+  // static const String backendHost = 'https://localhost:6606';
 
   /// Базовый путь API
   static const String apiBasePath = '/api';
@@ -12,6 +13,10 @@ class AppConfig {
 
   /// Базовый URL для медиа (изображений)
   static String get mediaBaseUrl => backendHost;
+
+  /// URL для WebSocket (автоматически: http → ws, https → wss)
+  static String get websocketUrl =>
+      '${backendHost.replaceFirst('http', 'ws')}/ws';
 
   /// URL для входа
   static String get loginUrl => '$apiBaseUrl/auth/login';
@@ -107,6 +112,6 @@ class AppConfig {
   /// Информация о текущем окружении (для отладки)
   static String get environmentInfo {
     final env = backendHost.contains('duckdns') ? 'DEV' : 'PROD';
-    return 'Environment: $env | API: $apiBaseUrl';
+    return 'Environment: $env | API: $apiBaseUrl | WS: $websocketUrl';
   }
 }

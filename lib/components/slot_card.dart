@@ -1,4 +1,3 @@
-// lib/components/slot_card.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -105,24 +104,23 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                       ? LinearGradient(
                           colors: isDarkMode
                               ? [Colors.green[900]!, Colors.green[800]!]
-                              : [const Color.fromARGB(255, 10, 80, 79)!, const Color.fromARGB(255, 63, 114, 66)!],
+                              : [
+                                  const Color.fromARGB(255, 10, 80, 79)!,
+                                  const Color.fromARGB(255, 63, 114, 66)!
+                                ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         )
                       : null,
                   borderRadius: BorderRadius.circular(20),
-                  // border: hasActiveShift
-                  //     ? Border.all(color: Colors.green[700]!, width: 2)
-                  //     : null,
-
                   boxShadow: [
                     BoxShadow(
                       color: Colors.grey,
                       spreadRadius: 1,
                       blurRadius: 12,
-                      offset: const Offset(4,4),
+                      offset: const Offset(4, 4),
                     ),
-                  ]
+                  ],
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(20.0),
@@ -145,11 +143,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
   }
 
   Widget _buildActiveShiftUI(
-      ActiveShift
-          activeShift, // ← параметр не опциональный, но мы уверены, что он не null
-      ThemeData theme,
-      bool isDarkMode) {
-    // Проверка на null startTimeString
+      ActiveShift activeShift, ThemeData theme, bool isDarkMode) {
     final String serverTime = activeShift.startTimeString != null
         ? extractTimeFromIsoString(activeShift.startTimeString!)
         : '--:--';
@@ -248,7 +242,6 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
         height: 60,
         width: 60,
         decoration: BoxDecoration(
-          // border: Border.all(color: Colors.white, width: 2),
           borderRadius: BorderRadius.circular(8),
         ),
         child: activeShift.selfie.isNotEmpty

@@ -1,9 +1,8 @@
-// lib/providers/shift_provider.dart
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show WidgetsBinding, AppLifecycleState;
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -84,7 +83,6 @@ class ShiftProvider with ChangeNotifier {
           });
         }
         _isOnline = isCurrentlyOnline;
-        // Вызываем notifyListeners только после завершения построения
         WidgetsBinding.instance.addPostFrameCallback((_) {
           notifyListeners();
         });
@@ -128,7 +126,6 @@ class ShiftProvider with ChangeNotifier {
           : null;
       _currentUsername = data['username'] as String?;
       _botStatsData = data['botStatsData'] as Map<String, dynamic>?;
-      // Вызываем notifyListeners только после завершения построения
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
@@ -179,7 +176,6 @@ class ShiftProvider with ChangeNotifier {
     }
   }
 
-  // Убрали _safeNotifyListeners из этого метода
   Future<model.ActiveShift?> getActiveShift() async {
     if (_token == null || _isLoadingActiveShift) return _activeShift;
     if (_lastActiveShiftFetchTime != null) {
@@ -195,7 +191,6 @@ class ShiftProvider with ChangeNotifier {
       final response =
           await _retryApiCall(() => _apiService.getActiveShift(_token!));
 
-      // ✅ ИСПРАВЛЕНИЕ: правильно обрабатываем null/пустой ответ
       if (response == null ||
           response.toString() == 'null' ||
           response.toString() == '[]' ||
@@ -215,11 +210,10 @@ class ShiftProvider with ChangeNotifier {
       return _activeShift;
     } catch (e) {
       debugPrint('❌ Ошибка получения активной смены: $e');
-      _activeShift = null; // ✅ На случай ошибки тоже обнуляем
+      _activeShift = null;
       return _activeShift;
     } finally {
       _isLoadingActiveShift = false;
-      // Вызываем notifyListeners только после завершения построения
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
@@ -248,7 +242,6 @@ class ShiftProvider with ChangeNotifier {
       _shiftHistory = [];
       _activeShift = null;
       _currentUsername = null;
-      // Вызываем notifyListeners только после завершения построения
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
@@ -270,11 +263,8 @@ class ShiftProvider with ChangeNotifier {
       } else {
         _shiftHistory = [];
       }
-      // Загружаем активную смену
       await getActiveShift();
       await _saveToCache();
-      // Единственный вызов notifyListeners в этом методе
-      // Вызываем его только после завершения построения
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
@@ -287,7 +277,6 @@ class ShiftProvider with ChangeNotifier {
         _activeShift = null;
         _currentUsername = null;
       }
-      // Вызываем notifyListeners только после завершения построения
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
@@ -296,7 +285,6 @@ class ShiftProvider with ChangeNotifier {
 
   void selectDate(DateTime date) {
     _selectedDate = _toAlmatyTime(DateTime(date.year, date.month, date.day));
-    // Вызываем notifyListeners только после завершения построения
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
     });
@@ -311,7 +299,6 @@ class ShiftProvider with ChangeNotifier {
     if (_isStartingSlot || _activeShift != null || _token == null) return;
     final File imageFile = File(selfie.path);
     _isStartingSlot = true;
-    // Вызываем notifyListeners только после завершения построения
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
     });
@@ -330,7 +317,6 @@ class ShiftProvider with ChangeNotifier {
       rethrow;
     } finally {
       _isStartingSlot = false;
-      // Вызываем notifyListeners только после завершения построения
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
@@ -340,7 +326,6 @@ class ShiftProvider with ChangeNotifier {
   Future<void> endSlot() async {
     if (_isEndingSlot || _token == null || _activeShift == null) return;
     _isEndingSlot = true;
-    // Вызываем notifyListeners только после завершения построения
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
     });
@@ -351,15 +336,12 @@ class ShiftProvider with ChangeNotifier {
       _activeShift = null;
       _currentUsername = null;
       await loadShifts();
-      // notifyListeners вызывается в loadShifts
     } catch (e) {
       debugPrint('❌ Ошибка завершения смены: $e');
       await loadShifts();
-      // notifyListeners вызывается в loadShifts
       rethrow;
     } finally {
       _isEndingSlot = false;
-      // Вызываем notifyListeners только после завершения построения
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
@@ -377,7 +359,6 @@ class ShiftProvider with ChangeNotifier {
       if (difference < const Duration(seconds: 30)) {
         debugPrint('ShiftProvider: Bot stats fetch skipped (cache hit).');
         if (_botStatsData != null) {
-          // Вызываем notifyListeners только после завершения построения
           WidgetsBinding.instance.addPostFrameCallback((_) {
             notifyListeners();
           });
@@ -388,14 +369,12 @@ class ShiftProvider with ChangeNotifier {
     if (_token == null) {
       debugPrint('ShiftProvider: Cannot fetch bot stats, no token.');
       _botStatsData = null;
-      // Вызываем notifyListeners только после завершения построения
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
       return;
     }
     _isLoadingBotStats = true;
-    // Вызываем notifyListeners только после завершения построения
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
     });
@@ -411,7 +390,6 @@ class ShiftProvider with ChangeNotifier {
       debugPrint('❌ ShiftProvider.fetchBotStats error: $e');
     } finally {
       _isLoadingBotStats = false;
-      // Вызываем notifyListeners только после завершения построения
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
@@ -425,20 +403,8 @@ class ShiftProvider with ChangeNotifier {
     _botStatsData = null;
     await _storage.delete(key: 'jwt_token');
     await _prefs.remove(_shiftsCacheKey);
-    // Вызываем notifyListeners только после завершения построения
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
-    });
-  }
-
-  // Упрощенный метод, который всегда использует addPostFrameCallback
-  void _safeNotifyListeners() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      try {
-        notifyListeners();
-      } catch (e) {
-        debugPrint('Ошибка при вызове notifyListeners: $e');
-      }
     });
   }
 

@@ -1,4 +1,3 @@
-// lib/screens/map_and_zone/tabs/zone_management_tab.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
@@ -13,7 +12,7 @@ class ZoneManagementTab extends StatefulWidget {
 class _ZoneManagementTabState extends State<ZoneManagementTab> {
   final ApiService _apiService = ApiService();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  late Future<List<String>> _zonesFuture;
+  late Future<List<Zone>> _zonesFuture;
   final TextEditingController _controller = TextEditingController();
 
   @override
@@ -22,10 +21,11 @@ class _ZoneManagementTabState extends State<ZoneManagementTab> {
     _zonesFuture = _loadZones();
   }
 
-  Future<List<String>> _loadZones() async {
+  Future<List<Zone>> _loadZones() async {
     final token = await _storage.read(key: 'jwt_token');
     if (token == null) return [];
-    return _apiService.getAvailableZones(token);
+    final data = await _apiService.getAvailableZonesRaw(token);
+    return data.map((e) => Zone(id: e['id'], name: e['name'])).toList();
   }
 
   Future<void> _addZone() async {
@@ -47,15 +47,12 @@ class _ZoneManagementTabState extends State<ZoneManagementTab> {
     }
   }
 
-  Future<void> _deleteZone(String name) async {
+  Future<void> _deleteZone(int zoneId) async {
     try {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) return;
 
-      final zones = await _zonesFuture;
-      final id = zones.indexOf(name) + 1;
-
-      await _apiService.deleteZone(token, id);
+      await _apiService.deleteZone(token, zoneId);
       setState(() {
         _zonesFuture = _loadZones();
       });
@@ -153,7 +150,7 @@ class _ZoneManagementTabState extends State<ZoneManagementTab> {
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            FutureBuilder<List<String>>(
+            FutureBuilder<List<Zone>>(
               future: _zonesFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -207,18 +204,17 @@ class _ZoneManagementTabState extends State<ZoneManagementTab> {
                           ),
                           child: Center(
                             child: Text(
-                              zone,
+                              zone.name,
                               style: TextStyle(
-                                color: primaryColor,
-                                fontWeight: FontWeight.bold,
-                              ),
+                                  color: primaryColor,
+                                  fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
-                        title: Text('Зона $zone'),
+                        title: Text('Зона ${zone.name}'),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deleteZone(zone),
+                          onPressed: () => _deleteZone(zone.id),
                         ),
                       ),
                     );
@@ -231,4 +227,10 @@ class _ZoneManagementTabState extends State<ZoneManagementTab> {
       ),
     );
   }
+}
+
+class Zone {
+  final int id;
+  final String name;
+  Zone({required this.id, required this.name});
 }

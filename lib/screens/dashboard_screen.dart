@@ -201,17 +201,6 @@ class _DashboardHomeState extends State<_DashboardHome> {
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: const Text('Главная'),
-        actions: [
-          IconButton(
-            icon: SvgPicture.asset(
-              AppIcons.notification,
-              color: Colors.black87,
-            ),
-            onPressed: () {
-              // Уведомления
-            },
-          ),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,

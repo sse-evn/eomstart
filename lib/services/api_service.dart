@@ -315,7 +315,7 @@ class ApiService {
       request.headers['Authorization'] = 'Bearer $effectiveToken';
       request.fields['slot_time_range'] = slotTimeRange;
       request.fields['position'] = position;
-      request.fields['zone'] = zone;
+      request.fields['zone'] = zone; // ← отправляем как строку
       if (await selfieImage.exists()) {
         request.files
             .add(await http.MultipartFile.fromPath('selfie', selfieImage.path));
@@ -500,14 +500,47 @@ class ApiService {
         },
       );
     }, token);
+
     if (response.statusCode == 200) {
       final dynamic body = jsonDecode(response.body);
       if (body is List) {
-        return body.map((e) => e.toString()).toList();
+        return body
+            .map((e) {
+              if (e is Map<String, dynamic> && e.containsKey('name')) {
+                return e['name'].toString();
+              } else if (e is String) {
+                return e;
+              }
+              return '';
+            })
+            .where((name) => name.isNotEmpty)
+            .toList();
       }
       return [];
     } else {
       throw Exception('Failed to load zones: ${response.statusCode}');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAvailableZonesRaw(String token) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.get(
+        Uri.parse(AppConfig.zonesUrl),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+    }, token);
+
+    if (response.statusCode == 200) {
+      final dynamic body = jsonDecode(response.body);
+      if (body is List) {
+        return body.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } else {
+      throw Exception('Failed to load zones');
     }
   }
 

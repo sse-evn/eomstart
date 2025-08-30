@@ -1,4 +1,3 @@
-// lib/components/period_card.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'info_row.dart';
@@ -12,22 +11,18 @@ class PeriodCard extends StatelessWidget {
     final provider = context.watch<ShiftProvider>();
     final shiftHistory = provider.shiftHistory;
 
-    final int totalShifts = shiftHistory.length;
+    final totalShifts = shiftHistory.length;
 
-    final int totalMinutes = shiftHistory.fold<int>(
-      0,
-      (sum, shift) {
-        if (shift.startTime != null && shift.endTime != null) {
-          return sum + shift.endTime!.difference(shift.startTime!).inMinutes;
-        }
-        return sum;
-      },
-    );
+    final totalMinutes = shiftHistory.fold<int>(0, (sum, shift) {
+      if (shift.startTime != null && shift.endTime != null) {
+        return sum + shift.endTime!.difference(shift.startTime!).inMinutes;
+      }
+      return sum;
+    });
 
-    final int totalHours = totalMinutes ~/ 60;
-    final int remainingMinutes = totalMinutes % 60;
-
-    final String formattedTime =
+    final totalHours = totalMinutes ~/ 60;
+    final remainingMinutes = totalMinutes % 60;
+    final formattedTime =
         '$totalHours ч ${remainingMinutes.toString().padLeft(2, '0')} мин';
 
     return Container(
@@ -40,15 +35,11 @@ class PeriodCard extends StatelessWidget {
         children: [
           const Text(
             'Отчет за период',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const Divider(),
           InfoRow(label: 'Количество смен', value: totalShifts.toString()),
           InfoRow(label: 'Общее время работы', value: formattedTime),
-          // Добавьте другие данные по аналогии
         ],
       ),
     );

@@ -1,4 +1,3 @@
-// lib/modals/slot_setup_modal.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -30,7 +29,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   List<String> _timeSlots = [];
   List<String> _zones = [];
   String? _token;
-  dynamic _activeShift; // Для хранения активной смены
+  dynamic _activeShift;
 
   @override
   void initState() {
@@ -43,52 +42,38 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     super.dispose();
   }
 
-  // Функция проверки, можно ли начать смену в текущее время
   bool _canStartShift(String timeSlot) {
     final now = DateTime.now();
     final currentHour = now.hour;
     final currentMinute = now.minute;
 
     switch (timeSlot) {
-      case '07:00–15:00':
-        // Смена начинается в 07:00
-        // Можно начать с 06:40 до 07:00 или в любое время до 15:00
-        if ((currentHour == 6 && currentMinute >= 40) ||
+      case '07:00-15:00':
+        return (currentHour == 6 && currentMinute >= 40) ||
             (currentHour >= 7 && currentHour < 15) ||
-            (currentHour == 15 && currentMinute == 0)) {
-          return true;
-        }
-      case '15:00–23:00':
-        // Смена начинается в 15:00
-        // Можно начать с 14:40 до 15:00 или в любое время до 23:00
-        if ((currentHour == 14 && currentMinute >= 40) ||
+            (currentHour == 15 && currentMinute == 0);
+      case '15:00-23:00':
+        return (currentHour == 14 && currentMinute >= 40) ||
             (currentHour >= 15 && currentHour < 23) ||
-            (currentHour == 23 && currentMinute == 0)) {
-          return true;
-        }
-      case '23:00–07:00':
-        // Ночная смена начинается в 23:00
-        // Можно начать с 22:40 или в любое время после 23:00 или до 07:00
-        if ((currentHour == 22 && currentMinute >= 40) ||
-            currentHour >= 23 ||
-            currentHour < 7) {
-          return true;
-        }
+            (currentHour == 23 && currentMinute == 0);
+      case '07:00-23:00':
+        return (currentHour == 6 && currentMinute >= 40) ||
+            (currentHour >= 7 && currentHour < 23) ||
+            (currentHour == 23 && currentMinute == 0);
     }
     return false;
   }
 
-  // Функция получения сообщения о ограничениях времени
   String _getTimeRestrictionMessage(String timeSlot) {
     switch (timeSlot) {
-      case '07:00–15:00':
+      case '07:00-15:00':
         return 'Смену можно начать с 06:40 или в любое время до 15:00';
-      case '15:00–23:00':
+      case '15:00-23:00':
         return 'Смену можно начать с 14:40 или в любое время до 23:00';
-      case '23:00–07:00':
-        return 'Смену можно начать с 22:40 или в любое время после 23:00';
+      case '07:00-23:00':
+        return 'Смену можно начать с 06:40 или в любое время до 23:00';
       default:
-        return 'Смену можно начать только в определенное время';
+        return 'Смену можно начать только в определённое время';
     }
   }
 
@@ -113,8 +98,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
       final profile =
           await _retryApiCall(() => _apiService.getUserProfile(_token!));
-      debugPrint('Полный профиль пользователя: $profile');
-
       String? positionFromProfile;
       final possibleKeys = [
         'position',
@@ -123,11 +106,9 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         'dolzhnost',
         'должность'
       ];
-
       for (var key in possibleKeys) {
         if (profile.containsKey(key) && profile[key] != null) {
           positionFromProfile = profile[key].toString();
-          debugPrint('Найдена позиция по ключу "$key": $positionFromProfile');
           break;
         }
       }
@@ -143,7 +124,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       if (mounted) {
         setState(() {
           _zones = uniqueZones;
-          _timeSlots = serverTimeSlots.toSet().toList(); // Убираем дубликаты
+          _timeSlots = serverTimeSlots.toSet().toList();
           _position = positionFromProfile ?? 'Не указана';
           _zone = defaultZone;
           _selectedTime = _timeSlots.isNotEmpty ? _timeSlots.first : null;
@@ -181,7 +162,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   }
 
   Future<void> _takeSelfie() async {
-    if (_isLoading) return; // Убираем проверку _hasActiveShift
+    if (_isLoading) return;
     try {
       final image = await _picker.pickImage(
         source: ImageSource.camera,
@@ -200,10 +181,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
   Future<void> _finish() async {
     if (_hasActiveShift) {
-      // Если есть активная смена, заканчиваем её
       await _endShift();
     } else {
-      // Если нет активной смены, начинаем новую
       await _startNewShift();
     }
   }
@@ -217,7 +196,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       _showError('Выберите время смены');
       return;
     }
-    // Проверяем, можно ли начать смену в текущее время
     if (!_canStartShift(_selectedTime!)) {
       _showError(_getTimeRestrictionMessage(_selectedTime!));
       return;
@@ -249,9 +227,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             selfie: XFile(compressedFile.path),
           ));
 
-      // После успешного начала смены обновляем состояние
-      await provider
-          .loadShifts(); // Используем существующий метод вместо refreshShiftData
+      await provider.loadShifts();
 
       if (mounted) {
         Navigator.pop(context, true);
@@ -277,15 +253,10 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       _showError('Требуется авторизация');
       return;
     }
-
     try {
       final provider = Provider.of<ShiftProvider>(context, listen: false);
       await _retryApiCall(() => provider.endSlot());
-
-      // После успешного завершения смены обновляем состояние
-      await provider
-          .loadShifts(); // Используем существующий метод вместо refreshShiftData
-
+      await provider.loadShifts();
       if (mounted) {
         setState(() {
           _hasActiveShift = false;
@@ -371,7 +342,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
-                    // Отображаем информацию об активной смене или форму для новой
                     if (_hasActiveShift)
                       _buildActiveShiftInfo()
                     else
@@ -389,7 +359,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     if (_activeShift == null) return const SizedBox.shrink();
     return Column(
       children: [
-        // Информация о активной смене
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -536,9 +505,10 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         Text(
           'Время смены',
           style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: isDarkMode ? Colors.white70 : Colors.black54),
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: isDarkMode ? Colors.white70 : Colors.black54,
+          ),
         ),
         const SizedBox(height: 12),
         GridView.builder(
@@ -597,9 +567,10 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                     Text(
                       timeSlot,
                       style: TextStyle(
-                          fontSize: 14,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.normal),
+                        fontSize: 14,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     if (!canStart)
@@ -665,7 +636,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   }
 
   Widget _buildActionButton() {
-    // Проверяем, можно ли начать выбранную смену
     bool canStartSelectedShift =
         _selectedTime != null && _canStartShift(_selectedTime!);
     bool canSubmit = !_isLoading &&
@@ -675,6 +645,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         _position != null &&
         _zone != null &&
         canStartSelectedShift;
+
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
@@ -703,9 +674,10 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                         ? 'Закончить смену'
                         : (canSubmit ? 'Начать смену' : 'Недоступно'),
                     style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold),
+                      fontSize: 16,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),

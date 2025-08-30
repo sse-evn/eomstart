@@ -5,7 +5,6 @@ import 'package:collection/collection.dart';
 import 'calendar_widget.dart';
 import 'info_row.dart';
 import 'period_card.dart';
-// === ДОБАВЛЕНО: Импорт виджета для статистики бота ===
 import 'bot_stats_card.dart';
 import '../../providers/shift_provider.dart';
 import '../../models/shift_data.dart';
@@ -17,25 +16,23 @@ class ReportCard extends StatefulWidget {
   State<ReportCard> createState() => _ReportCardState();
 }
 
-// === ИЗМЕНЕНО: Добавлено третье состояние ===
 enum ReportMode { day, period, bot }
 
 class _ReportCardState extends State<ReportCard> {
-  // === ИЗМЕНЕНО: Используем enum вместо bool ===
   ReportMode _currentMode = ReportMode.day;
+  bool _isRefreshing = false;
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ShiftProvider>();
     final shiftHistory = provider.shiftHistory;
 
-    // Найти данные за выбранный день
+    final selectedDay = provider.selectedDate;
     final shiftData = shiftHistory.firstWhereOrNull((s) =>
-        s.date.year == provider.selectedDate.year &&
-        s.date.month == provider.selectedDate.month &&
-        s.date.day == provider.selectedDate.day);
+        s.date.year == selectedDay.year &&
+        s.date.month == selectedDay.month &&
+        s.date.day == selectedDay.day);
 
-    // Генерация дней для календаря (текущий день по центру)
     final now = DateTime.now();
     final calendarDays =
         List.generate(9, (i) => now.subtract(Duration(days: 4 - i)));
@@ -50,21 +47,53 @@ class _ReportCardState extends State<ReportCard> {
             color: Colors.grey.withOpacity(0.15),
             spreadRadius: 1,
             blurRadius: 12,
-            offset: const Offset(0, 6),
+            offset: Offset(0, 6),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildToggleMode(), // Обновленный переключатель
+          _buildToggleMode(),
           const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 20),
+                onPressed: _isRefreshing
+                    ? null
+                    : () async {
+                        setState(() => _isRefreshing = true);
+                        try {
+                          if (_currentMode == ReportMode.bot) {
+                            await provider.fetchBotStats();
+                          } else {
+                            await provider.loadShifts();
+                          }
+                        } catch (e) {
+                          debugPrint('Refresh failed: $e');
+                        } finally {
+                          if (mounted) {
+                            setState(() => _isRefreshing = false);
+                          }
+                        }
+                      },
+              ),
+            ],
+          ),
+          _isRefreshing
+              ? const LinearProgressIndicator(
+                  backgroundColor: Colors.transparent,
+                  color: Colors.green,
+                )
+              : const SizedBox(height: 2),
+          const SizedBox(height: 10),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
-            transitionBuilder: (Widget child, Animation<double> animation) {
+            transitionBuilder: (child, animation) {
               return FadeTransition(opacity: animation, child: child);
             },
-            // === ИЗМЕНЕНО: Логика переключения между тремя видами ===
             child: _buildContentForMode(
                 _currentMode, shiftData, calendarDays, provider),
           ),
@@ -73,36 +102,6 @@ class _ReportCardState extends State<ReportCard> {
     );
   }
 
-  // === ДОБАВЛЕНО: Метод для построения контента в зависимости от режима ===
-  Widget _buildContentForMode(
-    ReportMode mode,
-    ShiftData? shiftData,
-    List<DateTime> calendarDays,
-    ShiftProvider provider,
-  ) {
-    switch (mode) {
-      case ReportMode.day:
-        return Column(
-          key: const ValueKey('day-mode'),
-          children: [
-            CalendarWidget(
-              days: calendarDays,
-              selectedDate: provider.selectedDate,
-              onDateSelected: provider.selectDate,
-            ),
-            const SizedBox(height: 20),
-            shiftData != null ? _buildShiftDetails(shiftData) : _buildNoData(),
-          ],
-        );
-      case ReportMode.period:
-        return const PeriodCard(key: ValueKey('period-mode'));
-      case ReportMode.bot:
-        // === ДОБАВЛЕНО: Виджет статистики бота ===
-        return const BotStatsCard(key: ValueKey('bot-mode'));
-    }
-  }
-
-  // === ИЗМЕНЕНО: Обновленный переключатель с тремя кнопками ===
   Widget _buildToggleMode() {
     return Container(
       height: 48,
@@ -112,7 +111,6 @@ class _ReportCardState extends State<ReportCard> {
       ),
       child: Row(
         children: [
-          // Кнопка "День"
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _currentMode = ReportMode.day),
@@ -154,8 +152,6 @@ class _ReportCardState extends State<ReportCard> {
               ),
             ),
           ),
-
-          // Кнопка "Период"
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _currentMode = ReportMode.period),
@@ -197,8 +193,6 @@ class _ReportCardState extends State<ReportCard> {
               ),
             ),
           ),
-
-          // Кнопка "Бот"
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _currentMode = ReportMode.bot),
@@ -222,7 +216,6 @@ class _ReportCardState extends State<ReportCard> {
                         ? null
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
-
                   ),
                   child: Center(
                     child: AnimatedDefaultTextStyle(
@@ -242,9 +235,35 @@ class _ReportCardState extends State<ReportCard> {
             ),
           ),
         ],
-      )
-
+      ),
     );
+  }
+
+  Widget _buildContentForMode(
+    ReportMode mode,
+    ShiftData? shiftData,
+    List<DateTime> calendarDays,
+    ShiftProvider provider,
+  ) {
+    switch (mode) {
+      case ReportMode.day:
+        return Column(
+          key: const ValueKey('day-mode'),
+          children: [
+            CalendarWidget(
+              days: calendarDays,
+              selectedDate: provider.selectedDate,
+              onDateSelected: provider.selectDate,
+            ),
+            const SizedBox(height: 20),
+            shiftData != null ? _buildShiftDetails(shiftData) : _buildNoData(),
+          ],
+        );
+      case ReportMode.period:
+        return const PeriodCard(key: ValueKey('period-mode'));
+      case ReportMode.bot:
+        return const BotStatsCard(key: ValueKey('bot-mode'));
+    }
   }
 
   Widget _buildShiftDetails(ShiftData data) {
@@ -257,7 +276,7 @@ class _ReportCardState extends State<ReportCard> {
           BoxShadow(
             color: Colors.grey.withOpacity(0.1),
             blurRadius: 8,
-            offset: const Offset(0, 4),
+            offset: Offset(0, 4),
           ),
         ],
       ),
