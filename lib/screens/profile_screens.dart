@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
-import 'package:micro_mobility_app/config.dart';
+import 'package:micro_mobility_app/config/config.dart';
 // 1. Импортируем TasksScreen
 // import 'package:micro_mobility_app/screens/tasks/tasks_screen.dart'; // Убедитесь, что путь правильный
 
@@ -315,15 +315,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           '/about', // Убедитесь, что маршрут существует или реализуйте onTap
                     ),
                     // === Админ-панель (только для superadmin) ===
-                    if (_userRole == 'superadmin') ...[
+// === Админ-панель (для superadmin, coordinator, supervisor) ===
+                    if (['superadmin', 'coordinator', 'supervisor']
+                        .contains(_userRole)) ...[
                       const Divider(height: 1),
                       _SettingsItem(
                         icon: Icons.admin_panel_settings,
                         title: 'Админ-панель',
-                        route:
-                            '/admin', // Убедитесь, что маршрут существует или реализуйте onTap
+                        route: '/admin', // Убедись, что маршрут существует
                       ),
                     ],
+
                     const Divider(height: 1),
                     _SettingsItem(
                       icon: Icons.logout,

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:micro_mobility_app/config.dart';
+import 'package:micro_mobility_app/config/config.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
 import 'package:micro_mobility_app/screens/admin/shifts_list/shift_details_screen.dart';
 import 'package:micro_mobility_app/utils/time_utils.dart';

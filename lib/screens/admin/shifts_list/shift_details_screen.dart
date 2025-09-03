@@ -2,12 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:micro_mobility_app/config/config.dart' show AppConfig;
 import 'package:micro_mobility_app/models/active_shift.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart';
 import 'package:micro_mobility_app/utils/time_utils.dart';
-import 'package:micro_mobility_app/config.dart'; // ✅ Импортируем конфиг
+import 'package:intl/intl.dart';
+import 'package:micro_mobility_app/config/google_sheets_config.dart'; // ✅ Подключаем ставку
 
 class ShiftDetailsScreen extends StatefulWidget {
   final ActiveShift shift;
@@ -48,6 +50,7 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     }
   }
 
+  // ✅ Принудительное завершение смены
   Future<void> _forceEndShift() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -84,7 +87,6 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) throw Exception('Токен не найден');
 
-      // Используем конфиг!
       await _apiService.forceEndShift(token, widget.shift.userId);
 
       if (mounted) {
@@ -114,11 +116,67 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     }
   }
 
+  // ✅ Расчёт длительности
+  Duration? _getDuration() {
+    if (widget.shift.startTimeString == null) return null;
+    final start = DateTime.parse(widget.shift.startTimeString!);
+    final end = widget.shift.endTimeString != null
+        ? DateTime.parse(widget.shift.endTimeString!)
+        : DateTime.now();
+    return end.difference(start);
+  }
+
+  // ✅ Форматирование длительности
+  String _formatDuration(Duration? duration) {
+    if (duration == null) return '–';
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    return '$hours ч $minutes мин';
+  }
+
+  // ✅ Расчёт оплаты
+  String _calculatePayment() {
+    final duration = _getDuration();
+    if (duration == null) return '–';
+
+    final hours = duration.inHours + duration.inMinutes.remainder(60) / 60.0;
+    final payment = hours * GoogleSheetsConfig.hourlyRate;
+    return '${payment.toStringAsFixed(0)} ${GoogleSheetsConfig.currency}';
+  }
+
+  // ✅ Формат даты
+  String _formatDate(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '–';
+    try {
+      final date = DateTime.parse(isoString);
+      return DateFormat('dd.MM.yyyy').format(date);
+    } catch (e) {
+      return '–';
+    }
+  }
+
+  // ✅ Формат времени
+  String _formatTime(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '–';
+    try {
+      final time = DateTime.parse(isoString);
+      return DateFormat('HH:mm').format(time);
+    } catch (e) {
+      return '–';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
     final primaryColor = theme.primaryColor;
+
+    // ✅ Переменные объявлены в build()
+    final bool isEnded = widget.shift.endTimeString != null;
+    final Color statusColor = isEnded ? Colors.green : Colors.orange;
+
+    final duration = _getDuration();
 
     return Scaffold(
       appBar: AppBar(
@@ -141,12 +199,28 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
                 padding: const EdgeInsets.all(16.0),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    _buildUserCard(context, theme, primaryColor),
+                    // 🧑‍💼 Карточка пользователя
+                    _buildUserCard(
+                        context, theme, primaryColor, isEnded, statusColor),
+
                     const SizedBox(height: 24),
+
+                    // 📸 Фото с начала смены
                     _buildSelfieSection(context, theme),
+
                     const SizedBox(height: 24),
+
+                    // 📊 Основная информация
                     _buildInfoSection(context, theme, primaryColor),
+
                     const SizedBox(height: 24),
+
+                    // 💰 Расчёт оплаты
+                    _buildPaymentSection(context, theme, primaryColor),
+
+                    const SizedBox(height: 24),
+
+                    // ⚠️ Админ-действия
                     if (_currentUserRole == 'superadmin')
                       _buildAdminAction(primaryColor),
                   ]),
@@ -179,8 +253,14 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     );
   }
 
+  // ✅ Передаём isEnded и statusColor как параметры
   Widget _buildUserCard(
-      BuildContext context, ThemeData theme, Color primaryColor) {
+    BuildContext context,
+    ThemeData theme,
+    Color primaryColor,
+    bool isEnded,
+    Color statusColor,
+  ) {
     final photoUrl = '${AppConfig.mediaBaseUrl}${widget.shift.selfie}';
 
     return Container(
@@ -223,6 +303,33 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
                 Text(
                   '${widget.shift.position} • ${widget.shift.zone}',
                   style: const TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: statusColor, width: 1),
+                      ),
+                      child: Text(
+                        isEnded ? 'Завершена' : 'Активна',
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatDuration(_getDuration()),
+                      style: const TextStyle(fontSize: 12, color: Colors.blue),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -362,12 +469,13 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
           _buildInfoRow('Зона', widget.shift.zone, primaryColor),
           _buildInfoRow(
               'Слот времени', widget.shift.slotTimeRange, primaryColor),
-          _buildInfoRow(
-            'Начало смены',
-            '${extractTimeFromIsoString(widget.shift.startTimeString)} '
-                'от ${extractDateFromIsoString(widget.shift.startTimeString)}',
-            primaryColor,
-          ),
+          _buildInfoRow('Дата начала',
+              _formatDate(widget.shift.startTimeString), primaryColor),
+          _buildInfoRow('Время начала',
+              _formatTime(widget.shift.startTimeString), primaryColor),
+          if (widget.shift.endTimeString != null)
+            _buildInfoRow('Время окончания',
+                _formatTime(widget.shift.endTimeString), primaryColor),
           _buildInfoRow(
               'ID сотрудника', widget.shift.userId.toString(), primaryColor),
         ],
@@ -375,9 +483,54 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value, Color primaryColor) {
+  Widget _buildPaymentSection(
+      BuildContext context, ThemeData theme, Color primaryColor) {
+    final duration = _getDuration();
+    if (duration == null) return Container();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.green[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.green[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Расчёт оплаты',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.green[800],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildInfoRow(
+              'Длительность', _formatDuration(duration), Colors.green),
+          _buildInfoRow(
+            'Ставка',
+            '${GoogleSheetsConfig.hourlyRate.toStringAsFixed(0)} ${GoogleSheetsConfig.currency}/час',
+            Colors.green,
+          ),
+          const SizedBox(height: 8),
+          Divider(color: Colors.green[300]),
+          const SizedBox(height: 8),
+          _buildInfoRow(
+            'Итого к оплате',
+            _calculatePayment(),
+            Colors.green[800]!,
+            isBold: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, Color color,
+      {bool isBold = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -387,7 +540,7 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
               '$label:',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: primaryColor,
+                color: color,
                 fontSize: 14,
               ),
             ),
@@ -395,7 +548,11 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              ),
               softWrap: true,
               overflow: TextOverflow.fade,
             ),

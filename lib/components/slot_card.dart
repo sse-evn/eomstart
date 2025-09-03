@@ -6,7 +6,7 @@ import 'package:micro_mobility_app/models/active_shift.dart';
 import '../../providers/shift_provider.dart';
 import '../modals/slot_setup_modal.dart';
 import '../../utils/time_utils.dart';
-import '../../config.dart';
+import '../config/config.dart';
 
 class SlotCard extends StatefulWidget {
   const SlotCard({super.key});

@@ -45,19 +45,19 @@ class AdminProvider with ChangeNotifier {
     await _apiService.updateUserRole(token, userId, newRole);
   }
 
-  // Активировать
-  Future<void> activateUser(int userId) async {
-    final token = await _storage.read(key: 'jwt_token');
-    if (token == null) throw Exception('Токен не найден');
-    await _apiService.activateUser(token, userId);
-  }
+  // // Активировать
+  // Future<void> activateUser(int userId) async {
+  //   final token = await _storage.read(key: 'jwt_token');
+  //   if (token == null) throw Exception('Токен не найден');
+  //   await _apiService.activateUser(token, userId);
+  // }
 
-  // Деактивировать
-  Future<void> deactivateUser(int userId) async {
-    final token = await _storage.read(key: 'jwt_token');
-    if (token == null) throw Exception('Токен не найден');
-    await _apiService.deactivateUser(token, userId);
-  }
+  // // Деактивировать
+  // Future<void> deactivateUser(int userId) async {
+  //   final token = await _storage.read(key: 'jwt_token');
+  //   if (token == null) throw Exception('Токен не найден');
+  //   await _apiService.deactivateUser(token, userId);
+  // }
 
   // Удалить
   Future<void> deleteUser(int userId) async {

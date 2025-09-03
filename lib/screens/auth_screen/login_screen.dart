@@ -10,8 +10,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:micro_mobility_app/config.dart'
-    as AppConfig; // ✅ Правильный импорт с префиксом
+import 'package:micro_mobility_app/config/config.dart' as AppConfig;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -42,9 +41,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (mounted && token != null && token.isNotEmpty) {
       try {
         final profile = await _apiService.getUserProfile(token);
-        final status = profile['status']?.toString();
-        final role = profile['role']?.toString().toLowerCase();
-
+        final status = profile['status']?.toString() ?? 'pending';
+        final role = profile['role']?.toString().toLowerCase() ?? 'user';
         if (mounted) {
           if (status == 'pending' && role != 'superadmin') {
             Navigator.pushNamedAndRemoveUntil(
@@ -55,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
       } catch (e) {
-        debugPrint('Недействительный токен: $e');
+        await _storage.delete(key: 'jwt_token');
       }
     }
   }
@@ -73,52 +71,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _showSuccess(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  Future<void> _performLogin(String username, String password) async {
-    setState(() => _isLoading = true);
-
-    try {
-      final response = await _apiService.login(username, password);
-
-      if (response.containsKey('token')) {
-        final token = response['token'] as String;
-
-        await _storage.write(key: 'jwt_token', value: token);
-
-        final shiftProvider =
-            Provider.of<ShiftProvider>(context, listen: false);
-        await shiftProvider.setToken(token);
-
-        final role = (response['role'] ?? 'user').toString().toLowerCase();
-        final nextRoute = role == 'superadmin' ? '/admin' : '/dashboard';
-
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, nextRoute);
-        }
-      } else {
-        _showError('Неверный логин или пароль');
-      }
-    } catch (e) {
-      _showError('Ошибка авторизации: ${e.toString()}');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
   void _initTelegramWebView() {
     late final PlatformWebViewControllerCreationParams params;
     if (WebViewPlatform.instance is WebKitWebViewPlatform) {
@@ -129,33 +81,38 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       params = const PlatformWebViewControllerCreationParams();
     }
-
     final controller = WebViewController.fromPlatformCreationParams(params);
-
     controller
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (request) async {
-            // ✅ Исправлено: используется AppConfig.backendHost
             if (request.url
                 .contains('${AppConfig.AppConfig.backendHost}/auth_callback')) {
               await _handleTelegramAuth(request.url);
+              _closeTelegramDialog();
               return NavigationDecision.prevent;
             }
             return NavigationDecision.navigate;
           },
         ),
       )
-      // ✅ Используем telegramLoginUrl из общего конфига
       ..loadRequest(Uri.parse(AppConfig.AppConfig.telegramLoginUrl));
-
     if (controller.platform is AndroidWebViewController) {
       (controller.platform as AndroidWebViewController)
           .setMediaPlaybackRequiresUserGesture(false);
     }
-
     _tgController = controller;
+  }
+
+  void _closeTelegramDialog() {
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.maybePop(context);
+        }
+      });
+    }
   }
 
   Future<void> _handleTelegramAuth(String url) async {
@@ -168,12 +125,10 @@ class _LoginScreenState extends State<LoginScreen> {
           authData[key] = value;
         }
       });
-
       if (!authData.containsKey('id') || !authData.containsKey('hash')) {
         throw Exception('Недостаточно данных');
       }
 
-      // ✅ Исправлено: backendHost
       final response = await http.post(
         Uri.parse('${AppConfig.AppConfig.backendHost}/api/auth/telegram'),
         headers: {'Content-Type': 'application/json'},
@@ -181,29 +136,53 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       final responseData = jsonDecode(response.body);
-      if (response.statusCode == 200) {
-        final String token = responseData['token'];
-        await _storage.write(key: 'jwt_token', value: token);
-
-        final profile = await _apiService.getUserProfile(token);
-        final status = profile['status']?.toString();
-        final role = profile['role']?.toString().toLowerCase();
-
-        if (mounted) {
-          if (status == 'pending' && role != 'superadmin') {
-            Navigator.pushNamedAndRemoveUntil(
-                context, '/pending', (route) => false);
-          } else {
-            Navigator.pushNamedAndRemoveUntil(
-                context, '/dashboard', (route) => false);
-          }
-        }
-      } else {
+      if (response.statusCode != 200) {
         _showError(
             responseData['error'] ?? 'Ошибка авторизации через Telegram');
+        return;
+      }
+
+      // Проверяем наличие токена
+      final String? token = responseData['token'] as String?;
+
+      if (token == null) {
+        // Пользователь создан, но статус pending
+        final status = responseData['status']?.toString() ?? 'pending';
+        final role = responseData['role']?.toString().toLowerCase() ?? 'user';
+
+        if (status == 'pending' && role != 'superadmin') {
+          if (mounted) {
+            Navigator.pushNamedAndRemoveUntil(
+                context, '/pending', (route) => false);
+          }
+        } else {
+          _showError('Ошибка: токен не получен, но статус не pending');
+        }
+        return;
+      }
+
+      // Токен есть — продолжаем
+      await _storage.write(key: 'jwt_token', value: token);
+      final shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
+      await shiftProvider.setToken(token);
+
+      final profile = await _apiService.getUserProfile(token);
+      final status = profile['status']?.toString() ?? 'pending';
+      final role = profile['role']?.toString().toLowerCase() ?? 'user';
+
+      if (status == 'pending' && role != 'superadmin') {
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/pending', (route) => false);
+        }
+      } else {
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/dashboard', (route) => false);
+        }
       }
     } catch (e) {
-      _showError('Ошибка авторизации через Telegram: ${e.toString()}');
+      _showError('Ошибка авторизации: ${e.toString()}');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -215,7 +194,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
-      // ✅ Исправлено: backendHost
       final response = await http.post(
         Uri.parse('${AppConfig.AppConfig.backendHost}/api/auth/login'),
         headers: {'Content-Type': 'application/json'},
@@ -225,25 +203,30 @@ class _LoginScreenState extends State<LoginScreen> {
         }),
       );
       final responseData = jsonDecode(response.body);
-      if (response.statusCode == 200) {
-        final String token = responseData['token'];
-        await _storage.write(key: 'jwt_token', value: token);
+      if (response.statusCode != 200) {
+        _showError(responseData['error'] ?? 'Ошибка авторизации');
+        return;
+      }
 
-        final profile = await _apiService.getUserProfile(token);
-        final status = profile['status']?.toString();
-        final role = profile['role']?.toString().toLowerCase();
+      final String token = responseData['token'];
+      final profile = await _apiService.getUserProfile(token);
+      final status = profile['status']?.toString() ?? 'pending';
+      final role = profile['role']?.toString().toLowerCase() ?? 'user';
 
+      if (status == 'pending' && role != 'superadmin') {
         if (mounted) {
-          if (status == 'pending' && role != 'superadmin') {
-            Navigator.pushNamedAndRemoveUntil(
-                context, '/pending', (route) => false);
-          } else {
-            Navigator.pushNamedAndRemoveUntil(
-                context, '/dashboard', (route) => false);
-          }
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/pending', (route) => false);
         }
       } else {
-        _showError(responseData['error'] ?? 'Ошибка авторизации');
+        await _storage.write(key: 'jwt_token', value: token);
+        final shiftProvider =
+            Provider.of<ShiftProvider>(context, listen: false);
+        await shiftProvider.setToken(token);
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/dashboard', (route) => false);
+        }
       }
     } catch (e) {
       _showError('Ошибка подключения: ${e.toString()}');
@@ -280,7 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     IconButton(
                       onPressed:
-                          _isLoading ? null : () => Navigator.pop(context),
+                          _isLoading ? null : () => Navigator.maybePop(context),
                       icon: const Icon(Icons.close),
                     ),
                   ],
@@ -312,7 +295,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-
     return Scaffold(
       backgroundColor: isDarkMode ? Colors.grey[900] : Colors.grey[50],
       body: SafeArea(
@@ -322,7 +304,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Логотип
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -344,8 +325,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-
-                // Карточка входа
                 Card(
                   elevation: 8,
                   shape: RoundedRectangleBorder(
@@ -497,7 +476,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-
     return TextFormField(
       controller: controller,
       enabled: enabled,
@@ -538,7 +516,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildPasswordField() {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-
     return TextFormField(
       controller: _passwordController,
       obscureText: _obscurePassword,

@@ -6,7 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/location.dart';
 import 'package:micro_mobility_app/models/user_shift_location.dart';
-import 'package:micro_mobility_app/config.dart'; // ✅ Импортируем конфиг
+import 'package:micro_mobility_app/config/config.dart'; // ✅ Импортируем конфиг
 
 class GlobalWebSocketService {
   static final GlobalWebSocketService _instance =

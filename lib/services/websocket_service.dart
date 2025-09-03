@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:micro_mobility_app/config.dart'; // ✅ Импортируем конфиг
+import 'package:micro_mobility_app/config/config.dart'; // ✅ Импортируем конфиг
 import '../models/location.dart';
 import '../models/user_shift_location.dart';
 

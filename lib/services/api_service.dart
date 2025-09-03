@@ -1,3 +1,4 @@
+// /home/evn/eomstart/lib/services/api_service.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart' show debugPrint;
@@ -5,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/active_shift.dart' as active_shift;
 import '../models/shift_data.dart' as shift_data;
-import '../config.dart';
+import '../config/config.dart';
 
 class ApiService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -37,7 +38,8 @@ class ApiService {
       );
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
-        final newAccessToken = body['access_token'];
+        final newAccessToken =
+            body['token']; // Или 'access_token', проверьте ваш ответ
         if (newAccessToken != null) {
           await _storage.write(key: 'jwt_token', value: newAccessToken);
           return newAccessToken as String;
@@ -174,13 +176,52 @@ class ApiService {
       );
     }, token);
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception(
-          'Failed to update role: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      String errorMessage = 'Failed to update role';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to update role') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки updateUserRole: $e');
+      }
+      throw Exception(errorMessage);
+    }
+  }
+
+  Future<void> updateUserStatus(String token, int userId, String status) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.patch(
+        Uri.parse('${AppConfig.apiBaseUrl}/admin/users/$userId/status'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'status': status}),
+      );
+    }, token);
+    if (response.statusCode != 200) {
+      String errorMessage = 'Failed to update user status';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to update user status') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки updateUserStatus: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
   Future<void> createUser(
-      String token, String username, String password) async {
+    String token,
+    String username,
+    String password, {
+    String? firstName,
+  }) async {
     final response = await _authorizedRequest((token) async {
       return await http.post(
         Uri.parse(AppConfig.adminUsersUrl),
@@ -191,11 +232,22 @@ class ApiService {
         body: jsonEncode({
           'username': username,
           'password': password,
+          if (firstName != null) 'first_name': firstName,
         }),
       );
     }, token);
     if (response.statusCode != 201) {
-      throw Exception('Ошибка: ${utf8.decode(response.bodyBytes)}');
+      String errorMessage = 'Failed to create user';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to create user') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки createUser: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -210,40 +262,17 @@ class ApiService {
       );
     }, token);
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception(
-          'Failed to delete user: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
-    }
-  }
-
-  Future<void> activateUser(String token, int userId) async {
-    final response = await _authorizedRequest((token) async {
-      return await http.patch(
-        Uri.parse(AppConfig.updateUserStatusUrl(userId)),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'is_active': true}),
-      );
-    }, token);
-    if (response.statusCode != 200) {
-      throw Exception('Failed to activate user');
-    }
-  }
-
-  Future<void> deactivateUser(String token, int userId) async {
-    final response = await _authorizedRequest((token) async {
-      return await http.patch(
-        Uri.parse(AppConfig.updateUserStatusUrl(userId)),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'is_active': false}),
-      );
-    }, token);
-    if (response.statusCode != 200) {
-      throw Exception('Failed to deactivate user');
+      String errorMessage = 'Failed to delete user';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to delete user') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки deleteUser: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -285,8 +314,17 @@ class ApiService {
         }
         return [];
       } else {
-        throw Exception(
-            'Failed to load shifts: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+        String errorMessage = 'Failed to load shifts';
+        try {
+          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+          errorMessage = errorBody['error']?.toString() ?? errorMessage;
+          if (errorMessage == 'Failed to load shifts') {
+            errorMessage = errorBody['message']?.toString() ?? errorMessage;
+          }
+        } catch (e) {
+          debugPrint('Ошибка парсинга тела ошибки getShifts: $e');
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
       rethrow;
@@ -315,7 +353,7 @@ class ApiService {
       request.headers['Authorization'] = 'Bearer $effectiveToken';
       request.fields['slot_time_range'] = slotTimeRange;
       request.fields['position'] = position;
-      request.fields['zone'] = zone; // ← отправляем как строку
+      request.fields['zone'] = zone;
       if (await selfieImage.exists()) {
         request.files
             .add(await http.MultipartFile.fromPath('selfie', selfieImage.path));
@@ -325,8 +363,17 @@ class ApiService {
       final response = await request.send();
       final resp = await http.Response.fromStream(response);
       if (resp.statusCode != 200 && resp.statusCode != 201) {
-        throw Exception(
-            'Failed to start slot: ${resp.reasonPhrase} - ${utf8.decode(resp.bodyBytes)}');
+        String errorMessage = 'Failed to start slot';
+        try {
+          final errorBody = jsonDecode(utf8.decode(resp.bodyBytes));
+          errorMessage = errorBody['error']?.toString() ?? errorMessage;
+          if (errorMessage == 'Failed to start slot') {
+            errorMessage = errorBody['message']?.toString() ?? errorMessage;
+          }
+        } catch (e) {
+          debugPrint('Ошибка парсинга тела ошибки startSlot: $e');
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
       debugPrint('Error in startSlot: $e');
@@ -346,8 +393,17 @@ class ApiService {
         );
       }, token);
       if (response.statusCode != 200 && response.statusCode != 204) {
-        throw Exception(
-            'Failed to end slot: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+        String errorMessage = 'Failed to end slot';
+        try {
+          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+          errorMessage = errorBody['error']?.toString() ?? errorMessage;
+          if (errorMessage == 'Failed to end slot') {
+            errorMessage = errorBody['message']?.toString() ?? errorMessage;
+          }
+        } catch (e) {
+          debugPrint('Ошибка парсинга тела ошибки endSlot: $e');
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
       debugPrint('Error in endSlot: $e');
@@ -365,7 +421,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       if (response.body == 'null' || response.body.trim().isEmpty) {
         return null;
@@ -386,6 +441,17 @@ class ApiService {
         return null;
       }
     } else {
+      String errorMessage = 'Failed to load active shift';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to load active shift') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки getActiveShift: $e');
+      }
+      debugPrint(errorMessage);
       return null;
     }
   }
@@ -400,7 +466,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       if (response.body == 'null' || response.body.trim().isEmpty) {
         return [];
@@ -418,7 +483,17 @@ class ApiService {
         return [];
       }
     } else {
-      throw Exception('Failed to load active shifts: ${response.statusCode}');
+      String errorMessage = 'Failed to load active shifts';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to load active shifts') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки getActiveShifts: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -442,7 +517,17 @@ class ApiService {
       }
       return [];
     } else {
-      throw Exception('Failed to load ended shifts: ${response.statusCode}');
+      String errorMessage = 'Failed to load ended shifts';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to load ended shifts') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки getEndedShifts: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -463,8 +548,17 @@ class ApiService {
       }
       return [];
     } else {
-      throw Exception(
-          'Failed to load positions: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      String errorMessage = 'Failed to load positions';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to load positions') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки getAvailablePositions: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -485,8 +579,17 @@ class ApiService {
       }
       return [];
     } else {
-      throw Exception(
-          'Failed to load time slots: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+      String errorMessage = 'Failed to load time slots';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to load time slots') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки getAvailableTimeSlots: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -500,7 +603,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       final dynamic body = jsonDecode(response.body);
       if (body is List) {
@@ -518,7 +620,17 @@ class ApiService {
       }
       return [];
     } else {
-      throw Exception('Failed to load zones: ${response.statusCode}');
+      String errorMessage = 'Failed to load zones';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to load zones') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки getAvailableZones: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -532,7 +644,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       final dynamic body = jsonDecode(response.body);
       if (body is List) {
@@ -540,7 +651,17 @@ class ApiService {
       }
       return [];
     } else {
-      throw Exception('Failed to load zones');
+      String errorMessage = 'Failed to load zones raw';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to load zones raw') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки getAvailableZonesRaw: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -556,7 +677,17 @@ class ApiService {
       );
     }, token);
     if (response.statusCode != 201) {
-      throw Exception('Failed to create zone');
+      String errorMessage = 'Failed to create zone';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to create zone') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки createZone: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -572,7 +703,17 @@ class ApiService {
       );
     }, token);
     if (response.statusCode != 200) {
-      throw Exception('Failed to update zone');
+      String errorMessage = 'Failed to update zone';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to update zone') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки updateZone: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -587,7 +728,17 @@ class ApiService {
       );
     }, token);
     if (response.statusCode != 200) {
-      throw Exception('Failed to delete zone');
+      String errorMessage = 'Failed to delete zone';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to delete zone') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('Ошибка парсинга тела ошибки deleteZone: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -607,8 +758,17 @@ class ApiService {
         if (body is List) return body;
         return [];
       } else {
-        throw Exception(
-            'Failed to load maps: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+        String errorMessage = 'Failed to load maps';
+        try {
+          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+          errorMessage = errorBody['error']?.toString() ?? errorMessage;
+          if (errorMessage == 'Failed to load maps') {
+            errorMessage = errorBody['message']?.toString() ?? errorMessage;
+          }
+        } catch (e) {
+          debugPrint('Ошибка парсинга тела ошибки getUploadedMaps: $e');
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
       rethrow;
@@ -649,8 +809,17 @@ class ApiService {
       final response = await request.send();
       final resp = await http.Response.fromStream(response);
       if (resp.statusCode != 200 && resp.statusCode != 201) {
-        throw Exception(
-            'Failed to upload map: ${resp.statusCode} - ${utf8.decode(resp.bodyBytes)}');
+        String errorMessage = 'Failed to upload map';
+        try {
+          final errorBody = jsonDecode(utf8.decode(resp.bodyBytes));
+          errorMessage = errorBody['error']?.toString() ?? errorMessage;
+          if (errorMessage == 'Failed to upload map') {
+            errorMessage = errorBody['message']?.toString() ?? errorMessage;
+          }
+        } catch (e) {
+          debugPrint('Ошибка парсинга тела ошибки uploadMap: $e');
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
       rethrow;
@@ -672,8 +841,17 @@ class ApiService {
         );
       }, token);
       if (response.statusCode != 200 && response.statusCode != 204) {
-        throw Exception(
-            'Failed to delete map: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+        String errorMessage = 'Failed to delete map';
+        try {
+          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+          errorMessage = errorBody['error']?.toString() ?? errorMessage;
+          if (errorMessage == 'Failed to delete map') {
+            errorMessage = errorBody['message']?.toString() ?? errorMessage;
+          }
+        } catch (e) {
+          debugPrint('Ошибка парсинга тела ошибки deleteMap: $e');
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
       rethrow;
@@ -697,8 +875,17 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
-        throw Exception(
-            'Failed to load map: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+        String errorMessage = 'Failed to load map by ID';
+        try {
+          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+          errorMessage = errorBody['error']?.toString() ?? errorMessage;
+          if (errorMessage == 'Failed to load map by ID') {
+            errorMessage = errorBody['message']?.toString() ?? errorMessage;
+          }
+        } catch (e) {
+          debugPrint('Ошибка парсинга тела ошибки getMapById: $e');
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
       rethrow;

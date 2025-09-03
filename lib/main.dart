@@ -19,7 +19,6 @@ import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.d
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 import 'package:micro_mobility_app/screens/splash/splash_screen.dart';
 import 'providers/shift_provider.dart';
-import 'config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +29,6 @@ void main() async {
   final _apiService = ApiService();
   final _prefs = await SharedPreferences.getInstance();
 
-  // Инициализируем глобальные сервисы
   final _globalWebSocketService = GlobalWebSocketService();
   final _locationTrackingService = LocationTrackingService();
 
@@ -45,7 +43,6 @@ void main() async {
             prefs: _prefs,
           ),
         ),
-        // Добавляем глобальные сервисы в провайдеры
         Provider<GlobalWebSocketService>.value(value: _globalWebSocketService),
         Provider<LocationTrackingService>.value(
             value: _locationTrackingService),

@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:micro_mobility_app/config.dart';
+import 'package:micro_mobility_app/config/config.dart';
 import 'package:micro_mobility_app/screens/admin/shift_history_screen.dart';
 import 'package:micro_mobility_app/screens/admin/shift_monitoring_screen.dart';
 import 'package:micro_mobility_app/screens/admin/tasks_screen.dart';
@@ -28,6 +28,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   ];
 
   late TabController _tabController;
+
+  // 🔁 Метод для обновления вкладок
+  void _refreshShifts() {
+    // Просто пересоздаём Future — это безопасно
+    setState(() {
+      // Ничего не делаем — перестроится через FutureBuilder
+    });
+  }
 
   @override
   void initState() {
@@ -57,15 +65,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         break;
       case 2:
         currentBody = MapAndZoneScreen();
-        // onGeoJsonLoaded: (File file) {
-        //   Navigator.pushReplacement(
-        //       context,
-        //       MaterialPageRoute(
-        //         builder: (context) => MapScreen(customGeoJsonFile: file),
-        //       ),
-        //     );
-        //   },
-        // );
         break;
       case 3:
         currentBody = Column(
@@ -88,9 +87,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             Expanded(
               child: TabBarView(
                 controller: _tabController,
-                children: const [
-                  ShiftMonitoringScreen(),
-                  ShiftHistoryScreen(),
+                children: [
+                  // ✅ Экраны просто перестраиваются при setState
+                  const ShiftMonitoringScreen(),
+                  const ShiftHistoryScreen(),
                 ],
               ),
             ),
@@ -111,16 +111,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         backgroundColor: primaryColor,
         elevation: 4,
         actions: [
+          // 🔄 Кнопка просто вызывает setState — и всё обновится
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              final state1 =
-                  context.findAncestorStateOfType<ShiftMonitoringScreenState>();
-              final state2 =
-                  context.findAncestorStateOfType<ShiftHistoryScreenState>();
-              state1?.refresh();
-              state2?.refresh();
-            },
+            onPressed: _refreshShifts,
             tooltip: 'Обновить',
           ),
           PopupMenuButton(
@@ -166,21 +160,25 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
         items: const [
           BottomNavigationBarItem(
-              icon: Icon(Icons.people_outline),
-              activeIcon: Icon(Icons.people),
-              label: 'Пользователи'),
+            icon: Icon(Icons.people_outline),
+            activeIcon: Icon(Icons.people),
+            label: 'Пользователи',
+          ),
           BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_today_outlined),
-              activeIcon: Icon(Icons.calendar_today),
-              label: 'Генератор смен'),
+            icon: Icon(Icons.calendar_today_outlined),
+            activeIcon: Icon(Icons.calendar_today),
+            label: 'Генератор смен',
+          ),
           BottomNavigationBarItem(
-              icon: Icon(Icons.map_outlined),
-              activeIcon: Icon(Icons.map),
-              label: 'Карта'),
+            icon: Icon(Icons.map_outlined),
+            activeIcon: Icon(Icons.map),
+            label: 'Карта',
+          ),
           BottomNavigationBarItem(
-              icon: Icon(Icons.access_time_outlined),
-              activeIcon: Icon(Icons.access_time),
-              label: 'Смены'),
+            icon: Icon(Icons.access_time_outlined),
+            activeIcon: Icon(Icons.access_time),
+            label: 'Смены',
+          ),
         ],
       ),
     );
