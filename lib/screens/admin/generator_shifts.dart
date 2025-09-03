@@ -1,4 +1,3 @@
-// lib/screens/generator_shifts.dart
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -18,7 +17,6 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
   int _morningCount = 0;
   int _eveningCount = 0;
 
-  // Исправлен тип данных для соответствия возвращаемому значению getAdminUsers
   List<dynamic> _availableScouts = [];
   List<int> _selectedScoutIds = [];
 
@@ -49,7 +47,6 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
 
       final scoutsData = await _apiService.getAdminUsers(token);
 
-      // Фильтруем только скаутов
       final scouts = scoutsData
           .where(
               (user) => user is Map<String, dynamic> && user['role'] == 'scout')
@@ -63,9 +60,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ошибка загрузки скаутов: $e')),
         );
@@ -81,22 +76,16 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (picked != null && picked != _date) {
-      setState(() {
-        _date = picked;
-      });
+      setState(() => _date = picked);
     }
   }
 
   void _updateMorningCount(String value) {
-    setState(() {
-      _morningCount = int.tryParse(value) ?? 0;
-    });
+    setState(() => _morningCount = int.tryParse(value) ?? 0);
   }
 
   void _updateEveningCount(String value) {
-    setState(() {
-      _eveningCount = int.tryParse(value) ?? 0;
-    });
+    setState(() => _eveningCount = int.tryParse(value) ?? 0);
   }
 
   Future<void> _generateShifts() async {
@@ -140,9 +129,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
         return;
       }
 
-      setState(() {
-        _isGenerating = true;
-      });
+      setState(() => _isGenerating = true);
 
       await _apiService.generateShifts(
         token: token,
@@ -153,10 +140,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
       );
 
       if (mounted) {
-        setState(() {
-          _isGenerating = false;
-        });
-
+        setState(() => _isGenerating = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Смены успешно сгенерированы!'),
@@ -166,9 +150,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isGenerating = false;
-        });
+        setState(() => _isGenerating = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Ошибка генерации смен: $e'),
@@ -185,12 +167,6 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
     final remainingScouts = totalShifts - _selectedScoutIds.length;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Генератор смен'),
-        centerTitle: true,
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
-      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: _isLoading
@@ -448,7 +424,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
                           ),
                         ),
                       )
-                    else ...[
+                    else
                       Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
@@ -459,7 +435,6 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: _availableScouts.map((scout) {
-                            // Проверка типа данных
                             if (scout is! Map<String, dynamic>)
                               return const SizedBox.shrink();
 
@@ -469,7 +444,6 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
                             final firstName = scout['first_name'] as String?;
                             final displayName = firstName ?? username;
 
-                            // Проверка на null
                             if (userId == null) return const SizedBox.shrink();
 
                             return ChoiceChip(
@@ -505,7 +479,6 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
                           }).toList(),
                         ),
                       ),
-                    ],
 
                     const SizedBox(height: 32),
 

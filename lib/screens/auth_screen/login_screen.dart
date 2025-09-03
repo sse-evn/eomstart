@@ -1,3 +1,4 @@
+// lib/screens/auth_screen/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart'
     show ShiftProvider;
@@ -53,7 +54,9 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
       } catch (e) {
-        await _storage.delete(key: 'jwt_token');
+        debugPrint('Token check failed: $e');
+        // Не удаляем токен сразу, попробуем войти
+        // await _storage.delete(key: 'jwt_token');
       }
     }
   }
@@ -146,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final String? token = responseData['token'] as String?;
 
       if (token == null) {
-        // Пользователь создан, но статус pending
+        // Пользователь создан, но статус pending или ошибка
         final status = responseData['status']?.toString() ?? 'pending';
         final role = responseData['role']?.toString().toLowerCase() ?? 'user';
 
@@ -156,16 +159,28 @@ class _LoginScreenState extends State<LoginScreen> {
                 context, '/pending', (route) => false);
           }
         } else {
-          _showError('Ошибка: токен не получен, но статус не pending');
+          // Это может быть ошибка или неожиданный статус
+          final message =
+              responseData['message'] as String? ?? 'Неизвестная ошибка';
+          _showError(message);
         }
         return;
       }
 
       // Токен есть — продолжаем
       await _storage.write(key: 'jwt_token', value: token);
-      final shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
-      await shiftProvider.setToken(token);
 
+      // Инициализируем провайдер с токеном
+      try {
+        final shiftProvider =
+            Provider.of<ShiftProvider>(context, listen: false);
+        await shiftProvider.setToken(token);
+      } catch (e) {
+        debugPrint("Could not set token in ShiftProvider: $e");
+        // Не критично, продолжаем
+      }
+
+      // Получаем профиль для определения статуса
       final profile = await _apiService.getUserProfile(token);
       final status = profile['status']?.toString() ?? 'pending';
       final role = profile['role']?.toString().toLowerCase() ?? 'user';
@@ -182,7 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } catch (e) {
-      _showError('Ошибка авторизации: ${e.toString()}');
+      _showError('Ошибка авторизации: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -202,13 +217,30 @@ class _LoginScreenState extends State<LoginScreen> {
           'password': _passwordController.text,
         }),
       );
-      final responseData = jsonDecode(response.body);
+
       if (response.statusCode != 200) {
+        final responseData = jsonDecode(response.body);
         _showError(responseData['error'] ?? 'Ошибка авторизации');
         return;
       }
 
+      final responseData = jsonDecode(response.body);
       final String token = responseData['token'];
+
+      // Сохраняем токен
+      await _storage.write(key: 'jwt_token', value: token);
+
+      // Инициализируем провайдер с токеном
+      try {
+        final shiftProvider =
+            Provider.of<ShiftProvider>(context, listen: false);
+        await shiftProvider.setToken(token);
+      } catch (e) {
+        debugPrint("Could not set token in ShiftProvider: $e");
+        // Не критично, продолжаем
+      }
+
+      // Получаем профиль для определения статуса
       final profile = await _apiService.getUserProfile(token);
       final status = profile['status']?.toString() ?? 'pending';
       final role = profile['role']?.toString().toLowerCase() ?? 'user';
@@ -219,17 +251,13 @@ class _LoginScreenState extends State<LoginScreen> {
               context, '/pending', (route) => false);
         }
       } else {
-        await _storage.write(key: 'jwt_token', value: token);
-        final shiftProvider =
-            Provider.of<ShiftProvider>(context, listen: false);
-        await shiftProvider.setToken(token);
         if (mounted) {
           Navigator.pushNamedAndRemoveUntil(
               context, '/dashboard', (route) => false);
         }
       }
     } catch (e) {
-      _showError('Ошибка подключения: ${e.toString()}');
+      _showError('Ошибка подключения: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
