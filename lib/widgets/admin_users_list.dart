@@ -206,26 +206,30 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
       await _refreshData();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(newStatus == 'active'
-                ? 'Пользователь активирован'
-                : 'Пользователь деактивирован'),
-            backgroundColor:
-                newStatus == 'active' ? Colors.green : Colors.orange,
-          ),
-        );
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(newStatus == 'active'
+                  ? 'Пользователь активирован'
+                  : 'Пользователь деактивирован'),
+              backgroundColor:
+                  newStatus == 'active' ? Colors.green : Colors.orange,
+            ),
+          );
+        }
+      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Ошибка: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      });
     }
   }
 
@@ -274,23 +278,27 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
         await _refreshData();
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Роль обновлена'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Роль обновлена'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        });
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ошибка: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Ошибка: ${e.toString()}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        });
       }
     }
   }
@@ -325,58 +333,73 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
         await _refreshData();
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Пользователь удален'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Пользователь удален'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        });
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ошибка: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Ошибка: ${e.toString()}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        });
       }
     }
   }
 
   void _showCreateUserDialog() {
+    _usernameController.clear();
+    _passwordController.clear();
+    _firstNameController.clear();
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Добавить пользователя'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _usernameController,
-              decoration: const InputDecoration(
-                labelText: 'Логин *',
-                prefixIcon: Icon(Icons.person),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _usernameController,
+                decoration: const InputDecoration(
+                  labelText: 'Логин *',
+                  prefixIcon: Icon(Icons.person),
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            TextField(
-              controller: _firstNameController,
-              decoration: const InputDecoration(
-                labelText: 'Имя',
-                prefixIcon: Icon(Icons.badge),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _firstNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Имя',
+                  prefixIcon: Icon(Icons.badge),
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(
-                labelText: 'Пароль *',
-                prefixIcon: Icon(Icons.lock),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _passwordController,
+                decoration: const InputDecoration(
+                  labelText: 'Пароль *',
+                  prefixIcon: Icon(Icons.lock),
+                  border: OutlineInputBorder(),
+                ),
+                obscureText: true,
               ),
-              obscureText: true,
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -386,16 +409,19 @@ class _AdminUsersListState extends State<AdminUsersList> {
           ElevatedButton(
             onPressed: () async {
               final username = _usernameController.text.trim();
-              final password = _passwordController.text;
+              final password = _passwordController.text.trim();
               final firstName = _firstNameController.text.trim();
 
               if (username.isEmpty || password.isEmpty) {
-                if (mounted) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(
-                        content: Text('Заполните обязательные поля')),
-                  );
-                }
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(
+                        content: Text('Заполните обязательные поля'),
+                      ),
+                    );
+                  }
+                });
                 return;
               }
 
@@ -405,29 +431,37 @@ class _AdminUsersListState extends State<AdminUsersList> {
                 final token = await _storage.read(key: 'jwt_token');
                 if (token == null) throw Exception('Токен не найден');
 
-                await _apiService.createUser(token, username, password,
-                    firstName: firstName.isNotEmpty ? firstName : null);
+                await _apiService.createUser(
+                  token,
+                  username,
+                  password,
+                  firstName: firstName.isNotEmpty ? firstName : null,
+                );
 
                 _addLog('🆕 Создан: $username');
                 await _refreshData();
 
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Пользователь создан'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Пользователь создан'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                });
               } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Ошибка: ${e.toString()}'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Ошибка: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                });
               }
             },
             child: const Text('Создать'),
@@ -439,158 +473,223 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _searchController,
-                      onChanged: _filterUsers,
-                      decoration: const InputDecoration(
-                        labelText: 'Поиск',
-                        prefixIcon: Icon(Icons.search),
+    // Права: кто может управлять
+    bool canManage = ['admin', 'superadmin', 'coordinator', 'supervisor']
+        .contains(_currentUserRole);
+    bool canDelete = _currentUserRole == 'superadmin';
+
+    return Stack(
+      children: [
+        // Основной контент
+        Column(
+          children: [
+            // Фильтры
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _searchController,
+                        onChanged: _filterUsers,
+                        decoration: InputDecoration(
+                          labelText: 'Поиск по логину или имени',
+                          prefixIcon: const Icon(Icons.search),
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 16,
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _filterRole,
-                            items: [
-                              const DropdownMenuItem(
-                                  value: 'all', child: Text('Все роли')),
-                              ..._roleLabels.entries.map((e) =>
-                                  DropdownMenuItem(
-                                      value: e.key, child: Text(e.value))),
-                            ],
-                            onChanged: _changeRoleFilter,
-                            decoration:
-                                const InputDecoration(labelText: 'Роль'),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _filterRole,
+                              items: [
+                                const DropdownMenuItem(
+                                  value: 'all',
+                                  child: Text('Все роли'),
+                                ),
+                                ..._roleLabels.entries
+                                    .map((e) => DropdownMenuItem(
+                                          value: e.key,
+                                          child: Text(e.value),
+                                        )),
+                              ],
+                              onChanged: _changeRoleFilter,
+                              decoration: const InputDecoration(
+                                labelText: 'Роль',
+                                border: OutlineInputBorder(),
+                              ),
+                              isExpanded: true,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _filterStatus,
-                            items: const [
-                              DropdownMenuItem(
-                                  value: 'all', child: Text('Все статусы')),
-                              DropdownMenuItem(
-                                  value: 'active', child: Text('Активные')),
-                              DropdownMenuItem(
-                                  value: 'pending', child: Text('Ожидание')),
-                            ],
-                            onChanged: _changeStatusFilter,
-                            decoration:
-                                const InputDecoration(labelText: 'Статус'),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _filterStatus,
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'all',
+                                  child: Text('Все статусы'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'active',
+                                  child: Text('Активные'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'pending',
+                                  child: Text('Ожидание'),
+                                ),
+                              ],
+                              onChanged: _changeStatusFilter,
+                              decoration: const InputDecoration(
+                                labelText: 'Статус',
+                                border: OutlineInputBorder(),
+                              ),
+                              isExpanded: true,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _usersFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error, size: 48, color: Colors.red),
-                        const SizedBox(height: 16),
-                        Text('Ошибка: ${snapshot.error}'),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: _refreshData,
-                          child: const Text('Повторить'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
+            // Список пользователей
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refreshData,
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _usersFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text('Пользователи не найдены'));
-                }
-
-                final filteredUsers = _applyFilters(snapshot.data!);
-
-                if (filteredUsers.isEmpty) {
-                  return const Center(
-                      child: Text('Нет пользователей по выбранным фильтрам'));
-                }
-
-                return ListView.builder(
-                  itemCount: filteredUsers.length,
-                  itemBuilder: (context, index) {
-                    final user = filteredUsers[index];
-                    final username =
-                        user['username'] as String? ?? 'Неизвестно';
-                    final firstName = user['first_name'] as String?;
-                    final role = user['role'] as String? ?? 'user';
-                    final status = user['status'] as String? ?? 'pending';
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          child: Text(username.substring(0, 1).toUpperCase()),
-                        ),
-                        title: Text(firstName ?? username),
-                        subtitle: Text('@$username'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Chip(
-                              label: Text(_roleLabels[role] ?? role),
-                              backgroundColor:
-                                  _roleColors[role]?.withOpacity(0.1),
-                              labelStyle: TextStyle(color: _roleColors[role]),
-                            ),
-                            const SizedBox(width: 8),
-                            Chip(
-                              label: Text(
-                                  status == 'active' ? 'Активен' : 'Ожидание'),
-                              backgroundColor:
-                                  _statusColors[status]?.withOpacity(0.1),
-                              labelStyle:
-                                  TextStyle(color: _statusColors[status]),
+                            const Icon(Icons.error,
+                                size: 48, color: Colors.red),
+                            const SizedBox(height: 16),
+                            Text('Ошибка: ${snapshot.error}'),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _refreshData,
+                              child: const Text('Повторить'),
                             ),
                           ],
                         ),
-                        onTap: () => _showUserActions(user),
-                      ),
+                      );
+                    }
+
+                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                      return const Center(
+                          child: Text('Пользователи не найдены'));
+                    }
+
+                    final filteredUsers = _applyFilters(snapshot.data!);
+
+                    if (filteredUsers.isEmpty) {
+                      return const Center(
+                        child: Text('Нет пользователей по выбранным фильтрам'),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: filteredUsers.length,
+                      itemBuilder: (context, index) {
+                        final user = filteredUsers[index];
+                        final username =
+                            user['username'] as String? ?? 'Неизвестно';
+                        final firstName = user['first_name'] as String?;
+                        final role = user['role'] as String? ?? 'user';
+                        final status = user['status'] as String? ?? 'pending';
+                        return Card(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: _roleColors[role],
+                              child: Text(
+                                username.substring(0, 1).toUpperCase(),
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                            title: Text(firstName ?? username),
+                            subtitle: Text(
+                              '@$username • ${_roleLabels[role] ?? role}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Chip(
+                                  label: Text(
+                                    status == 'active' ? 'Активен' : 'Ожидание',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: _statusColors[status],
+                                    ),
+                                  ),
+                                  backgroundColor:
+                                      _statusColors[status]?.withOpacity(0.1),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: BorderSide(
+                                      color:
+                                          _statusColors[status] ?? Colors.grey,
+                                      width: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            onTap: () => _showUserActions(user),
+                          ),
+                        );
+                      },
                     );
                   },
-                );
-              },
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        // Кнопка "Добавить" — справа снизу
+        if (canManage)
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: FloatingActionButton(
+              onPressed: _showCreateUserDialog,
+              tooltip: 'Добавить пользователя',
+              child: const Icon(Icons.person_add),
             ),
           ),
-        ],
-      ),
-      floatingActionButton:
-          (_currentUserRole == 'admin' || _currentUserRole == 'superadmin')
-              ? FloatingActionButton(
-                  onPressed: _showCreateUserDialog,
-                  child: const Icon(Icons.person_add),
-                )
-              : null,
+      ],
     );
   }
 
@@ -602,59 +701,99 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
     if (userId == null) return;
 
+    bool canManage = ['admin', 'superadmin', 'coordinator', 'supervisor']
+        .contains(_currentUserRole);
+    bool canDelete = _currentUserRole == 'superadmin';
+
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              username,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text('Роль: ${_roleLabels[role] ?? role}'),
-            Text('Статус: ${status == 'active' ? 'Активен' : 'Ожидание'}'),
-            const SizedBox(height: 16),
-            if (_currentUserRole == 'admin' || _currentUserRole == 'superadmin')
-              if (status != 'active')
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                username,
+                style:
+                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Роль: ${_roleLabels[role] ?? role}',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _roleColors[role]),
+              ),
+              Text(
+                'Статус: ${status == 'active' ? 'Активен' : 'Ожидание'}',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _statusColors[status]),
+              ),
+              const SizedBox(height: 24),
+              if (canManage)
+                if (status != 'active')
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _updateUserStatus(userId, username, 'active');
+                    },
+                    child: const Text('Активировать'),
+                  ),
+              if (canManage)
+                if (status == 'active')
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _updateUserStatus(userId, username, 'pending');
+                    },
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange),
+                    child: const Text('Деактивировать'),
+                  ),
+              if (canManage)
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    _updateUserStatus(userId, username, 'active');
+                    _changeUserRole(userId, username, role);
                   },
-                  child: const Text('Активировать'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.secondary,
+                  ),
+                  child: const Text('Изменить роль'),
                 ),
-            if (_currentUserRole == 'admin' || _currentUserRole == 'superadmin')
-              if (status == 'active')
+              if (canDelete)
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    _updateUserStatus(userId, username, 'pending');
+                    _deleteUser(userId, username);
                   },
-                  style:
-                      ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                  child: const Text('Деактивировать'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Удалить'),
                 ),
-            if (_currentUserRole == 'admin' || _currentUserRole == 'superadmin')
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _changeUserRole(userId, username, role);
-                },
-                child: const Text('Изменить роль'),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Закрыть'),
               ),
-            if (_currentUserRole == 'superadmin')
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _deleteUser(userId, username);
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('Удалить'),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

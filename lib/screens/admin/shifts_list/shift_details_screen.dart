@@ -8,8 +8,7 @@ import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart';
 import 'package:micro_mobility_app/utils/time_utils.dart';
-import 'package:intl/intl.dart';
-import 'package:micro_mobility_app/config/google_sheets_config.dart'; // ✅ Подключаем ставку
+import 'package:micro_mobility_app/config/google_sheets_config.dart';
 
 class ShiftDetailsScreen extends StatefulWidget {
   final ActiveShift shift;
@@ -144,26 +143,10 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     return '${payment.toStringAsFixed(0)} ${GoogleSheetsConfig.currency}';
   }
 
-  // ✅ Формат даты
+  // ✅ Формат даты (используем готовую функцию из time_utils)
   String _formatDate(String? isoString) {
     if (isoString == null || isoString.isEmpty) return '–';
-    try {
-      final date = DateTime.parse(isoString);
-      return DateFormat('dd.MM.yyyy').format(date);
-    } catch (e) {
-      return '–';
-    }
-  }
-
-  // ✅ Формат времени
-  String _formatTime(String? isoString) {
-    if (isoString == null || isoString.isEmpty) return '–';
-    try {
-      final time = DateTime.parse(isoString);
-      return DateFormat('HH:mm').format(time);
-    } catch (e) {
-      return '–';
-    }
+    return extractDateFromIsoString(isoString);
   }
 
   @override
@@ -172,10 +155,8 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     final textTheme = theme.textTheme;
     final primaryColor = theme.primaryColor;
 
-    // ✅ Переменные объявлены в build()
     final bool isEnded = widget.shift.endTimeString != null;
     final Color statusColor = isEnded ? Colors.green : Colors.orange;
-
     final duration = _getDuration();
 
     return Scaffold(
@@ -200,8 +181,8 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     // 🧑‍💼 Карточка пользователя
-                    _buildUserCard(
-                        context, theme, primaryColor, isEnded, statusColor),
+                    _buildUserCard(context, theme, primaryColor, isEnded,
+                        statusColor, duration),
 
                     const SizedBox(height: 24),
 
@@ -216,7 +197,8 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
                     const SizedBox(height: 24),
 
                     // 💰 Расчёт оплаты
-                    _buildPaymentSection(context, theme, primaryColor),
+                    _buildPaymentSection(
+                        context, theme, primaryColor, duration),
 
                     const SizedBox(height: 24),
 
@@ -253,13 +235,13 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     );
   }
 
-  // ✅ Передаём isEnded и statusColor как параметры
   Widget _buildUserCard(
     BuildContext context,
     ThemeData theme,
     Color primaryColor,
     bool isEnded,
     Color statusColor,
+    Duration? duration,
   ) {
     final photoUrl = '${AppConfig.mediaBaseUrl}${widget.shift.selfie}';
 
@@ -326,7 +308,7 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      _formatDuration(_getDuration()),
+                      _formatDuration(duration),
                       style: const TextStyle(fontSize: 12, color: Colors.blue),
                     ),
                   ],
@@ -471,11 +453,15 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
               'Слот времени', widget.shift.slotTimeRange, primaryColor),
           _buildInfoRow('Дата начала',
               _formatDate(widget.shift.startTimeString), primaryColor),
-          _buildInfoRow('Время начала',
-              _formatTime(widget.shift.startTimeString), primaryColor),
+          _buildInfoRow(
+              'Время начала',
+              extractTimeFromIsoString(widget.shift.startTimeString),
+              primaryColor),
           if (widget.shift.endTimeString != null)
-            _buildInfoRow('Время окончания',
-                _formatTime(widget.shift.endTimeString), primaryColor),
+            _buildInfoRow(
+                'Время окончания',
+                extractTimeFromIsoString(widget.shift.endTimeString),
+                primaryColor),
           _buildInfoRow(
               'ID сотрудника', widget.shift.userId.toString(), primaryColor),
         ],
@@ -483,9 +469,8 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     );
   }
 
-  Widget _buildPaymentSection(
-      BuildContext context, ThemeData theme, Color primaryColor) {
-    final duration = _getDuration();
+  Widget _buildPaymentSection(BuildContext context, ThemeData theme,
+      Color primaryColor, Duration? duration) {
     if (duration == null) return Container();
 
     return Container(

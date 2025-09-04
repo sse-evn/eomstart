@@ -10,7 +10,6 @@ import 'package:micro_mobility_app/config/google_sheets_config.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
 import 'package:micro_mobility_app/screens/admin/shifts_list/shift_details_screen.dart';
 import 'package:micro_mobility_app/utils/time_utils.dart';
-import 'package:intl/intl.dart';
 
 class ShiftHistoryScreen extends StatefulWidget {
   const ShiftHistoryScreen({super.key});

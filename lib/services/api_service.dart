@@ -948,4 +948,25 @@ class ApiService {
       throw Exception('Ошибка: $message');
     }
   }
+
+  Future<List<dynamic>> getShiftsByDate(String token, String date) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/shifts/date/$date'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+    }, token);
+
+    if (response.statusCode == 200) {
+      final dynamic body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (body is List) return body.cast<dynamic>();
+      return [];
+    } else {
+      throw Exception(
+          'Не удалось загрузить смены за $date: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
+    }
+  }
 }
