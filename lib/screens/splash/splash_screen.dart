@@ -1,8 +1,10 @@
-// lib/screens/splash/splash_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:micro_mobility_app/config/config.dart';
 import 'package:micro_mobility_app/services/websocket/global_websocket_service.dart';
-import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -12,6 +14,8 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
   @override
   void initState() {
     super.initState();
@@ -19,14 +23,56 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initializeApp() async {
-    // Получаем глобальный WebSocket сервис и инициализируем его
-    final globalWebSocketService =
-        Provider.of<GlobalWebSocketService>(context, listen: false);
-    await globalWebSocketService.init();
+    try {
+      debugPrint('Checking tokens on app start...');
 
-    // Переходим на экран входа
-    if (mounted) {
-      Navigator.of(context).pushReplacementNamed('/');
+      final globalWebSocketService =
+          Provider.of<GlobalWebSocketService>(context, listen: false);
+      await globalWebSocketService.init();
+
+      final token = await _storage.read(key: 'jwt_token');
+      if (token != null) {
+        debugPrint(
+            'Access token found. Checking if it\'s valid or needs refresh...');
+
+        final response = await http.get(
+          Uri.parse(AppConfig.profileUrl),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json'
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final userData = jsonDecode(response.body) as Map<String, dynamic>;
+          final status = userData['status'] as String?;
+          final isActive = userData['is_active'] as bool?;
+
+          debugPrint(
+              'Access token is valid. Status: $status, Role: ${userData['role']}');
+
+          if (status == 'active' && isActive == true) {
+            if (mounted) {
+              Navigator.pushReplacementNamed(context, '/dashboard');
+            }
+            return;
+          } else {
+            if (mounted) {
+              Navigator.pushReplacementNamed(context, '/pending');
+            }
+            return;
+          }
+        }
+      }
+
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    } catch (e) {
+      debugPrint('Error in splash screen: $e');
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-// lib/screens/employee_map_tab.dart
+// lib/screens/admin/tabs/employee_map_tab.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -14,28 +14,47 @@ class EmployeeMapTab extends StatefulWidget {
   State<EmployeeMapTab> createState() => _EmployeeMapTabState();
 }
 
-class _EmployeeMapTabState extends State<EmployeeMapTab> {
+class _EmployeeMapTabState extends State<EmployeeMapTab>
+    with AutomaticKeepAliveClientMixin {
   late EmployeeMapLogic logic;
+  bool _isLogicInitialized = false;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    _initLogic();
+  }
+
+  Future<void> _initLogic() async {
+    if (_isLogicInitialized) return;
+
     logic = EmployeeMapLogic(context);
     logic.onStateChanged = () {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     };
+
+    _isLogicInitialized = true;
     logic.init();
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    // 🔥 Критически важно: уничтожаем логику
     logic.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (logic.isLoading) {
+    super.build(context); // для AutomaticKeepAliveClientMixin
+
+    if (!_isLogicInitialized || logic.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -52,10 +71,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab> {
                   logic.isLoading = true;
                   logic.error = '';
                 });
-                // Перезапускаем инициализацию через публичный метод
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  logic.initMap(); // ✅ Но лучше — вынести в публичный метод
-                });
+                _initLogic();
               },
               child: const Text('Попробовать снова'),
             ),

@@ -107,7 +107,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
           content:
-              Text('Ваш аккаунт все еще ожидает подтверждения администратором'),
+              Text('Ваш аккаунт всё ещё ожидает подтверждения администратором'),
           duration: Duration(seconds: 2)),
     );
   }
@@ -144,89 +144,119 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
 
   @override
   Widget build(BuildContext context) {
-    const primaryColor = Color(0xFF388E3C);
+    final primaryColor = Colors.green[700]!;
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Colors.grey[50],
       body: Center(
         child: SingleChildScrollView(
-          child: Card(
-            elevation: 10,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            margin: const EdgeInsets.symmetric(horizontal: 32),
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    height: 120,
-                    child: Lottie.asset(
-                      'assets/icons/Insider-loading.json',
-                      controller: _controller,
-                      onLoaded: (composition) {
-                        _controller.duration = composition.duration;
-                      },
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('Ожидание подтверждения',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: primaryColor)),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Ваш аккаунт находится на рассмотрении у администратора. Пожалуйста, подождите — мы свяжемся с вами в ближайшее время.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Проверка обычно занимает не более 24 часов',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                        fontStyle: FontStyle.italic),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 45,
-                    child: ElevatedButton.icon(
-                      onPressed: _isChecking ? null : _checkUserStatus,
-                      icon: _isChecking
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor:
-                                      AlwaysStoppedAnimation(Colors.white)))
-                          : const Icon(Icons.refresh, size: 18),
-                      label: _isChecking
-                          ? const Text('Проверка...')
-                          : const Text('Проверить статус'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                      onPressed: _isChecking ? null : _logout,
-                      child: const Text('Выйти из системы')),
-                  const SizedBox(height: 8),
-                  if (_isChecking)
-                    const Text('Автопроверка каждые 5 секунд...',
-                        style: TextStyle(fontSize: 12, color: Colors.grey)),
-                ],
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Лого или анимация
+              SizedBox(
+                height: 150,
+                child: Lottie.asset(
+                  'assets/icons/wired-lineal-884-electric-scooter-loop-cycle.json', // Замени на свою анимацию
+                  controller: _controller,
+                  onLoaded: (composition) {
+                    _controller.duration = composition.duration;
+                  },
+                  fit: BoxFit.contain,
+                ),
               ),
-            ),
+              const SizedBox(height: 20),
+
+              // Заголовок
+              Text(
+                'Ожидание подтверждения',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: primaryColor,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+
+              // Подзаголовок
+              const Text(
+                'Ваш аккаунт находится на рассмотрении у администратора. Мы свяжемся с вами в ближайшее время.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+              const SizedBox(height: 24),
+
+              // Информация о времени
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: primaryColor.withOpacity(0.3)),
+                ),
+                child: const Text(
+                  'Проверка обычно занимает не более 24 часов',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.green,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
+
+              // Кнопка "Проверить статус"
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _isChecking ? null : _checkUserStatus,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: _isChecking
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.refresh,
+                          size: 18, color: Colors.white),
+                  label: _isChecking
+                      ? const Text('Проверка...',
+                          style: TextStyle(color: Colors.white))
+                      : const Text('Проверить статус',
+                          style: TextStyle(color: Colors.white)),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Выход из системы
+              TextButton(
+                onPressed: _isChecking ? null : _logout,
+                child: const Text(
+                  'Выйти из системы',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Автопроверка
+              if (_isChecking)
+                const Text(
+                  'Автопроверка каждые 5 секунд...',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+            ],
           ),
         ),
       ),

@@ -1,4 +1,3 @@
-// /home/evn/eomstart/lib/services/api_service.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart' show debugPrint;
@@ -16,10 +15,15 @@ class ApiService {
     String originalToken,
   ) async {
     http.Response response = await requestFunction(originalToken);
+
     if (response.statusCode == 401) {
+      debugPrint('Access token expired (401). Attempting to refresh...');
       final newToken = await refreshToken();
       if (newToken != null) {
+        debugPrint('Token refreshed successfully. Retrying request...');
         response = await requestFunction(newToken);
+      } else {
+        debugPrint('Failed to refresh token. User needs to log in again.');
       }
     }
     return response;
@@ -28,27 +32,48 @@ class ApiService {
   Future<String?> refreshToken() async {
     try {
       final refreshToken = await _storage.read(key: 'refresh_token');
-      if (refreshToken == null) {
+      if (refreshToken == null || refreshToken.isEmpty) {
+        debugPrint('No refresh token found in storage.');
         return null;
       }
+
+      debugPrint('Attempting to refresh token with stored refresh token.');
+
       final response = await http.post(
         Uri.parse(AppConfig.refreshTokenUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh_token': refreshToken}),
       );
+
+      debugPrint('Refresh token response status: ${response.statusCode}');
+
       if (response.statusCode == 200) {
-        final body = jsonDecode(response.body) as Map<String, dynamic>;
-        final newAccessToken =
-            body['token']; // Или 'access_token', проверьте ваш ответ
+        final body = jsonDecode(response.body) as Map<String, dynamic>?;
+
+        final newAccessToken = body?['token'] as String?;
+        final newRefreshToken = body?['refresh_token'] as String?;
+
         if (newAccessToken != null) {
           await _storage.write(key: 'jwt_token', value: newAccessToken);
-          return newAccessToken as String;
+          if (newRefreshToken != null) {
+            await _storage.write(key: 'refresh_token', value: newRefreshToken);
+            debugPrint('New access and refresh tokens saved.');
+          } else {
+            debugPrint('Warning: New refresh token not received from server.');
+          }
+          return newAccessToken;
+        } else {
+          debugPrint('Refresh response missing access token.');
         }
       } else {
+        debugPrint(
+            'Refresh token request failed: ${response.statusCode}. Clearing tokens.');
+        await _storage.delete(key: 'jwt_token');
         await _storage.delete(key: 'refresh_token');
       }
-    } catch (e) {
-      debugPrint('Exception during token refresh: $e');
+    } catch (e, stackTrace) {
+      debugPrint(
+          'Exception during token refresh: $e\nStack trace: $stackTrace');
     }
     return null;
   }
@@ -62,31 +87,56 @@ class ApiService {
         'password': password,
       }),
     );
+
     if (response.statusCode == 200) {
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      await _storage.write(key: 'jwt_token', value: body['token']);
-      await _storage.write(key: 'refresh_token', value: body['refresh_token']);
-      return body;
+      final body = jsonDecode(response.body) as Map<String, dynamic>?;
+
+      final accessToken = body?['token'] as String?;
+      final refreshToken = body?['refresh_token'] as String?;
+
+      if (accessToken != null && refreshToken != null) {
+        await _storage.write(key: 'jwt_token', value: accessToken);
+        await _storage.write(key: 'refresh_token', value: refreshToken);
+        debugPrint('Login successful. Tokens saved.');
+        return body!;
+      } else {
+        debugPrint('Login response missing tokens.');
+        throw Exception(
+            'Ошибка авторизации: Неполный ответ от сервера (отсутствуют токены)');
+      }
     } else {
-      throw Exception(
-          'Ошибка авторизации: ${response.statusCode} - ${response.body}');
+      debugPrint('Login failed: ${response.statusCode} - ${response.body}');
+      String errorMessage = 'Ошибка авторизации: ${response.statusCode}';
+      try {
+        final errorBody = jsonDecode(response.body) as Map<String, dynamic>?;
+        errorMessage = errorBody?['error']?.toString() ??
+            errorBody?['message']?.toString() ??
+            errorMessage;
+      } catch (e) {
+        debugPrint('Error parsing login error response: $e');
+      }
+      throw Exception(errorMessage);
     }
   }
 
   Future<void> logout(String token) async {
     try {
-      await http.post(
+      final response = await http.post(
         Uri.parse(AppConfig.logoutUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
+      if (response.statusCode != 200) {
+        debugPrint('Logout endpoint returned status ${response.statusCode}');
+      }
     } catch (e) {
-      debugPrint('Error calling logout endpoint: $e');
+      debugPrint('Error calling logout endpoint (not critical): $e');
     } finally {
       await _storage.delete(key: 'jwt_token');
       await _storage.delete(key: 'refresh_token');
+      debugPrint('Tokens cleared on logout.');
     }
   }
 
@@ -959,7 +1009,6 @@ class ApiService {
         },
       );
     }, token);
-
     if (response.statusCode == 200) {
       final dynamic body = jsonDecode(utf8.decode(response.bodyBytes));
       if (body is List) return body.cast<dynamic>();

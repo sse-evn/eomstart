@@ -1,4 +1,3 @@
-// lib/screens/auth_screen/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart'
     show ShiftProvider;
@@ -38,12 +37,19 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _checkTokenAndNavigate() async {
-    final String? token = await _storage.read(key: 'jwt_token');
-    if (mounted && token != null && token.isNotEmpty) {
+    debugPrint("Checking tokens on app start...");
+    final String? accessToken = await _storage.read(key: 'jwt_token');
+
+    if (accessToken != null && accessToken.isNotEmpty) {
+      debugPrint(
+          "Access token found. Checking if it's valid or needs refresh...");
+
       try {
-        final profile = await _apiService.getUserProfile(token);
+        final profile = await _apiService.getUserProfile(accessToken);
         final status = profile['status']?.toString() ?? 'pending';
         final role = profile['role']?.toString().toLowerCase() ?? 'user';
+        debugPrint("Access token is valid. Status: $status, Role: $role");
+
         if (mounted) {
           if (status == 'pending' && role != 'superadmin') {
             Navigator.pushNamedAndRemoveUntil(
@@ -53,12 +59,45 @@ class _LoginScreenState extends State<LoginScreen> {
                 context, '/dashboard', (route) => false);
           }
         }
+        return;
       } catch (e) {
-        debugPrint('Token check failed: $e');
-        // Не удаляем токен сразу, попробуем войти
-        // await _storage.delete(key: 'jwt_token');
+        debugPrint('Access token check failed: $e');
       }
+
+      debugPrint("Attempting to refresh token...");
+      final newAccessToken = await _apiService.refreshToken();
+      if (newAccessToken != null) {
+        debugPrint("Token refreshed successfully after failed profile check.");
+
+        try {
+          final profile = await _apiService.getUserProfile(newAccessToken);
+          final status = profile['status']?.toString() ?? 'pending';
+          final role = profile['role']?.toString().toLowerCase() ?? 'user';
+          debugPrint(
+              "Profile fetched with new token. Status: $status, Role: $role");
+
+          if (mounted) {
+            if (status == 'pending' && role != 'superadmin') {
+              Navigator.pushNamedAndRemoveUntil(
+                  context, '/pending', (route) => false);
+            } else {
+              Navigator.pushNamedAndRemoveUntil(
+                  context, '/dashboard', (route) => false);
+            }
+          }
+          return;
+        } catch (profileError) {
+          debugPrint(
+              'Failed to get profile even with new token: $profileError');
+        }
+      } else {
+        debugPrint("Failed to refresh token or no refresh token available.");
+      }
+    } else {
+      debugPrint("No access token found.");
     }
+
+    debugPrint("Staying on login screen.");
   }
 
   void _showError(String message) {
@@ -131,56 +170,45 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!authData.containsKey('id') || !authData.containsKey('hash')) {
         throw Exception('Недостаточно данных');
       }
-
       final response = await http.post(
         Uri.parse('${AppConfig.AppConfig.backendHost}/api/auth/telegram'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(authData),
       );
 
-      final responseData = jsonDecode(response.body);
+      final responseData = jsonDecode(response.body) as Map<String, dynamic>?;
+
       if (response.statusCode != 200) {
         _showError(
-            responseData['error'] ?? 'Ошибка авторизации через Telegram');
+            responseData?['error'] ?? 'Ошибка авторизации через Telegram');
         return;
       }
 
-      // Проверяем наличие токена
-      final String? token = responseData['token'] as String?;
-
+      final String? token = responseData?['token'] as String?;
       if (token == null) {
-        // Пользователь создан, но статус pending или ошибка
-        final status = responseData['status']?.toString() ?? 'pending';
-        final role = responseData['role']?.toString().toLowerCase() ?? 'user';
-
+        final status = responseData?['status']?.toString() ?? 'pending';
+        final role = responseData?['role']?.toString().toLowerCase() ?? 'user';
         if (status == 'pending' && role != 'superadmin') {
           if (mounted) {
             Navigator.pushNamedAndRemoveUntil(
                 context, '/pending', (route) => false);
           }
         } else {
-          // Это может быть ошибка или неожиданный статус
           final message =
-              responseData['message'] as String? ?? 'Неизвестная ошибка';
+              responseData?['message'] as String? ?? 'Неизвестная ошибка';
           _showError(message);
         }
         return;
       }
 
-      // Токен есть — продолжаем
-      await _storage.write(key: 'jwt_token', value: token);
-
-      // Инициализируем провайдер с токеном
       try {
         final shiftProvider =
             Provider.of<ShiftProvider>(context, listen: false);
         await shiftProvider.setToken(token);
       } catch (e) {
         debugPrint("Could not set token in ShiftProvider: $e");
-        // Не критично, продолжаем
       }
 
-      // Получаем профиль для определения статуса
       final profile = await _apiService.getUserProfile(token);
       final status = profile['status']?.toString() ?? 'pending';
       final role = profile['role']?.toString().toLowerCase() ?? 'user';
@@ -209,38 +237,19 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
-      final response = await http.post(
-        Uri.parse('${AppConfig.AppConfig.backendHost}/api/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': _usernameController.text,
-          'password': _passwordController.text,
-        }),
-      );
+      final responseData = await _apiService.login(
+          _usernameController.text, _passwordController.text);
 
-      if (response.statusCode != 200) {
-        final responseData = jsonDecode(response.body);
-        _showError(responseData['error'] ?? 'Ошибка авторизации');
-        return;
-      }
+      final String token = responseData['token'] as String;
 
-      final responseData = jsonDecode(response.body);
-      final String token = responseData['token'];
-
-      // Сохраняем токен
-      await _storage.write(key: 'jwt_token', value: token);
-
-      // Инициализируем провайдер с токеном
       try {
         final shiftProvider =
             Provider.of<ShiftProvider>(context, listen: false);
         await shiftProvider.setToken(token);
       } catch (e) {
         debugPrint("Could not set token in ShiftProvider: $e");
-        // Не критично, продолжаем
       }
 
-      // Получаем профиль для определения статуса
       final profile = await _apiService.getUserProfile(token);
       final status = profile['status']?.toString() ?? 'pending';
       final role = profile['role']?.toString().toLowerCase() ?? 'user';
@@ -257,7 +266,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } catch (e) {
-      _showError('Ошибка подключения: $e');
+      _showError('Ошибка подключения или авторизации: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
