@@ -29,7 +29,7 @@ class EmployeeMapLogic {
   bool isWebSocketConnected = false;
 
   // Services
-  late GlobalWebSocketService globalWebSocketService;
+  // late GlobalWebSocketService globalWebSocketService;
   late LocationTrackingService locationTrackingService;
   final FlutterSecureStorage storage = const FlutterSecureStorage();
 
@@ -38,25 +38,25 @@ class EmployeeMapLogic {
 
   EmployeeMapLogic(this.context) {
     mapController = MapController();
-    globalWebSocketService =
-        Provider.of<GlobalWebSocketService>(context, listen: false);
+    // globalWebSocketService =
+    //     Provider.of<GlobalWebSocketService>(context, listen: false);
     locationTrackingService =
         Provider.of<LocationTrackingService>(context, listen: false);
   }
 
   void init() {
-    globalWebSocketService.addLocationsCallback(_updateUsers);
-    globalWebSocketService.addShiftsCallback(_updateShifts);
-    globalWebSocketService.addConnectionCallback(_updateConnectionStatus);
+    // globalWebSocketService.addLocationsCallback(_updateUsers);
+    // globalWebSocketService.addShiftsCallback(_updateShifts);
+    // globalWebSocketService.addConnectionCallback(_updateConnectionStatus);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initMap();
     });
   }
 
   void dispose() {
-    globalWebSocketService.removeLocationsCallback(_updateUsers);
-    globalWebSocketService.removeShiftsCallback(_updateShifts);
-    globalWebSocketService.removeConnectionCallback(_updateConnectionStatus);
+    // globalWebSocketService.removeLocationsCallback(_updateUsers);
+    // globalWebSocketService.removeShiftsCallback(_updateShifts);
+    // globalWebSocketService.removeConnectionCallback(_updateConnectionStatus);
     mapController.dispose();
   }
 

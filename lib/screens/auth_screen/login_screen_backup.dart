@@ -234,47 +234,44 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _handleRegularLogin() async {
-    Navigator.pushNamedAndRemoveUntil(
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+    try {
+      final responseData = await _apiService.login(
+          _usernameController.text, _passwordController.text);
+
+      final String token = responseData['token'] as String;
+
+      try {
+        final shiftProvider =
+            Provider.of<ShiftProvider>(context, listen: false);
+        await shiftProvider.setToken(token);
+      } catch (e) {
+        debugPrint("Could not set token in ShiftProvider: $e");
+      }
+
+      final profile = await _apiService.getUserProfile(token);
+      final status = profile['status']?.toString() ?? 'pending';
+      final role = profile['role']?.toString().toLowerCase() ?? 'user';
+
+      if (status == 'pending' && role != 'superadmin') {
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/pending', (route) => false);
+        }
+      } else {
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
               context, '/dashboard', (route) => false);
-
-    // if (!_formKey.currentState!.validate()) return;
-    // setState(() => _isLoading = true);
-    // try {
-    //   final responseData = await _apiService.login(
-    //       _usernameController.text, _passwordController.text);
-
-    //   final String token = responseData['token'] as String;
-
-    //   try {
-    //     final shiftProvider =
-    //         Provider.of<ShiftProvider>(context, listen: false);
-    //     await shiftProvider.setToken(token);
-    //   } catch (e) {
-    //     debugPrint("Could not set token in ShiftProvider: $e");
-    //   }
-
-    //   final profile = await _apiService.getUserProfile(token);
-    //   final status = profile['status']?.toString() ?? 'pending';
-    //   final role = profile['role']?.toString().toLowerCase() ?? 'user';
-
-    //   if (status == 'pending' && role != 'superadmin') {
-    //     if (mounted) {
-    //       Navigator.pushNamedAndRemoveUntil(
-    //           context, '/pending', (route) => false);
-    //     }
-    //   } else {
-    //     if (mounted) {
-    //       Navigator.pushNamedAndRemoveUntil(
-    //           context, '/dashboard', (route) => false);
-    //     }
-    //   }
-    // } catch (e) {
-    //   _showError('Ошибка подключения или авторизации: $e');
-    // } finally {
-    //   if (mounted) {
-    //     setState(() => _isLoading = false);
-    //   }
-    // }
+        }
+      }
+    } catch (e) {
+      _showError('Ошибка подключения или авторизации: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _showTelegramAuthDialog() {
@@ -344,122 +341,144 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-
-                SvgPicture.asset(
-                  'assets/eom2.svg',
-                  height: 180,
-                ),
-
-                // const SizedBox(height: 32),
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Вход в систему',
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color:
-                              isDarkMode ? Colors.white : Colors.green[800],
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      _buildTextField(
-                        controller: _usernameController,
-                        label: 'Имя пользователя',
-                        icon: Icons.person_outline,
-                        enabled: !_isLoading,
-                      ),
-                      const SizedBox(height: 20),
-                      _buildPasswordField(),
-                      const SizedBox(height: 32),
-
-                      SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green[700],
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16)),
-                            elevation: 4,
-                          ),
-                          onPressed:
-                              _isLoading ? null : _handleRegularLogin,
-                          child: _isLoading
-                              ? const CircularProgressIndicator(
-                                  color: Colors.white)
-                              : const Text(
-                                  'Войти',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          const Expanded(
-                              child: Divider(
-                                  color: Colors.grey, thickness: 1)),
-                          Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              'или',
-                              style: TextStyle(
-                                color: isDarkMode
-                                    ? Colors.grey[400]
-                                    : Colors.grey[700],
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                          const Expanded(
-                              child: Divider(
-                                  color: Colors.grey, thickness: 1)),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: OutlinedButton.icon(
-                          icon: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.blue[400],
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: SvgPicture.asset(
-                              'assets/telegram.svg',
-                              height: 22,
-                              color: Colors.white,
-                            ),
-                          ),
-                          label: const Text(
-                            'Войти через Telegram',
-                            style: TextStyle(
-                              color: Colors.blue,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: Colors.blue[400]!),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16)),
-                          ),
-                          onPressed:
-                              _isLoading ? null : _showTelegramAuthDialog,
-                        ),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? Colors.grey[800] : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: isDarkMode
+                            ? Colors.black26
+                            : Colors.grey.withOpacity(0.3),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
                       ),
                     ],
+                  ),
+                  child: SvgPicture.asset(
+                    'assets/eom.svg',
+                    height: 120,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                Card(
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  color: isDarkMode ? Colors.grey[800] : Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Вход в систему',
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  isDarkMode ? Colors.white : Colors.green[800],
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                          _buildTextField(
+                            controller: _usernameController,
+                            label: 'Имя пользователя',
+                            icon: Icons.person_outline,
+                            enabled: !_isLoading,
+                          ),
+                          const SizedBox(height: 20),
+                          _buildPasswordField(),
+                          const SizedBox(height: 32),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 55,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green[700],
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                                elevation: 4,
+                              ),
+                              onPressed:
+                                  _isLoading ? null : _handleRegularLogin,
+                              child: _isLoading
+                                  ? const CircularProgressIndicator(
+                                      color: Colors.white)
+                                  : const Text(
+                                      'ВОЙТИ',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              const Expanded(
+                                  child: Divider(
+                                      color: Colors.grey, thickness: 1)),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text(
+                                  'или',
+                                  style: TextStyle(
+                                    color: isDarkMode
+                                        ? Colors.grey[400]
+                                        : Colors.grey[700],
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                              const Expanded(
+                                  child: Divider(
+                                      color: Colors.grey, thickness: 1)),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 55,
+                            child: OutlinedButton.icon(
+                              icon: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue[400],
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: SvgPicture.asset(
+                                  'assets/telegram.svg',
+                                  height: 22,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              label: const Text(
+                                'Войти через Telegram',
+                                style: TextStyle(
+                                  color: Colors.blue,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: Colors.blue[400]!),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                              ),
+                              onPressed:
+                                  _isLoading ? null : _showTelegramAuthDialog,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
