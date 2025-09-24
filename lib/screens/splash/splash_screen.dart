@@ -49,20 +49,20 @@ class _SplashScreenState extends State<SplashScreen> {
             'Content-Type': 'application/json',
           },
         );
+//снять позже для ws подключение
+        // if (response.statusCode == 200) {
+        //   final userData = jsonDecode(response.body) as Map<String, dynamic>;
+        //   final status = userData['status'] as String?;
+        //   final isActive = userData['is_active'] as bool?;
 
-        if (response.statusCode == 200) {
-          final userData = jsonDecode(response.body) as Map<String, dynamic>;
-          final status = userData['status'] as String?;
-          final isActive = userData['is_active'] as bool?;
-
-          if (status == 'active' && isActive == true) {
-            _connectWebSocketAndNavigate();
-            return;
-          } else {
-            if (mounted) Navigator.pushReplacementNamed(context, '/pending');
-            return;
-          }
-        }
+        //   if (status == 'active' && isActive == true) {
+        //     _connectWebSocketAndNavigate();
+        //     return;
+        //   } else {
+        //     if (mounted) Navigator.pushReplacementNamed(context, '/pending');
+        //     return;
+        //   }
+        // }
       }
 
       // Offline fallback
@@ -86,17 +86,17 @@ class _SplashScreenState extends State<SplashScreen> {
       if (mounted) Navigator.pushReplacementNamed(context, '/login');
     }
   }
-
-  void _connectWebSocketAndNavigate() {
-    try {
-      final globalWebSocketService =
-          Provider.of<GlobalWebSocketService>(context, listen: false);
-      globalWebSocketService.init();
-    } catch (e) {
-      debugPrint('⚠️ WebSocket init failed (non-fatal): $e');
-    }
-    if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
-  }
+//для ws подключение
+  // void _connectWebSocketAndNavigate() {
+  //   try {
+  //     final globalWebSocketService =
+  //         Provider.of<GlobalWebSocketService>(context, listen: false);
+  //     globalWebSocketService.init();
+  //   } catch (e) {
+  //     debugPrint('⚠️ WebSocket init failed (non-fatal): $e');
+  //   }
+  //   if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
+  // }
 
   @override
   Widget build(BuildContext context) {
