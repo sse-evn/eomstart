@@ -98,7 +98,7 @@ class EmployeeMapLogic {
   Future<void> _initMap() async {
     try {
       await _fetchCurrentLocation();
-      await locationTrackingService.init(context);
+      await locationTrackingService.init();
       isLoading = false;
       _notify();
     } catch (e) {

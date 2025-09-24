@@ -286,7 +286,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   }
 
   void _showError(String message) {
-    if (mounted) {
+    if (!mounted) return;
+    try {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
@@ -294,11 +295,14 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+    } catch (e) {
+      debugPrint('Не удалось показать ошибку: $e');
     }
   }
 
   void _showSuccess(String message) {
-    if (mounted) {
+    if (!mounted) return;
+    try {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
@@ -306,6 +310,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+    } catch (e) {
+      debugPrint('Не удалось показать успех: $e');
     }
   }
 

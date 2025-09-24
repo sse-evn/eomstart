@@ -4,10 +4,17 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
+
+// Providers
 import 'package:micro_mobility_app/settings_provider.dart';
+import 'package:micro_mobility_app/providers/shift_provider.dart';
+
+// Services
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:micro_mobility_app/services/websocket/global_websocket_service.dart';
 import 'package:micro_mobility_app/services/websocket/location_tracking_service.dart';
+
+// Screens
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/screens/auth_screen/pending_screen.dart';
 import 'package:micro_mobility_app/screens/dashboard_screen.dart';
@@ -18,7 +25,6 @@ import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
 import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.dart';
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 import 'package:micro_mobility_app/screens/splash/splash_screen.dart';
-import 'providers/shift_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,8 +35,14 @@ void main() async {
   final _apiService = ApiService();
   final _prefs = await SharedPreferences.getInstance();
 
-  // final _globalWebSocketService = GlobalWebSocketService();
+  // Инициализация сервисов
+  final _globalWebSocketService = GlobalWebSocketService();
   final _locationTrackingService = LocationTrackingService();
+
+  // 🔗 СВЯЗКА: при обновлении локации — отправляем в WebSocket
+  _locationTrackingService.setLocationUpdateCallback((location) {
+    _globalWebSocketService.updateCurrentLocation(location);
+  });
 
   runApp(
     MultiProvider(
@@ -43,18 +55,19 @@ void main() async {
             prefs: _prefs,
           ),
         ),
-        // Provider<GlobalWebSocketService>.value(value: _globalWebSocketService),
-        Provider<LocationTrackingService>.value(
-            value: _locationTrackingService),
+        // Предоставляем сервисы как singleton'ы
+        Provider.value(value: _globalWebSocketService),
+        Provider.value(value: _locationTrackingService),
       ],
-      child: MyApp(),
+      child: const MyApp(),
     ),
   );
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
-  final Color appColor = Color(0xff1AB54E);
+  static const Color appColor = Color(0xff1AB54E);
 
   @override
   Widget build(BuildContext context) {

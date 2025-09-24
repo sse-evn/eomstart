@@ -1,5 +1,3 @@
-// lib/screens/map_logic.dart
-
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -13,7 +11,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
 import 'package:micro_mobility_app/models/location.dart';
 import 'package:micro_mobility_app/models/user_shift_location.dart';
-import 'package:micro_mobility_app/services/websocket/global_websocket_service.dart';
 import 'package:micro_mobility_app/services/websocket/location_tracking_service.dart';
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart';
@@ -37,7 +34,6 @@ class MapLogic {
   bool showParkingZones = true;
   bool showSpeedLimitZones = true;
   bool showBoundaries = true;
-  // late GlobalWebSocketService globalWebSocketService;
   late LocationTrackingService locationTrackingService;
   StreamSubscription<Location>? locationSubscription;
   bool connectionError = false;
@@ -45,94 +41,97 @@ class MapLogic {
   List<Location> users = [];
   List<UserShiftLocation> activeShifts = [];
   bool isWebSocketConnected = false;
+  bool _disposed = false;
 
   // Callback to notify UI about state changes
   void Function()? onStateChanged;
 
   MapLogic(this.context) {
     mapController = MapController();
-    // globalWebSocketService =
-    //     Provider.of<GlobalWebSocketService>(context, listen: false);
     locationTrackingService =
         Provider.of<LocationTrackingService>(context, listen: false);
   }
 
   void init() {
-    // globalWebSocketService.addLocationsCallback(_updateUsers);
-    // globalWebSocketService.addShiftsCallback(_updateShifts);
-    // globalWebSocketService.addConnectionCallback(_updateConnectionStatus);
+    if (_disposed) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initMap();
+      if (!_disposed) _initMap();
     });
   }
 
   void dispose() {
-    // globalWebSocketService.removeLocationsCallback(_updateUsers);
-    // globalWebSocketService.removeShiftsCallback(_updateShifts);
-    // globalWebSocketService.removeConnectionCallback(_updateConnectionStatus);
+    _disposed = true;
     locationSubscription?.cancel();
     mapController.dispose();
   }
 
   void _updateUsers(List<Location> newUsers) {
+    if (_disposed) return;
     users = newUsers;
     _notify();
   }
 
   void _updateShifts(List<UserShiftLocation> shifts) {
+    if (_disposed) return;
     activeShifts = shifts;
     _notify();
   }
 
   void _updateConnectionStatus(bool isConnected) {
+    if (_disposed) return;
     isWebSocketConnected = isConnected;
     _notify();
   }
 
   void _notify() {
-    if (onStateChanged != null) {
-      onStateChanged!();
-    }
+    if (_disposed || onStateChanged == null) return;
+    onStateChanged!();
   }
 
   Future<void> _initMap() async {
+    if (_disposed) return;
     try {
       await fetchCurrentLocation();
       await _loadAvailableMaps();
       await _loadAndParseGeoJson();
-      await locationTrackingService.init(context);
-      isLoading = false;
-      _notify();
+      await locationTrackingService.init();
+      if (!_disposed) {
+        isLoading = false;
+        _notify();
+      }
     } catch (e) {
-      isLoading = false;
-      connectionError = true;
-      connectionErrorMessage = e.toString();
-      _notify();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка инициализации: $e')),
-      );
+      if (!_disposed) {
+        isLoading = false;
+        connectionError = true;
+        connectionErrorMessage = e.toString();
+        _notify();
+        _showErrorSnackBar('Ошибка инициализации: $e');
+      }
     }
   }
 
   Future<void> fetchCurrentLocation() async {
+    if (_disposed) return;
     isLoading = true;
     _notify();
     try {
       final position = await locationService.determinePosition();
+      if (_disposed) return;
       currentLocation = LatLng(position.latitude, position.longitude);
       isLoading = false;
       mapController.move(currentLocation!, mapController.camera.zoom);
       _notify();
     } catch (e) {
-      isLoading = false;
-      _notify();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ошибка получения местоположения')),
-      );
+      if (!_disposed) {
+        isLoading = false;
+        _notify();
+        _showErrorSnackBar('Ошибка получения местоположения');
+      }
     }
   }
 
   Future<void> _loadAvailableMaps() async {
+    if (_disposed) return;
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token != null) {
@@ -143,7 +142,7 @@ class MapLogic {
             'Content-Type': 'application/json',
           },
         );
-        if (response.statusCode == 200) {
+        if (response.statusCode == 200 && !_disposed) {
           final dynamic body = jsonDecode(response.body);
           if (body is List) {
             availableMaps = body;
@@ -159,13 +158,14 @@ class MapLogic {
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка загрузки списка карт: $e')),
-      );
+      if (!_disposed) {
+        _showErrorSnackBar('Ошибка загрузки списка карт: $e');
+      }
     }
   }
 
   Future<void> _loadAndParseGeoJson() async {
+    if (_disposed) return;
     try {
       String geoJsonString;
       if (selectedMapId != -1) {
@@ -181,16 +181,19 @@ class MapLogic {
       } else {
         throw Exception('Нет доступных карт');
       }
-      geoJsonParser.parseGeoJsonAsString(geoJsonString);
-      _notify();
+      if (!_disposed) {
+        geoJsonParser.parseGeoJsonAsString(geoJsonString);
+        _notify();
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка загрузки GeoJSON: $e')),
-      );
+      if (!_disposed) {
+        _showErrorSnackBar('Ошибка загрузки GeoJSON: $e');
+      }
     }
   }
 
   Future<String> _loadGeoJsonFromServer(int mapId) async {
+    if (_disposed) return '';
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token != null) {
@@ -201,7 +204,7 @@ class MapLogic {
             'Content-Type': 'application/json',
           },
         );
-        if (response.statusCode == 200) {
+        if (response.statusCode == 200 && !_disposed) {
           final dynamic body = jsonDecode(response.body);
           if (body is Map<String, dynamic> && body.containsKey('file_name')) {
             final fileName = body['file_name'] as String;
@@ -226,15 +229,18 @@ class MapLogic {
       }
     } catch (e) {
       debugPrint('Ошибка загрузки GeoJSON с сервера: $e');
-      final localFile = await _getLocalMapFile(mapId);
-      if (localFile != null && await localFile.exists()) {
-        return await localFile.readAsString();
+      if (!_disposed) {
+        final localFile = await _getLocalMapFile(mapId);
+        if (localFile != null && await localFile.exists()) {
+          return await localFile.readAsString();
+        }
       }
     }
     throw Exception('Не удалось загрузить карту');
   }
 
   Future<File?> _getLocalMapFile(int mapId) async {
+    if (_disposed) return null;
     try {
       final dir = await getApplicationDocumentsDirectory();
       final fileName = 'map_$mapId.geojson';
@@ -247,6 +253,7 @@ class MapLogic {
   }
 
   Future<void> _saveMapFileLocally(int mapId, String content) async {
+    if (_disposed) return;
     try {
       final dir = await getApplicationDocumentsDirectory();
       final fileName = 'map_$mapId.geojson';
@@ -259,18 +266,21 @@ class MapLogic {
   }
 
   Future<void> onMapChanged(int newMapId) async {
-    if (newMapId != selectedMapId) {
-      selectedMapId = newMapId;
-      isLoading = true;
-      _notify();
-      try {
-        final geoJsonString = await _loadGeoJsonFromServer(newMapId);
+    if (_disposed || newMapId == selectedMapId) return;
+    selectedMapId = newMapId;
+    isLoading = true;
+    _notify();
+    try {
+      final geoJsonString = await _loadGeoJsonFromServer(newMapId);
+      if (!_disposed) {
         geoJsonParser.parseGeoJsonAsString(geoJsonString);
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки карты: $e')),
-        );
-      } finally {
+      }
+    } catch (e) {
+      if (!_disposed) {
+        _showErrorSnackBar('Ошибка загрузки карты: $e');
+      }
+    } finally {
+      if (!_disposed) {
         isLoading = false;
         _notify();
       }
@@ -278,6 +288,7 @@ class MapLogic {
   }
 
   Future<void> downloadMapLocally(int mapId) async {
+    if (_disposed) return;
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token != null) {
@@ -288,7 +299,7 @@ class MapLogic {
             'Content-Type': 'application/json',
           },
         );
-        if (response.statusCode == 200) {
+        if (response.statusCode == 200 && !_disposed) {
           final dynamic body = jsonDecode(response.body);
           if (body is Map<String, dynamic> && body.containsKey('file_name')) {
             final fileName = body['file_name'] as String;
@@ -302,28 +313,21 @@ class MapLogic {
             );
             if (fileResponse.statusCode == 200) {
               await _saveMapFileLocally(mapId, fileResponse.body);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content:
-                      Text('Карта успешно сохранена для оффлайн использования'),
-                  backgroundColor: Colors.green,
-                ),
-              );
+              _showSuccessSnackBar(
+                  'Карта успешно сохранена для оффлайн использования');
             }
           }
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ошибка сохранения карты: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (!_disposed) {
+        _showErrorSnackBar('Ошибка сохранения карты: $e');
+      }
     }
   }
 
   void showLayerSettingsDialog() {
+    if (_disposed || !context.mounted) return;
     showModalBottomSheet(
       context: context,
       builder: (BuildContext context) {
@@ -345,9 +349,11 @@ class MapLogic {
                         const Text('Красные зоны (запрет на проезд/парковку)'),
                     value: showRestrictedZones,
                     onChanged: (bool value) {
-                      setState(() {
-                        showRestrictedZones = value;
-                      });
+                      if (!_disposed) {
+                        setState(() {
+                          showRestrictedZones = value;
+                        });
+                      }
                     },
                     secondary: Container(
                       width: 24,
@@ -363,9 +369,11 @@ class MapLogic {
                     subtitle: const Text('Розовые зоны (запрет на парковку)'),
                     value: showParkingZones,
                     onChanged: (bool value) {
-                      setState(() {
-                        showParkingZones = value;
-                      });
+                      if (!_disposed) {
+                        setState(() {
+                          showParkingZones = value;
+                        });
+                      }
                     },
                     secondary: Container(
                       width: 24,
@@ -382,9 +390,11 @@ class MapLogic {
                         'Зеленые и желтые зоны (ограничение скорости)'),
                     value: showSpeedLimitZones,
                     onChanged: (bool value) {
-                      setState(() {
-                        showSpeedLimitZones = value;
-                      });
+                      if (!_disposed) {
+                        setState(() {
+                          showSpeedLimitZones = value;
+                        });
+                      }
                     },
                     secondary: Container(
                       width: 24,
@@ -402,9 +412,11 @@ class MapLogic {
                     subtitle: const Text('Синие линии (граница рабочей зоны)'),
                     value: showBoundaries,
                     onChanged: (bool value) {
-                      setState(() {
-                        showBoundaries = value;
-                      });
+                      if (!_disposed) {
+                        setState(() {
+                          showBoundaries = value;
+                        });
+                      }
                     },
                     secondary: Container(
                       width: 24,
@@ -422,6 +434,26 @@ class MapLogic {
           },
         );
       },
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (_disposed || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    if (_disposed || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+      ),
     );
   }
 }

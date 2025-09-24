@@ -20,16 +20,11 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
     _initializeApp();
-
   }
 
   Future<void> _initializeApp() async {
     try {
       debugPrint('Checking tokens on app start...');
-
-      // final globalWebSocketService =
-      //     Provider.of<GlobalWebSocketService>(context, listen: false);
-      // await globalWebSocketService.init();
 
       final token = await _storage.read(key: 'jwt_token');
       if (token != null) {
@@ -40,7 +35,7 @@ class _SplashScreenState extends State<SplashScreen> {
           Uri.parse(AppConfig.profileUrl),
           headers: {
             'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
         );
 
@@ -53,6 +48,17 @@ class _SplashScreenState extends State<SplashScreen> {
               'Access token is valid. Status: $status, Role: ${userData['role']}');
 
           if (status == 'active' && isActive == true) {
+            // ✅ Пользователь активен — подключаем WebSocket
+            try {
+              final globalWebSocketService =
+                  Provider.of<GlobalWebSocketService>(context, listen: false);
+              await globalWebSocketService
+                  .init(); // ← Подключение с токеном из secure storage
+            } catch (e) {
+              debugPrint('⚠️ WebSocket init failed (non-fatal): $e');
+              // Не критично — можно продолжить без карты в реальном времени
+            }
+
             if (mounted) {
               Navigator.pushReplacementNamed(context, '/dashboard');
             }
