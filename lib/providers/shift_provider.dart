@@ -1,3 +1,4 @@
+// lib/providers/shift_provider.dart
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
@@ -34,6 +35,9 @@ class ShiftProvider with ChangeNotifier {
   static const String _lastCacheTimeKey = 'shifts_cache_time';
   bool _isLoadingActiveShift = false;
   DateTime? _lastActiveShiftFetchTime;
+
+  // 🔑 НОВЫЙ ФЛАГ: данные уже загружались хотя бы раз
+  bool _hasLoadedShifts = false;
 
   ShiftProvider({
     required ApiService apiService,
@@ -77,11 +81,16 @@ class ShiftProvider with ChangeNotifier {
         final ConnectivityResult result =
             results.isNotEmpty ? results.last : ConnectivityResult.none;
         final bool isCurrentlyOnline = result != ConnectivityResult.none;
+
         if (isCurrentlyOnline && !_isOnline) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            loadShifts();
-          });
+          // 🔥 ИЗМЕНЕНО: не перезагружаем автоматически, если уже загружали
+          if (!_hasLoadedShifts && _token != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              loadShifts();
+            });
+          }
         }
+
         _isOnline = isCurrentlyOnline;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           notifyListeners();
@@ -108,7 +117,7 @@ class ShiftProvider with ChangeNotifier {
     }
   }
 
-  Future<void> _loadFromCache() async {
+  Future<void> loadFromCache() async {
     try {
       final cached = _prefs.getString(_shiftsCacheKey);
       if (cached == null) return;
@@ -168,8 +177,8 @@ class ShiftProvider with ChangeNotifier {
       await logout();
       return;
     }
-    await _loadFromCache();
-    if (_isOnline && _token != null) {
+    await loadFromCache();
+    if (_isOnline && _token != null && !_hasLoadedShifts) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         loadShifts();
       });
@@ -237,7 +246,13 @@ class ShiftProvider with ChangeNotifier {
     throw Exception('API call failed after $maxRetries retries');
   }
 
+  // 🔥 ОСНОВНОЙ МЕТОД: loadShifts
   Future<void> loadShifts() async {
+    // Устанавливаем флаг, что загрузка началась
+    // (даже если будет ошибка — считаем, что "пытались")
+    final isFirstLoad = !_hasLoadedShifts;
+    _hasLoadedShifts = true;
+
     if (_token == null) {
       _shiftHistory = [];
       _activeShift = null;
@@ -270,9 +285,11 @@ class ShiftProvider with ChangeNotifier {
       });
     } catch (e) {
       debugPrint('ShiftProvider.loadShifts error: $e');
-      if (!_isOnline) {
-        await _loadFromCache();
+      // Если первая загрузка и нет интернета — грузим из кэша
+      if (isFirstLoad && !_isOnline) {
+        await loadFromCache();
       } else {
+        // Иначе — сбрасываем данные (ошибка сети/сервера)
         _shiftHistory = [];
         _activeShift = null;
         _currentUsername = null;
@@ -311,7 +328,7 @@ class ShiftProvider with ChangeNotifier {
             selfieImage: imageFile,
           ));
       debugPrint('✅ Смена начата');
-      await loadShifts();
+      await loadShifts(); // Здесь уместно — действие пользователя
     } catch (e) {
       debugPrint('❌ Ошибка старта смены: $e');
       rethrow;
@@ -335,7 +352,7 @@ class ShiftProvider with ChangeNotifier {
       _lastActiveShiftFetchTime = null;
       _activeShift = null;
       _currentUsername = null;
-      await loadShifts();
+      await loadShifts(); // Уместно — действие пользователя
     } catch (e) {
       debugPrint('❌ Ошибка завершения смены: $e');
       await loadShifts();
@@ -401,6 +418,7 @@ class ShiftProvider with ChangeNotifier {
     _activeShift = null;
     _currentUsername = null;
     _botStatsData = null;
+    _hasLoadedShifts = false; // Сбрасываем при выходе
     await _storage.delete(key: 'jwt_token');
     await _prefs.remove(_shiftsCacheKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {

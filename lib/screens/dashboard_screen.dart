@@ -2,7 +2,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:provider/provider.dart';
 import '../../providers/shift_provider.dart';
 import '../components/slot_card.dart';
@@ -21,7 +20,9 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
-  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+
+  // 🔥 УДАЛЕНО: больше не нужен connectivity subscription здесь
+  // Потому что ShiftProvider сам управляет загрузкой по сети
 
   final List<Widget> _screens = [
     const _DashboardHome(),
@@ -29,32 +30,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     const QrScannerScreen(),
     const ProfileScreen(),
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    _listenToConnectionChanges();
-  }
-
-  void _listenToConnectionChanges() {
-    _connectivitySubscription = Connectivity()
-        .onConnectivityChanged
-        .listen((List<ConnectivityResult> results) {
-      final result = results.firstWhere(
-        (r) => r != ConnectivityResult.none,
-        orElse: () => ConnectivityResult.none,
-      );
-      if (mounted && result != ConnectivityResult.none) {
-        setState(() {}); // Перестроит _DashboardHome
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _connectivitySubscription.cancel();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -152,47 +127,24 @@ class _DashboardHome extends StatefulWidget {
 
 class _DashboardHomeState extends State<_DashboardHome> {
   late Future<void> _loadDataFuture;
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+
+  // 🔥 УДАЛЕНО: StreamSubscription и _listenToConnectionChanges()
 
   @override
   void initState() {
     super.initState();
     _loadDataFuture = _loadData();
-    _listenToConnectionChanges();
-  }
-
-  void _listenToConnectionChanges() {
-    _connectivitySubscription = Connectivity()
-        .onConnectivityChanged
-        .listen((List<ConnectivityResult> results) {
-      final result = results.firstWhere(
-        (r) => r != ConnectivityResult.none,
-        orElse: () => ConnectivityResult.none,
-      );
-      if (mounted && result != ConnectivityResult.none) {
-        setState(() {
-          _loadDataFuture = _loadData();
-        });
-      }
-    });
   }
 
   Future<void> _loadData() async {
-    // ✅ Исправлено: используем context.read()
     final provider = context.read<ShiftProvider>();
     await provider.loadShifts();
   }
 
   Future<void> _refresh() async {
     setState(() {
-      _loadDataFuture = _loadData();
+      _loadDataFuture = _loadData(); // Явный запрос — уместен
     });
-  }
-
-  @override
-  void dispose() {
-    _connectivitySubscription?.cancel();
-    super.dispose();
   }
 
   @override
@@ -211,8 +163,10 @@ class _DashboardHomeState extends State<_DashboardHome> {
               return const Center(
                   child: CircularProgressIndicator(color: Colors.green));
             } else if (snapshot.hasError) {
-              if (snapshot.error.toString().contains('SocketException') ||
-                  snapshot.error.toString().contains('Network')) {
+              final errorStr = snapshot.error.toString();
+              if (errorStr.contains('SocketException') ||
+                  errorStr.contains('Network') ||
+                  errorStr.contains('Timeout')) {
                 return NoInternetWidget(onRetry: _refresh);
               } else {
                 return Center(
@@ -230,7 +184,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          snapshot.error.toString(),
+                          errorStr,
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: Colors.grey),
                         ),
