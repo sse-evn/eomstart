@@ -20,8 +20,6 @@ import '../../services/location_service.dart';
 
 class MapLogic {
   final BuildContext context;
-
-  // --- State-like variables ---
   LatLng? currentLocation;
   final LocationService locationService = LocationService();
   final GeoJsonParser geoJsonParser = GeoJsonParser();
@@ -42,18 +40,19 @@ class MapLogic {
   List<UserShiftLocation> activeShifts = [];
   bool isWebSocketConnected = false;
   bool _disposed = false;
-
-  // Callback to notify UI about state changes
+  late ShiftProvider _shiftProvider;
   void Function()? onStateChanged;
 
   MapLogic(this.context) {
     mapController = MapController();
     locationTrackingService =
         Provider.of<LocationTrackingService>(context, listen: false);
+    _shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
   }
 
   void init() {
     if (_disposed) return;
+    _shiftProvider.addListener(_onShiftProviderUpdate);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_disposed) _initMap();
     });
@@ -61,8 +60,17 @@ class MapLogic {
 
   void dispose() {
     _disposed = true;
+    _shiftProvider.removeListener(_onShiftProviderUpdate);
     locationSubscription?.cancel();
     mapController.dispose();
+  }
+
+  void _onShiftProviderUpdate() {
+    if (_disposed) return;
+    locationTrackingService.updateUserInfo(
+      userId: _shiftProvider.activeShift?.userId ?? 0,
+      username: _shiftProvider.currentUsername ?? 'user',
+    );
   }
 
   void _updateUsers(List<Location> newUsers) {
@@ -95,6 +103,10 @@ class MapLogic {
       await _loadAvailableMaps();
       await _loadAndParseGeoJson();
       await locationTrackingService.init();
+      locationTrackingService.updateUserInfo(
+        userId: _shiftProvider.activeShift?.userId ?? 0,
+        username: _shiftProvider.currentUsername ?? 'user',
+      );
       if (!_disposed) {
         isLoading = false;
         _notify();

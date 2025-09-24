@@ -1,4 +1,4 @@
-// lib/screens/employee_map_logic.dart
+// lib/screens/admin/tabs/map_employee_map/employee_map_logic.dart
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -9,14 +9,12 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/location.dart';
 import 'package:micro_mobility_app/models/user_shift_location.dart';
-import 'package:micro_mobility_app/services/websocket/global_websocket_service.dart';
 import 'package:micro_mobility_app/services/websocket/location_tracking_service.dart';
 import 'package:provider/provider.dart';
+import 'package:micro_mobility_app/providers/shift_provider.dart';
 
 class EmployeeMapLogic {
   final BuildContext context;
-
-  // --- State ---
   LatLng? currentLocation;
   List<UserShiftLocation> activeShifts = [];
   List<Location> users = [];
@@ -27,93 +25,111 @@ class EmployeeMapLogic {
   bool connectionError = false;
   String connectionErrorMessage = '';
   bool isWebSocketConnected = false;
-
-  // Services
-  // late GlobalWebSocketService globalWebSocketService;
   late LocationTrackingService locationTrackingService;
   final FlutterSecureStorage storage = const FlutterSecureStorage();
-
-  // Callback to notify UI
+  late ShiftProvider _shiftProvider;
   void Function()? onStateChanged;
+  bool _disposed = false;
 
   EmployeeMapLogic(this.context) {
     mapController = MapController();
-    // globalWebSocketService =
-    //     Provider.of<GlobalWebSocketService>(context, listen: false);
     locationTrackingService =
         Provider.of<LocationTrackingService>(context, listen: false);
+    _shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
   }
 
   void init() {
-    // globalWebSocketService.addLocationsCallback(_updateUsers);
-    // globalWebSocketService.addShiftsCallback(_updateShifts);
-    // globalWebSocketService.addConnectionCallback(_updateConnectionStatus);
+    if (_disposed) return;
+    _shiftProvider.addListener(_onShiftProviderUpdate);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initMap();
+      if (!_disposed) _initMap();
     });
   }
 
   void dispose() {
-    // globalWebSocketService.removeLocationsCallback(_updateUsers);
-    // globalWebSocketService.removeShiftsCallback(_updateShifts);
-    // globalWebSocketService.removeConnectionCallback(_updateConnectionStatus);
+    _disposed = true;
+    _shiftProvider.removeListener(_onShiftProviderUpdate);
+    locationTrackingService.stopTracking();
     mapController.dispose();
   }
 
+  void _onShiftProviderUpdate() {
+    if (_disposed) return;
+    locationTrackingService.updateUserInfo(
+      userId: _shiftProvider.activeShift?.userId ?? 0,
+      username: _shiftProvider.currentUsername ?? 'user',
+    );
+  }
+
   void _notify() {
-    if (onStateChanged != null && onStateChanged is Function()) {
-      onStateChanged!();
-    }
+    if (_disposed || onStateChanged == null) return;
+    onStateChanged!();
   }
 
   Future<void> initMap() async {
+    if (_disposed) return;
     isLoading = true;
     _notify();
     try {
-      await _initMap(); // вызывает приватную реализацию
+      await _initMap();
     } catch (e) {
-      isLoading = false;
-      error = e.toString();
-      connectionError = true;
-      connectionErrorMessage = e.toString();
-      _notify();
+      if (!_disposed) {
+        isLoading = false;
+        error = e.toString();
+        connectionError = true;
+        connectionErrorMessage = e.toString();
+        _notify();
+      }
     }
   }
 
   void _updateUsers(List<Location> newUsers) {
+    if (_disposed) return;
     users = newUsers;
     _notify();
   }
 
   void _updateShifts(List<UserShiftLocation> shifts) {
+    if (_disposed) return;
     activeShifts = shifts;
     _notify();
   }
 
   void _updateConnectionStatus(bool isConnected) {
+    if (_disposed) return;
     isWebSocketConnected = isConnected;
     _notify();
   }
 
   Future<void> _initMap() async {
+    if (_disposed) return;
     try {
       await _fetchCurrentLocation();
       await locationTrackingService.init();
-      isLoading = false;
-      _notify();
+      locationTrackingService.updateUserInfo(
+        userId: _shiftProvider.activeShift?.userId ?? 0,
+        username: _shiftProvider.currentUsername ?? 'user',
+      );
+      if (!_disposed) {
+        isLoading = false;
+        _notify();
+      }
     } catch (e) {
-      isLoading = false;
-      error = e.toString();
-      connectionError = true;
-      connectionErrorMessage = e.toString();
-      _notify();
+      if (!_disposed) {
+        isLoading = false;
+        error = e.toString();
+        connectionError = true;
+        connectionErrorMessage = e.toString();
+        _notify();
+      }
     }
   }
 
   Future<void> _fetchCurrentLocation() async {
+    if (_disposed) return;
     try {
       final response = await http.get(Uri.parse('https://ipapi.co/json/'));
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 && !_disposed) {
         final data = jsonDecode(response.body);
         final lat = data['latitude'] as double?;
         final lng = data['longitude'] as double?;
@@ -128,21 +144,27 @@ class EmployeeMapLogic {
   }
 
   Future<void> refreshMap() async {
-    if (isRefreshing) return;
+    if (_disposed || isRefreshing) return;
     isRefreshing = true;
     _notify();
     try {
       await _fetchCurrentLocation();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Карта обновлена')),
-      );
+      if (!_disposed && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Карта обновлена')),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
-      );
+      if (!_disposed && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
     } finally {
-      isRefreshing = false;
-      _notify();
+      if (!_disposed) {
+        isRefreshing = false;
+        _notify();
+      }
     }
   }
 

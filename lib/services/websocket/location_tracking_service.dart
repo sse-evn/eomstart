@@ -1,4 +1,7 @@
+// lib/services/websocket/location_tracking_service.dart
+
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:location/location.dart' as loc;
 import '../../models/location.dart';
 
@@ -14,12 +17,18 @@ class LocationTrackingService {
   bool _isTracking = false;
   Location? _currentLocation;
   void Function(Location)? _onLocationUpdate;
+  bool _hasValidUser = false; // ← НОВЫЙ ФЛАГ
 
   void setLocationUpdateCallback(void Function(Location) callback) {
     _onLocationUpdate = callback;
   }
 
   void updateUserInfo({required int userId, required String username}) {
+    if (userId == 0 || username.isEmpty) {
+      _hasValidUser = false;
+      return;
+    }
+    _hasValidUser = true;
     if (_currentLocation != null) {
       _currentLocation = Location(
         userID: userId,
@@ -39,10 +48,10 @@ class LocationTrackingService {
       if (!serviceEnabled) return;
     }
 
-    var permission = await _locationService.hasPermission();
-    if (permission == loc.PermissionStatus.denied) {
-      permission = await _locationService.requestPermission();
-      if (permission != loc.PermissionStatus.granted) return;
+    final permissionGranted = await _locationService.hasPermission();
+    if (permissionGranted == loc.PermissionStatus.denied) {
+      final newPermission = await _locationService.requestPermission();
+      if (newPermission != loc.PermissionStatus.granted) return;
     }
 
     _startTracking();
@@ -61,12 +70,17 @@ class LocationTrackingService {
           lng: data.longitude!,
           timestamp: DateTime.now(),
         );
-        _onLocationUpdate?.call(_currentLocation!);
+        // 🔥 Отправляем ТОЛЬКО если есть валидный пользователь
+        if (_hasValidUser) {
+          _onLocationUpdate?.call(_currentLocation!);
+        }
       }
     });
 
-    _updateTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      _onLocationUpdate?.call(_currentLocation!);
+    _updateTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (_currentLocation != null && _hasValidUser) {
+        _onLocationUpdate?.call(_currentLocation!);
+      }
     });
   }
 

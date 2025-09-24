@@ -69,17 +69,21 @@ class _AdminUsersListState extends State<AdminUsersList> {
       final token = await _storage.read(key: 'jwt_token');
       if (token != null) {
         final profile = await _apiService.getUserProfile(token);
-        setState(() {
-          _currentUserId = profile['id']?.toString();
-          _currentUserRole = profile['role'] as String?;
-          _currentUserFirstName = profile['first_name'] as String? ??
-              profile['username'] as String?;
-          _currentUserRoleLabel =
-              _roleLabels[_currentUserRole ?? ''] ?? 'Пользователь';
-        });
+        if (mounted) {
+          // ← ДОБАВЛЕНО: безопасная проверка
+          setState(() {
+            _currentUserId = profile['id']?.toString();
+            _currentUserRole = profile['role'] as String?;
+            _currentUserFirstName = profile['first_name'] as String? ??
+                profile['username'] as String?;
+            _currentUserRoleLabel =
+                _roleLabels[_currentUserRole ?? ''] ?? 'Пользователь';
+          });
+        }
       }
     } catch (e) {
       debugPrint('Ошибка загрузки профиля: $e');
+      // Даже в catch — если нужно обновить UI, проверяйте mounted
     }
   }
 
@@ -678,7 +682,6 @@ class _AdminUsersListState extends State<AdminUsersList> {
           ],
         ),
 
-        // Кнопка "Добавить" — справа снизу
         if (canManage)
           Positioned(
             bottom: 16,

@@ -16,7 +16,6 @@ class SlotCard extends StatefulWidget {
 }
 
 class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
-  Timer? _timer;
   bool _isLoading = false;
   bool _showError = false;
   String _errorMessage = '';
@@ -36,7 +35,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
       curve: Curves.easeInOut,
     );
     _loadInitialData();
-    _startTimer();
+    // 🔥 Таймер удалён — он вызывал лишние запросы каждые 10 секунд
   }
 
   Future<void> _loadInitialData() async {
@@ -55,26 +54,8 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
     }
   }
 
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 10), (timer) async {
-      if (mounted) {
-        try {
-          await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
-          setState(() {});
-        } catch (e) {
-          setState(() {
-            _errorMessage = 'Ошибка синхронизации: ${e.toString()}';
-            _showError = true;
-          });
-        }
-      }
-    });
-  }
-
   @override
   void dispose() {
-    _timer?.cancel();
     _animationController.dispose();
     super.dispose();
   }
@@ -223,7 +204,16 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
   }
 
   Widget _buildSelfiePreview(ActiveShift activeShift) {
-    final photoUrl = '${AppConfig.mediaBaseUrl}${activeShift.selfie}';
+    // 🔍 Исправление: убедимся, что URL формируется правильно
+    String photoUrl;
+    if (activeShift.selfie.startsWith('http')) {
+      photoUrl = activeShift.selfie;
+    } else {
+      // Убедимся, что между baseUrl и путём есть слэш
+      final baseUrl = AppConfig.mediaBaseUrl;
+      final path = activeShift.selfie;
+      photoUrl = baseUrl.endsWith('/') ? '$baseUrl$path' : '$baseUrl/$path';
+    }
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),

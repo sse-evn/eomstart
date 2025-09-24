@@ -5,6 +5,7 @@ import 'dart:convert';
 class ActiveShift {
   final int id;
   final int userId;
+
   final String username;
   final String slotTimeRange;
   final String position;

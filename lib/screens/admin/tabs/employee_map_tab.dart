@@ -18,6 +18,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     with AutomaticKeepAliveClientMixin {
   late EmployeeMapLogic logic;
   bool _isLogicInitialized = false;
+  bool _disposed = false; // 🔥 Добавлен флаг disposed
 
   @override
   bool get wantKeepAlive => true;
@@ -29,22 +30,23 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   }
 
   Future<void> _initLogic() async {
-    if (_isLogicInitialized) return;
+    if (_disposed || _isLogicInitialized) return; // 🔥 Проверка disposed
 
     logic = EmployeeMapLogic(context);
     logic.onStateChanged = () {
-      if (mounted) {
+      if (!_disposed && mounted) {
         setState(() {});
       }
     };
 
     _isLogicInitialized = true;
     logic.init();
-    if (mounted) setState(() {});
+    if (!_disposed && mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _disposed = true; // 🔥 Устанавливаем флаг
     // 🔥 Критически важно: уничтожаем логику
     logic.dispose();
     super.dispose();
@@ -67,6 +69,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () {
+                if (_disposed) return; // 🔥 Дополнительная проверка
                 setState(() {
                   logic.isLoading = true;
                   logic.error = '';
@@ -238,7 +241,9 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 right: 20,
                 child: FloatingActionButton(
                   backgroundColor: Colors.green,
-                  onPressed: logic.refreshMap,
+                  onPressed: _disposed
+                      ? null
+                      : logic.refreshMap, // 🔥 Безопасный вызов
                   tooltip: 'Обновить карту',
                   child: logic.isRefreshing
                       ? const SizedBox(
@@ -296,7 +301,9 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                         IconButton(
                           icon: const Icon(Icons.refresh,
                               size: 18, color: Colors.white),
-                          onPressed: logic.refreshMap,
+                          onPressed: _disposed
+                              ? null
+                              : logic.refreshMap, // 🔥 Безопасный вызов
                           tooltip: 'Обновить',
                         ),
                     ],
@@ -358,14 +365,16 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                               ),
                               trailing: Icon(Icons.circle,
                                   color: statusColor, size: 12),
-                              onTap: () {
-                                if (shift.hasLocation) {
-                                  logic.mapController.move(
-                                    LatLng(shift.lat!, shift.lng!),
-                                    15.0,
-                                  );
-                                }
-                              },
+                              onTap: _disposed
+                                  ? null
+                                  : () {
+                                      if (shift.hasLocation) {
+                                        logic.mapController.move(
+                                          LatLng(shift.lat!, shift.lng!),
+                                          15.0,
+                                        );
+                                      }
+                                    }, // 🔥 Безопасный вызов
                             );
                           },
                         ),
