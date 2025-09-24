@@ -113,26 +113,15 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                         )
                       : null,
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey,
-                      spreadRadius: 1,
-                      blurRadius: 12,
-                      offset: const Offset(4, 4),
-                    ),
-                  ],
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    children: [
-                      if (hasActiveShift)
-                        _buildActiveShiftUI(activeShift, theme, isDarkMode)
-                      else
-                        _buildInactiveShiftUI(context, theme, isDarkMode),
-                      const SizedBox(height: 20),
-                    ],
-                  ),
+                child: Column(
+                  children: [
+                    if (hasActiveShift)
+                      _buildActiveShiftUI(activeShift, theme, isDarkMode)
+                    else
+                      _buildInactiveShiftUI(context, theme, isDarkMode),
+                    const SizedBox(height: 20),
+                  ],
                 ),
               ),
             ),

@@ -29,7 +29,7 @@ void main() async {
   final _apiService = ApiService();
   final _prefs = await SharedPreferences.getInstance();
 
-  final _globalWebSocketService = GlobalWebSocketService();
+  // final _globalWebSocketService = GlobalWebSocketService();
   final _locationTrackingService = LocationTrackingService();
 
   runApp(
@@ -43,7 +43,7 @@ void main() async {
             prefs: _prefs,
           ),
         ),
-        Provider<GlobalWebSocketService>.value(value: _globalWebSocketService),
+        // Provider<GlobalWebSocketService>.value(value: _globalWebSocketService),
         Provider<LocationTrackingService>.value(
             value: _locationTrackingService),
       ],
@@ -53,13 +53,16 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
+
+  final Color appColor = Color(0xff1AB54E);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Оператор микромобильности',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.green[700]!, brightness: Brightness.light),
+            seedColor: appColor, brightness: Brightness.light),
         scaffoldBackgroundColor: Colors.grey[100],
         appBarTheme: AppBarTheme(
           foregroundColor: Colors.white,
@@ -73,7 +76,7 @@ class MyApp extends StatelessWidget {
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green[700],
+            backgroundColor: appColor,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
@@ -90,11 +93,11 @@ class MyApp extends StatelessWidget {
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.green[700]!),
+            borderSide: BorderSide(color: appColor),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.green[700]!),
+            borderSide: BorderSide(color: appColor),
           ),
         ),
         visualDensity: VisualDensity.adaptivePlatformDensity,

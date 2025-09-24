@@ -251,7 +251,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                 child: Column(
                   children: [
                     SlotCard(),
-                    SizedBox(height: 20),
+                    SizedBox(height: 10),
                     ReportCard(),
                   ],
                 ),

@@ -37,7 +37,7 @@ class MapLogic {
   bool showParkingZones = true;
   bool showSpeedLimitZones = true;
   bool showBoundaries = true;
-  late GlobalWebSocketService globalWebSocketService;
+  // late GlobalWebSocketService globalWebSocketService;
   late LocationTrackingService locationTrackingService;
   StreamSubscription<Location>? locationSubscription;
   bool connectionError = false;
@@ -51,25 +51,25 @@ class MapLogic {
 
   MapLogic(this.context) {
     mapController = MapController();
-    globalWebSocketService =
-        Provider.of<GlobalWebSocketService>(context, listen: false);
+    // globalWebSocketService =
+    //     Provider.of<GlobalWebSocketService>(context, listen: false);
     locationTrackingService =
         Provider.of<LocationTrackingService>(context, listen: false);
   }
 
   void init() {
-    globalWebSocketService.addLocationsCallback(_updateUsers);
-    globalWebSocketService.addShiftsCallback(_updateShifts);
-    globalWebSocketService.addConnectionCallback(_updateConnectionStatus);
+    // globalWebSocketService.addLocationsCallback(_updateUsers);
+    // globalWebSocketService.addShiftsCallback(_updateShifts);
+    // globalWebSocketService.addConnectionCallback(_updateConnectionStatus);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initMap();
     });
   }
 
   void dispose() {
-    globalWebSocketService.removeLocationsCallback(_updateUsers);
-    globalWebSocketService.removeShiftsCallback(_updateShifts);
-    globalWebSocketService.removeConnectionCallback(_updateConnectionStatus);
+    // globalWebSocketService.removeLocationsCallback(_updateUsers);
+    // globalWebSocketService.removeShiftsCallback(_updateShifts);
+    // globalWebSocketService.removeConnectionCallback(_updateConnectionStatus);
     locationSubscription?.cancel();
     mapController.dispose();
   }

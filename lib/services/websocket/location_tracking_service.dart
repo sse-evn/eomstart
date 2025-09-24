@@ -90,7 +90,7 @@ class LocationTrackingService {
         timestamp: DateTime.now(),
       );
 
-      GlobalWebSocketService().updateCurrentLocation(_currentLocation!);
+      // GlobalWebSocketService().updateCurrentLocation(_currentLocation!);
     } catch (e) {
       print('Error updating location in global service: $e');
     }

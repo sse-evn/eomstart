@@ -20,15 +20,16 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
     _initializeApp();
+
   }
 
   Future<void> _initializeApp() async {
     try {
       debugPrint('Checking tokens on app start...');
 
-      final globalWebSocketService =
-          Provider.of<GlobalWebSocketService>(context, listen: false);
-      await globalWebSocketService.init();
+      // final globalWebSocketService =
+      //     Provider.of<GlobalWebSocketService>(context, listen: false);
+      // await globalWebSocketService.init();
 
       final token = await _storage.read(key: 'jwt_token');
       if (token != null) {
