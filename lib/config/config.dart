@@ -2,8 +2,8 @@
 
 class AppConfig {
   /// Основной хост бэкенда (меняй здесь для dev/prod)
-  static const String backendHost =
-      'https://eom-sharing.duckdns.org'; // ✅ Без пробелов!
+  static const String backendHost ='https://start.eom.kz'; // ✅ Без пробелов!
+
   // static const String backendHost = 'https://localhost:6606';
 
   /// Базовый путь API
