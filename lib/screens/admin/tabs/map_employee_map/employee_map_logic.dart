@@ -1,10 +1,6 @@
-// lib/screens/admin/tabs/map_employee_map/employee_map_logic.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart' show MapController;
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/location.dart';
@@ -12,6 +8,7 @@ import 'package:micro_mobility_app/models/user_shift_location.dart';
 import 'package:micro_mobility_app/services/websocket/location_tracking_service.dart';
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart';
+import 'package:geolocator/geolocator.dart'; // 🔹 Добавлен geolocator
 
 class EmployeeMapLogic {
   final BuildContext context;
@@ -125,21 +122,49 @@ class EmployeeMapLogic {
     }
   }
 
+  /// Получает текущее местоположение через GPS (geolocator)
   Future<void> _fetchCurrentLocation() async {
     if (_disposed) return;
+
     try {
-      final response = await http.get(Uri.parse('https://ipapi.co/json/'));
-      if (response.statusCode == 200 && !_disposed) {
-        final data = jsonDecode(response.body);
-        final lat = data['latitude'] as double?;
-        final lng = data['longitude'] as double?;
-        if (lat != null && lng != null) {
-          currentLocation = LatLng(lat, lng);
-          _notify();
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Служба геолокации отключена на устройстве.');
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception(
+              'Доступ к местоположению запрещён. Разрешите в настройках.');
         }
       }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception(
+            'Доступ к местоположению запрещён навсегда. Измените в настройках устройства.');
+      }
+
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
+        Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+        currentLocation = LatLng(position.latitude, position.longitude);
+        _notify();
+      } else {
+        throw Exception('Недостаточно прав для доступа к местоположению.');
+      }
     } catch (e) {
-      debugPrint('Ошибка получения локации: $e');
+      debugPrint('Ошибка GPS-геолокации: $e');
+      if (!_disposed) {
+        connectionError = true;
+        connectionErrorMessage = e.toString();
+        // Не устанавливаем isLoading = false здесь, чтобы не сломать логику initMap
+        // Ошибку обработает вызывающий код
+        rethrow; // чтобы initMap поймал ошибку
+      }
     }
   }
 
@@ -157,7 +182,7 @@ class EmployeeMapLogic {
     } catch (e) {
       if (!_disposed && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text('Ошибка обновления: ${e.toString()}')),
         );
       }
     } finally {
