@@ -1,14 +1,12 @@
-// lib/screens/map_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:micro_mobility_app/utils/map_app_constants.dart';
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
-import 'package:micro_mobility_app/services/map_load/map_data_loader.dart';
+import 'map_data_loader.dart';
 
 class MapScreen extends StatefulWidget {
-  final String? initialMapId; // опционально: начальная карта
+  final String? initialMapId;
   const MapScreen({super.key, this.initialMapId});
 
   @override
@@ -41,30 +39,6 @@ class _MapScreenState extends State<MapScreen> {
         title: const Text('Карта зон'),
         automaticallyImplyLeading: false,
         actions: [
-          IconButton(
-            icon: Icon(
-              logic.isWebSocketConnected
-                  ? Icons.wifi
-                  : (logic.connectionError ? Icons.wifi_off : Icons.wifi_find),
-              color: logic.isWebSocketConnected
-                  ? Colors.green
-                  : (logic.connectionError ? Colors.red : Colors.orange),
-            ),
-            onPressed: () {
-              String message = logic.isWebSocketConnected
-                  ? 'WebSocket подключен'
-                  : logic.connectionError
-                      ? 'Ошибка подключения: ${logic.connectionErrorMessage}'
-                      : 'WebSocket отключен';
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(message),
-                  backgroundColor:
-                      logic.isWebSocketConnected ? Colors.green : Colors.red,
-                ),
-              );
-            },
-          ),
           if (logic.availableMaps.isNotEmpty)
             PopupMenuButton<int>(
               icon: const Icon(Icons.map),
@@ -95,6 +69,8 @@ class _MapScreenState extends State<MapScreen> {
               onPressed: () => logic.downloadMapLocally(logic.selectedMapId),
               tooltip: 'Сохранить карту локально',
             ),
+          if (logic.isMapLoadedOffline)
+            const Icon(Icons.cloud_off, color: Colors.grey),
         ],
       ),
       body: Stack(
@@ -167,72 +143,6 @@ class _MapScreenState extends State<MapScreen> {
                               ),
                             ],
                           ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              if (logic.users.isNotEmpty)
-                MarkerLayer(
-                  markers: logic.users.map((user) {
-                    return Marker(
-                      point: LatLng(user.lat, user.lng),
-                      width: 40,
-                      height: 40,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: Center(
-                          child: Text(
-                            user.username.isNotEmpty
-                                ? user.username[0].toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              if (logic.activeShifts.isNotEmpty)
-                MarkerLayer(
-                  markers: logic.activeShifts
-                      .where((shift) => shift.hasLocation)
-                      .map((shift) {
-                    return Marker(
-                      point: LatLng(shift.lat!, shift.lng!),
-                      width: 60,
-                      height: 30,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white, width: 1.5),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black45,
-                              blurRadius: 3,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          shift.username,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     );

@@ -9,14 +9,9 @@ import 'package:path/path.dart' as path;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
-import 'package:micro_mobility_app/models/location.dart';
-import 'package:micro_mobility_app/models/user_shift_location.dart';
-import 'package:micro_mobility_app/services/websocket/location_tracking_service.dart';
-import 'package:provider/provider.dart';
-import 'package:micro_mobility_app/providers/shift_provider.dart';
-import 'package:flutter_map/flutter_map.dart';
 import '../../utils/map_app_constants.dart';
 import '../../services/location_service.dart';
+import 'package:flutter_map/flutter_map.dart';
 
 class MapLogic {
   final BuildContext context;
@@ -32,27 +27,16 @@ class MapLogic {
   bool showParkingZones = true;
   bool showSpeedLimitZones = true;
   bool showBoundaries = true;
-  late LocationTrackingService locationTrackingService;
-  StreamSubscription<Location>? locationSubscription;
-  bool connectionError = false;
-  String connectionErrorMessage = '';
-  List<Location> users = [];
-  List<UserShiftLocation> activeShifts = [];
-  bool isWebSocketConnected = false;
+  bool isMapLoadedOffline = false;
   bool _disposed = false;
-  late ShiftProvider _shiftProvider;
   void Function()? onStateChanged;
 
   MapLogic(this.context) {
     mapController = MapController();
-    locationTrackingService =
-        Provider.of<LocationTrackingService>(context, listen: false);
-    _shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
   }
 
   void init() {
     if (_disposed) return;
-    _shiftProvider.addListener(_onShiftProviderUpdate);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_disposed) _initMap();
     });
@@ -60,35 +44,7 @@ class MapLogic {
 
   void dispose() {
     _disposed = true;
-    _shiftProvider.removeListener(_onShiftProviderUpdate);
-    locationSubscription?.cancel();
     mapController.dispose();
-  }
-
-  void _onShiftProviderUpdate() {
-    if (_disposed) return;
-    locationTrackingService.updateUserInfo(
-      userId: _shiftProvider.activeShift?.userId ?? 0,
-      username: _shiftProvider.currentUsername ?? 'user',
-    );
-  }
-
-  void _updateUsers(List<Location> newUsers) {
-    if (_disposed) return;
-    users = newUsers;
-    _notify();
-  }
-
-  void _updateShifts(List<UserShiftLocation> shifts) {
-    if (_disposed) return;
-    activeShifts = shifts;
-    _notify();
-  }
-
-  void _updateConnectionStatus(bool isConnected) {
-    if (_disposed) return;
-    isWebSocketConnected = isConnected;
-    _notify();
   }
 
   void _notify() {
@@ -102,11 +58,6 @@ class MapLogic {
       await fetchCurrentLocation();
       await _loadAvailableMaps();
       await _loadAndParseGeoJson();
-      await locationTrackingService.init();
-      locationTrackingService.updateUserInfo(
-        userId: _shiftProvider.activeShift?.userId ?? 0,
-        username: _shiftProvider.currentUsername ?? 'user',
-      );
       if (!_disposed) {
         isLoading = false;
         _notify();
@@ -114,8 +65,6 @@ class MapLogic {
     } catch (e) {
       if (!_disposed) {
         isLoading = false;
-        connectionError = true;
-        connectionErrorMessage = e.toString();
         _notify();
         _showErrorSnackBar('Ошибка инициализации: $e');
       }
@@ -223,6 +172,7 @@ class MapLogic {
             final fileUrl = AppConfig.getMapFileUrl(fileName);
             final localFile = await _getLocalMapFile(mapId);
             if (localFile != null && await localFile.exists()) {
+              isMapLoadedOffline = true;
               return await localFile.readAsString();
             }
             final fileResponse = await http.get(
@@ -233,6 +183,7 @@ class MapLogic {
               },
             );
             if (fileResponse.statusCode == 200) {
+              isMapLoadedOffline = false;
               await _saveMapFileLocally(mapId, fileResponse.body);
               return fileResponse.body;
             }
@@ -244,6 +195,7 @@ class MapLogic {
       if (!_disposed) {
         final localFile = await _getLocalMapFile(mapId);
         if (localFile != null && await localFile.exists()) {
+          isMapLoadedOffline = true;
           return await localFile.readAsString();
         }
       }
@@ -281,6 +233,7 @@ class MapLogic {
     if (_disposed || newMapId == selectedMapId) return;
     selectedMapId = newMapId;
     isLoading = true;
+    isMapLoadedOffline = false;
     _notify();
     try {
       final geoJsonString = await _loadGeoJsonFromServer(newMapId);

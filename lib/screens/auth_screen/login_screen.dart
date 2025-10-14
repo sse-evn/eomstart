@@ -234,47 +234,46 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _handleRegularLogin() async {
-    Navigator.pushNamedAndRemoveUntil(
+    Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+    try {
+      final responseData = await _apiService.login(
+          _usernameController.text, _passwordController.text);
+
+      final String token = responseData['token'] as String;
+
+      try {
+        final shiftProvider =
+            Provider.of<ShiftProvider>(context, listen: false);
+        await shiftProvider.setToken(token);
+      } catch (e) {
+        debugPrint("Could not set token in ShiftProvider: $e");
+      }
+
+      final profile = await _apiService.getUserProfile(token);
+      final status = profile['status']?.toString() ?? 'pending';
+      final role = profile['role']?.toString().toLowerCase() ?? 'user';
+
+      if (status == 'pending' && role != 'superadmin') {
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/pending', (route) => false);
+        }
+      } else {
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
               context, '/dashboard', (route) => false);
-
-    // if (!_formKey.currentState!.validate()) return;
-    // setState(() => _isLoading = true);
-    // try {
-    //   final responseData = await _apiService.login(
-    //       _usernameController.text, _passwordController.text);
-
-    //   final String token = responseData['token'] as String;
-
-    //   try {
-    //     final shiftProvider =
-    //         Provider.of<ShiftProvider>(context, listen: false);
-    //     await shiftProvider.setToken(token);
-    //   } catch (e) {
-    //     debugPrint("Could not set token in ShiftProvider: $e");
-    //   }
-
-    //   final profile = await _apiService.getUserProfile(token);
-    //   final status = profile['status']?.toString() ?? 'pending';
-    //   final role = profile['role']?.toString().toLowerCase() ?? 'user';
-
-    //   if (status == 'pending' && role != 'superadmin') {
-    //     if (mounted) {
-    //       Navigator.pushNamedAndRemoveUntil(
-    //           context, '/pending', (route) => false);
-    //     }
-    //   } else {
-    //     if (mounted) {
-    //       Navigator.pushNamedAndRemoveUntil(
-    //           context, '/dashboard', (route) => false);
-    //     }
-    //   }
-    // } catch (e) {
-    //   _showError('Ошибка подключения или авторизации: $e');
-    // } finally {
-    //   if (mounted) {
-    //     setState(() => _isLoading = false);
-    //   }
-    // }
+        }
+      }
+    } catch (e) {
+      _showError('Ошибка подключения или авторизации: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _showTelegramAuthDialog() {
@@ -344,7 +343,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-
                 SvgPicture.asset(
                   'assets/eom2.svg',
                   height: 180,
@@ -361,8 +359,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.bold,
-                          color:
-                              isDarkMode ? Colors.white : Colors.green[800],
+                          color: isDarkMode ? Colors.white : Colors.green[800],
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -375,7 +372,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
                       _buildPasswordField(),
                       const SizedBox(height: 32),
-
                       SizedBox(
                         width: double.infinity,
                         height: 55,
@@ -386,8 +382,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 borderRadius: BorderRadius.circular(16)),
                             elevation: 4,
                           ),
-                          onPressed:
-                              _isLoading ? null : _handleRegularLogin,
+                          onPressed: _isLoading ? null : _handleRegularLogin,
                           child: _isLoading
                               ? const CircularProgressIndicator(
                                   color: Colors.white)
@@ -405,11 +400,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       Row(
                         children: [
                           const Expanded(
-                              child: Divider(
-                                  color: Colors.grey, thickness: 1)),
+                              child: Divider(color: Colors.grey, thickness: 1)),
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: Text(
                               'или',
                               style: TextStyle(
@@ -421,8 +414,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const Expanded(
-                              child: Divider(
-                                  color: Colors.grey, thickness: 1)),
+                              child: Divider(color: Colors.grey, thickness: 1)),
                         ],
                       ),
                       const SizedBox(height: 24),

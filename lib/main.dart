@@ -12,7 +12,6 @@ import 'package:micro_mobility_app/providers/shift_provider.dart';
 
 // Services
 import 'package:micro_mobility_app/services/api_service.dart';
-import 'package:micro_mobility_app/services/websocket/location_tracking_service.dart';
 
 // Screens
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
@@ -37,12 +36,12 @@ void main() async {
 
   // Инициализация сервисов
   // final _globalWebSocketService = GlobalWebSocketService(); //снять для подключение wss
-  final _locationTrackingService = LocationTrackingService();
+  // final _locationTrackingService = LocationTrackingService();
 
   // 🔗 СВЯЗКА: при обновлении локации — отправляем в WebSocket
-  _locationTrackingService.setLocationUpdateCallback((location) {
-    // _globalWebSocketService.updateCurrentLocation(location); //снять для подключение wss
-  });
+  // _locationTrackingService.setLocationUpdateCallback((location)
+
+  // _globalWebSocketService.updateCurrentLocation(location); //снять для подключение wss
 
   runApp(
     MultiProvider(
@@ -57,7 +56,7 @@ void main() async {
         ),
         // Предоставляем сервисы как singleton'ы
         // Provider.value(value: _globalWebSocketService), //снять для подключение wss
-        Provider.value(value: _locationTrackingService),
+        // Provider.value(value: _locationTrackingService),
       ],
       child: const MyApp(),
     ),

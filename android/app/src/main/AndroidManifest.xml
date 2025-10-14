@@ -16,7 +16,6 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-
     <application
         android:enableOnBackInvokedCallback="true"
         android:label="EOM Start"
@@ -24,17 +23,17 @@
         android:icon="@mipmap/ic_launcher">
 
         <!-- Основной фоновый сервис -->
-        <service
+        <!-- <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
             android:foregroundServiceType="location"
             android:exported="false"
-            tools:replace="android:exported" />
+            tools:replace="android:exported" /> -->
 
         <!-- Другие сервисы (если используются) -->
-        <service
+        <!-- <service
             android:name="com.almoullim.background_location.BackgroundLocationService"
             android:foregroundServiceType="location"
-            android:exported="false" />
+            android:exported="false" /> -->
 
         <!-- MainActivity и meta-data -->
         <activity

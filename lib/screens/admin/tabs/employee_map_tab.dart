@@ -1,11 +1,10 @@
-// lib/screens/admin/tabs/employee_map_tab.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:micro_mobility_app/utils/map_app_constants.dart'
     show AppConstants;
 import 'package:micro_mobility_app/screens/admin/tabs/map_employee_map/employee_map_logic.dart';
+import 'package:provider/provider.dart';
 
 class EmployeeMapTab extends StatefulWidget {
   const EmployeeMapTab({super.key});
@@ -16,9 +15,9 @@ class EmployeeMapTab extends StatefulWidget {
 
 class _EmployeeMapTabState extends State<EmployeeMapTab>
     with AutomaticKeepAliveClientMixin {
-  late EmployeeMapLogic logic;
+  EmployeeMapLogic? _logic; // Сделайте nullable
   bool _isLogicInitialized = false;
-  bool _disposed = false; // 🔥 Добавлен флаг disposed
+  bool _disposed = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -30,35 +29,46 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   }
 
   Future<void> _initLogic() async {
-    if (_disposed || _isLogicInitialized) return; // 🔥 Проверка disposed
+    if (_disposed || _isLogicInitialized) return;
 
-    logic = EmployeeMapLogic(context);
-    logic.onStateChanged = () {
+    try {
+      _logic = EmployeeMapLogic(context);
+      _logic!.onStateChanged = () {
+        if (!_disposed && mounted) {
+          setState(() {});
+        }
+      };
+
+      _isLogicInitialized = true;
+      _logic!.init();
+      if (!_disposed && mounted) setState(() {});
+    } catch (e) {
+      print('Error initializing logic: $e');
       if (!_disposed && mounted) {
-        setState(() {});
+        setState(() {
+          _isLogicInitialized = true;
+        });
       }
-    };
-
-    _isLogicInitialized = true;
-    logic.init();
-    if (!_disposed && mounted) setState(() {});
+    }
   }
 
   @override
   void dispose() {
-    _disposed = true; // 🔥 Устанавливаем флаг
-    // 🔥 Критически важно: уничтожаем логику
-    logic.dispose();
+    _disposed = true;
+    _logic?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // для AutomaticKeepAliveClientMixin
+    super.build(context);
 
-    if (!_isLogicInitialized || logic.isLoading) {
+    // Если логика не инициализирована или произошла ошибка
+    if (!_isLogicInitialized || _logic == null) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final logic = _logic!;
 
     if (logic.error.isNotEmpty) {
       return Center(
@@ -68,19 +78,16 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
             Text('Ошибка: ${logic.error}'),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () {
-                if (_disposed) return; // 🔥 Дополнительная проверка
-                setState(() {
-                  logic.isLoading = true;
-                  logic.error = '';
-                });
-                _initLogic();
-              },
+              onPressed: _disposed ? null : _initLogic,
               child: const Text('Попробовать снова'),
             ),
           ],
         ),
       );
+    }
+
+    if (logic.isLoading) {
+      return const Center(child: CircularProgressIndicator());
     }
 
     return Column(
@@ -241,9 +248,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 right: 20,
                 child: FloatingActionButton(
                   backgroundColor: Colors.green,
-                  onPressed: _disposed
-                      ? null
-                      : logic.refreshMap, // 🔥 Безопасный вызов
+                  onPressed: _disposed ? null : logic.refreshMap,
                   tooltip: 'Обновить карту',
                   child: logic.isRefreshing
                       ? const SizedBox(
@@ -301,9 +306,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                         IconButton(
                           icon: const Icon(Icons.refresh,
                               size: 18, color: Colors.white),
-                          onPressed: _disposed
-                              ? null
-                              : logic.refreshMap, // 🔥 Безопасный вызов
+                          onPressed: _disposed ? null : logic.refreshMap,
                           tooltip: 'Обновить',
                         ),
                     ],
@@ -374,7 +377,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                                           15.0,
                                         );
                                       }
-                                    }, // 🔥 Безопасный вызов
+                                    },
                             );
                           },
                         ),

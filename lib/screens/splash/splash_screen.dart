@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:micro_mobility_app/config/config.dart';
-import 'package:micro_mobility_app/services/websocket/global_websocket_service.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart';
 
 class SplashScreen extends StatefulWidget {

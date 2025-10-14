@@ -1,10 +1,10 @@
 # pubspec.yaml
 name: micro_mobility_app
-description: A new Flutter project.
+description: EOM START 
 
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -55,7 +55,7 @@ dependencies:
   web_socket_channel: ^3.0.3
   location: ^8.0.1
   upgrader: ^11.5.0
-  # flutter_local_notifications: ^19.4.1
+  battery_plus: ^5.0.0
 
 flutter:
   uses-material-design: true
