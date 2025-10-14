@@ -51,11 +51,20 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   String _extractNumberFromLink(String link) {
+
+    // Whoosh
     RegExp whooshRegExp =
         RegExp(r'whoosh\.app\.link\/scooter\?scooter_code=([a-zA-Z0-9]+)');
     var whooshMatch = whooshRegExp.firstMatch(link);
     if (whooshMatch != null && whooshMatch.group(1) != null) {
       return whooshMatch.group(1)!;
+    }
+
+    // 🔹 WSH (https://wsh.bike?s=AB0696)
+    RegExp wshRegExp = RegExp(r'wsh\.bike\?s=([a-zA-Z0-9]+)');
+    var wshMatch = wshRegExp.firstMatch(link);
+    if (wshMatch != null && wshMatch.group(1) != null) {
+      return wshMatch.group(1)!;
     }
 
     RegExp urentRegExp = RegExp(r'ure\.su\/j\/s\.(\d+)');
@@ -240,13 +249,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         centerTitle: true,
         backgroundColor: Colors.green[700],
         automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add, color: Colors.white),
-            tooltip: 'Добавить номер вручную',
-            onPressed: _addNumberManually,
-          ),
-        ],
+        
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -276,28 +279,18 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                         ),
                         child: Column(
                           children: [
-                            Text(
-                              'Сканировать QR-код',
-                              style: TextStyle(
-                                color: const Color(0xFF34495E),
-                                fontSize:
-                                    MediaQuery.of(context).size.width > 400
-                                        ? 18
-                                        : 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
                             const SizedBox(height: 12),
                             AspectRatio(
                               aspectRatio: 1.0,
                               child: Container(
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(18),
                                   border:
                                       Border.all(color: Colors.grey, width: 1),
                                 ),
+                                clipBehavior: Clip.hardEdge,
                                 child: MobileScanner(
+                                  
                                   controller: cameraController,
                                   onDetect: (capture) {
                                     final barcodes = capture.barcodes;
@@ -337,8 +330,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                                       builder: (context, state, child) {
                                         return Icon(
                                           state == TorchState.on
-                                              ? Icons.flash_on
-                                              : Icons.flash_off,
+                                              ? Icons.flashlight_off_rounded
+                                              : Icons.flashlight_on_rounded,
                                           color: Colors.white,
                                           size: 18,
                                         );
@@ -411,17 +404,36 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                         ),
                         child: Column(
                           children: [
-                            Text(
-                              'Номера',
-                              style: TextStyle(
-                                color: const Color(0xFF34495E),
-                                fontSize:
-                                    MediaQuery.of(context).size.width > 400
-                                        ? 18
-                                        : 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
+                            Column(
+                              children: [
+                                Text(
+                                  'Всего: ${_scannedNumbers.length}',
+                                  style: TextStyle(
+                                    color: const Color(0xFF34495E),
+                                    fontSize:
+                                        MediaQuery.of(context).size.width > 400
+                                            ? 18
+                                            : 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+
+                               
+
+                                // Text(
+                                //   'Номера',
+                                //   style: TextStyle(
+                                //     color: const Color(0xFF34495E),
+                                //     fontSize:
+                                //         MediaQuery.of(context).size.width > 400
+                                //             ? 18
+                                //             : 16,
+                                //     fontWeight: FontWeight.bold,
+                                //   ),
+                                //   textAlign: TextAlign.center,
+                                // ),
+
+                              ],
                             ),
                             const SizedBox(height: 10),
                             SizedBox(
@@ -461,26 +473,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: _scannedNumbers.isEmpty
-                                        ? null
-                                        : _copyAllNumbers,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8)),
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
-                                    ),
-                                    child: const Text('Копировать',
-                                        style: TextStyle(
-                                            color: Colors.white, fontSize: 14)),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: ElevatedButton(
+                                  child: ElevatedButton.icon(
                                     onPressed: _scannedNumbers.isEmpty
                                         ? null
                                         : _clearAllScannedNumbers,
@@ -492,29 +485,51 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 12),
                                     ),
-                                    child: const Text('Очистить',
+                                    icon: Icon(Icons.delete_rounded),
+                                    label: const Text('Очистить',
+                                        style: TextStyle(
+                                            color: Colors.white, fontSize: 14)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: _scannedNumbers.isEmpty
+                                        ? null
+                                        : _copyAllNumbers,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8)),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                    ),
+
+                                    icon: Icon(Icons.copy_rounded),
+                                    label: const Text('Копировать',
                                         style: TextStyle(
                                             color: Colors.white, fontSize: 14)),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 12),
-                            ElevatedButton(
-                              onPressed: _scannedNumbers.isEmpty
-                                  ? null
-                                  : _sendToTelegram,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8)),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                              child: const Text('Отправить в Telegram',
-                                  style: TextStyle(
-                                      color: Colors.white, fontSize: 14)),
-                            ),
+                            // const SizedBox(height: 12),
+                            // ElevatedButton(
+                            //   onPressed: _scannedNumbers.isEmpty
+                            //       ? null
+                            //       : _sendToTelegram,
+                            //   style: ElevatedButton.styleFrom(
+                            //     backgroundColor: Colors.blue,
+                            //     shape: RoundedRectangleBorder(
+                            //         borderRadius: BorderRadius.circular(8)),
+                            //     padding:
+                            //         const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
+                            //   ),
+                            //   child: const Text('Отправить в Telegram',
+                            //       style: TextStyle(
+                            //           color: Colors.white, fontSize: 14)),
+                            // ),
                           ],
                         ),
                       ),

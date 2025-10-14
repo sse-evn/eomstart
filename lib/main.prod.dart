@@ -10,7 +10,7 @@ import 'package:micro_mobility_app/settings_provider.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/screens/auth_screen/pending_screen.dart';
-import 'package:micro_mobility_app/screens/dashboard_screen.dart';
+import 'package:micro_mobility_app/screens/bottom_navigation/bottom_navigation.dart';
 import 'package:micro_mobility_app/screens/profile_screens.dart';
 import 'package:micro_mobility_app/screens/settings_screen.dart';
 import 'package:micro_mobility_app/screens/about_screen.dart';

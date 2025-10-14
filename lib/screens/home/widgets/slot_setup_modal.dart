@@ -5,8 +5,8 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../providers/shift_provider.dart';
-import '../services/api_service.dart';
+import '../../../providers/shift_provider.dart';
+import '../../../services/api_service.dart';
 
 class SlotSetupModal extends StatefulWidget {
   const SlotSetupModal({super.key});
@@ -409,6 +409,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           _buildSelfiePreview()
         else
           _buildSelfiePlaceholder(isDarkMode),
+        
         _buildSelfieButton(isDarkMode),
         const SizedBox(height: 24),
         if (_timeSlots.isNotEmpty) _buildTimeSlotsSection(isDarkMode),

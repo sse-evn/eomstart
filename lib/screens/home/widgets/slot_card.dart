@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
-import '../../providers/shift_provider.dart';
-import '../modals/slot_setup_modal.dart';
-import '../../utils/time_utils.dart';
-import '../config/config.dart';
+import '../../../../providers/shift_provider.dart';
+import 'slot_setup_modal.dart';
+import '../../../../utils/time_utils.dart';
+import '../../../config/config.dart';
 
 class SlotCard extends StatefulWidget {
   const SlotCard({super.key});
@@ -86,8 +85,8 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                           colors: isDarkMode
                               ? [Colors.green[900]!, Colors.green[800]!]
                               : [
-                                  const Color.fromARGB(255, 10, 80, 79)!,
-                                  const Color.fromARGB(255, 63, 114, 66)!
+                                  const Color.fromARGB(255, 10, 80, 79),
+                                  const Color.fromARGB(255, 63, 114, 66)
                                 ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
