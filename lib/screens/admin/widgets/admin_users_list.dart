@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/api_service.dart';
-import '../config/config.dart';
+import '../../../services/api_service.dart';
+import '../../../config/config.dart';
 
 class AdminUsersList extends StatefulWidget {
   const AdminUsersList({Key? key}) : super(key: key);
@@ -27,7 +27,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
     'scout': 'Скаут',
     'supervisor': 'Супервайзер',
     'coordinator': 'Координатор',
-    'admin': 'Админ',
+    // 'admin': 'Админ',
     'superadmin': 'Суперадмин',
   };
 
@@ -36,8 +36,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
     'scout': Colors.blue,
     'supervisor': Colors.orange,
     'coordinator': Colors.purple,
-    'admin': Colors.red,
-    'superadmin': Colors.redAccent,
+    // 'admin': Colors.red,
+    'superadmin': Colors.red,
   };
 
   final Map<String, Color> _statusColors = {
@@ -716,7 +716,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.only(left: 20, right: 20, top: 10, bottom: 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -770,6 +770,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
                         backgroundColor: Colors.orange),
                     child: const Text('Деактивировать'),
                   ),
+              const SizedBox(height: 10,),
               if (canManage)
                 ElevatedButton(
                   onPressed: () {
@@ -781,6 +782,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
                   ),
                   child: const Text('Изменить роль'),
                 ),
+              const SizedBox(height: 10,),
+              
               if (canDelete)
                 ElevatedButton(
                   onPressed: () {
@@ -790,11 +793,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text('Удалить'),
                 ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Закрыть'),
-              ),
+
             ],
           ),
         ),

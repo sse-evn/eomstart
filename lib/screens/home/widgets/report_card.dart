@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
-import 'calendar_widget.dart';
-import 'info_row.dart';
-import 'period_card.dart';
-import 'bot_stats_card.dart';
-import '../../providers/shift_provider.dart';
-import '../../models/shift_data.dart';
+import '../../../components/calendar_widget.dart';
+import '../../../components/info_row.dart';
+import '../../../components/period_card.dart';
+import '../../../components/bot_stats_card.dart';
+import '../../../../providers/shift_provider.dart';
+import '../../../../models/shift_data.dart';
 
 class ReportCard extends StatefulWidget {
   const ReportCard({super.key});

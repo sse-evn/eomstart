@@ -6,7 +6,7 @@ import 'package:micro_mobility_app/screens/admin/shift_monitoring_screen.dart';
 import 'package:micro_mobility_app/screens/admin/tasks_screen.dart';
 import 'package:micro_mobility_app/screens/admin/admin_map_screens.dart';
 import 'package:micro_mobility_app/screens/admin/generator_shifts.dart';
-import 'package:micro_mobility_app/widgets/admin_users_list.dart';
+import 'package:micro_mobility_app/screens/admin/widgets/admin_users_list.dart';
 import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
 
 class AdminPanelScreen extends StatefulWidget {
