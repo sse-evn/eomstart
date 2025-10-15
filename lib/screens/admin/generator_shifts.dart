@@ -426,10 +426,11 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
       ],
     );
   }
-
+  
   Widget _buildShiftField(String title, String subtitle, int count,
       void Function(String) onChanged) {
     return Card(
+      color: Theme.of(context).colorScheme.secondary,
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
@@ -453,7 +454,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
             Container(
               width: 80,
               decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade700 : Colors.grey[100],
                   borderRadius: BorderRadius.circular(8)),
               child: TextFormField(
                 keyboardType:

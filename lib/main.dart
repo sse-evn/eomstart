@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/core/themes/theme.dart';
+import 'package:micro_mobility_app/providers/theme_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -17,8 +18,8 @@ import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/screens/auth_screen/pending_screen.dart';
 import 'package:micro_mobility_app/screens/bottom_navigation/bottom_navigation.dart';
-import 'package:micro_mobility_app/screens/profile_screens.dart';
-import 'package:micro_mobility_app/screens/settings_screen.dart';
+import 'package:micro_mobility_app/screens/profile/profile_screens.dart';
+import 'package:micro_mobility_app/screens/profile/settings_screen.dart';
 import 'package:micro_mobility_app/screens/about_screen.dart';
 import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
 import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.dart';
@@ -54,6 +55,7 @@ void main() async {
             prefs: _prefs,
           ),
         ),
+        ChangeNotifierProvider(create: (_) => ThemeProvider(),)
         // Предоставляем сервисы как singleton'ы
         // Provider.value(value: _globalWebSocketService), //снять для подключение wss
         // Provider.value(value: _locationTrackingService),
@@ -72,7 +74,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Оператор микромобильности',
-      theme: lightMode,
+      theme: Provider.of<ThemeProvider>(context).themeData,
       debugShowCheckedModeBanner: false,
       initialRoute: '/splash',
       routes: {

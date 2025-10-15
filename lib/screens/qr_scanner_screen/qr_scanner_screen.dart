@@ -243,11 +243,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Сканер QR-кодов'),
         centerTitle: true,
-        backgroundColor: Colors.green[700],
         automaticallyImplyLeading: false,
         
       ),
@@ -266,7 +267,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                         margin: const EdgeInsets.all(8.0),
                         padding: const EdgeInsets.all(12.0),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: colorScheme.secondary,
                           borderRadius: BorderRadius.circular(12.0),
                           boxShadow: [
                             BoxShadow(
@@ -391,7 +392,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                         margin: const EdgeInsets.all(8.0),
                         padding: const EdgeInsets.all(12.0),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: colorScheme.secondary,
                           borderRadius: BorderRadius.circular(12.0),
                           boxShadow: [
                             BoxShadow(
@@ -409,7 +410,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                                 Text(
                                   'Всего: ${_scannedNumbers.length}',
                                   style: TextStyle(
-                                    color: const Color(0xFF34495E),
+                                    // color: const Color(0xFF34495E),
                                     fontSize:
                                         MediaQuery.of(context).size.width > 400
                                             ? 18

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:win32/win32.dart';
 import '../../../services/api_service.dart';
 import '../../../config/config.dart';
 
@@ -482,6 +483,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
         .contains(_currentUserRole);
     bool canDelete = _currentUserRole == 'superadmin';
 
+    final colorScheme = Theme.of(context).colorScheme;
     return Stack(
       children: [
         // Основной контент
@@ -491,6 +493,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Card(
+                color: colorScheme.secondary,
                 elevation: 4,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -614,6 +617,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
                       );
                     }
 
+                    final colorScheme = Theme.of(context).colorScheme;
+
                     return ListView.builder(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: filteredUsers.length,
@@ -625,6 +630,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
                         final role = user['role'] as String? ?? 'user';
                         final status = user['status'] as String? ?? 'pending';
                         return Card(
+                          color: colorScheme.secondary,
                           margin: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 6,
@@ -638,7 +644,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
                               backgroundColor: _roleColors[role],
                               child: Text(
                                 username.substring(0, 1).toUpperCase(),
-                                style: const TextStyle(color: Colors.white),
+                                // style: const TextStyle(color: Colors.white),
                               ),
                             ),
                             title: Text(firstName ?? username),
