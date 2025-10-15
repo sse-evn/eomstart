@@ -93,10 +93,148 @@ class _DashboardHomeState extends State<DashboardHome> {
                 child: Column(
                   children: [
                     SlotCard(),
+                    SizedBox(height: 10),
+
+
+                    Row(
+                      children: [
+                        Text(
+                          'Статистика',
+                          style: TextStyle(
+                            fontSize: 22,
+                            
+                          ),
+                        ),
+                        const SizedBox(width: 10,),
+                        Icon(
+                          Icons.stacked_line_chart_rounded
+                        )
+                      ],
+                    ),
+
+                    const SizedBox(
+                      height: 10,
+                    ),
+                    
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16.0),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16.0),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.15),
+                            spreadRadius: 1,
+                            blurRadius: 12,
+                            offset: Offset(0, 6),
+                          ),
+                        ],
+                      ),
+
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'Всего:',
+                                style: TextStyle(
+                                  fontSize: 20
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                '100',
+                                style: TextStyle(
+                                  fontSize: 20
+                                ),
+                              ),
+                            ],
+                          ),
+                      
+                          const Divider(
+                            color: Colors.grey,
+                          ),
+                      
+                          Row(
+                            children: [
+                              Text(
+                                'Jet',
+                                style: TextStyle(
+                                  fontSize: 16
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                '100',
+                                style: TextStyle(
+                                  fontSize: 16
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                'Yandex',
+                                style: TextStyle(
+                                  fontSize: 16
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                '100',
+                                style: TextStyle(
+                                  fontSize: 16
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                'Whoosh',
+                                style: TextStyle(
+                                  fontSize: 16
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                '100',
+                                style: TextStyle(
+                                  fontSize: 16
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                'Bolt',
+                                style: TextStyle(
+                                  fontSize: 16
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                '100',
+                                style: TextStyle(
+                                  fontSize: 16
+                                ),
+                              ),
+                            ],
+                          ),
+                      
+                      
+                      
+                        ],
+                      ),
+                    ),
 
                     SizedBox(height: 10),
                   
-                    // ReportCard(),
+                    ReportCard(),
                   ],
                 ),
               );

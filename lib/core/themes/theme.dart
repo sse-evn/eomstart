@@ -10,21 +10,11 @@ final ThemeData lightMode = ThemeData(
 
   primaryColor: primaryColor,
   colorScheme: ColorScheme.light(
-    primary: primaryColor
+    primary: primaryColor,
+    secondary: Colors.white,
+    shadow: const Color.fromARGB(255, 201, 201, 201),
   ),
 
-
-  scaffoldBackgroundColor: Colors.grey[100],
-  appBarTheme: AppBarTheme(
-    foregroundColor: Colors.white,
-    elevation: 1,
-    titleTextStyle: const TextStyle(
-      color: Colors.black,
-      fontSize: 18,
-      fontWeight: FontWeight.bold,
-    ),
-    iconTheme: const IconThemeData(color: Colors.white),
-  ),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
       backgroundColor: primaryColor,
@@ -54,11 +44,14 @@ final ThemeData lightMode = ThemeData(
   visualDensity: VisualDensity.adaptivePlatformDensity,
 );
 
+
 final ThemeData darkMode = ThemeData(
   brightness: Brightness.dark,
 
   primaryColor: primaryColor,
   colorScheme: ColorScheme.dark(
-    primary: primaryColor
+    primary: primaryColor,
+    secondary: const Color.fromARGB(255, 59, 59, 59),
+    shadow: const Color.fromARGB(255, 32, 32, 32),
   )
 );

@@ -65,7 +65,7 @@ flutter:
     - assets/almaty_zone.geojson
     - assets/icons/
     - assets/icons/Insider-loading.json
-    - assets/images/almaty.png
+    - assets/images/
 
 
 dev_dependencies:
