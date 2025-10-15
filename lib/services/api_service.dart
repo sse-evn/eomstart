@@ -1018,4 +1018,36 @@ class ApiService {
           'Не удалось загрузить смены за $date: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
     }
   }
+
+  Future<List<String>> getAvailableTimeSlotsForStart(String token) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/time-slots/available-for-start'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+    }, token);
+    if (response.statusCode == 200) {
+      final dynamic body = jsonDecode(response.body);
+      if (body is List) {
+        return body.map((e) => e.toString()).toList();
+      }
+      return [];
+    } else {
+      String errorMessage = 'Failed to load available time slots';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to load available time slots') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint(
+            'Ошибка парсинга тела ошибки getAvailableTimeSlotsForStart: $e');
+      }
+      throw Exception(errorMessage);
+    }
+  }
 }

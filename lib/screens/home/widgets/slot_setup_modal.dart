@@ -43,41 +43,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     super.dispose();
   }
 
-  bool _canStartShift(String timeSlot) {
-    final now = DateTime.now();
-    final currentHour = now.hour;
-    final currentMinute = now.minute;
-
-    switch (timeSlot) {
-      case '07:00-15:00':
-        return (currentHour == 6 && currentMinute >= 40) ||
-            (currentHour >= 7 && currentHour < 15) ||
-            (currentHour == 15 && currentMinute == 0);
-      case '15:00-23:00':
-        return (currentHour == 14 && currentMinute >= 40) ||
-            (currentHour >= 15 && currentHour < 23) ||
-            (currentHour == 23 && currentMinute == 0);
-      case '07:00-23:00':
-        return (currentHour == 6 && currentMinute >= 40) ||
-            (currentHour >= 7 && currentHour < 23) ||
-            (currentHour == 23 && currentMinute == 0);
-    }
-    return false;
-  }
-
-  String _getTimeRestrictionMessage(String timeSlot) {
-    switch (timeSlot) {
-      case '07:00-15:00':
-        return 'Смену можно начать с 06:40 или в любое время до 15:00';
-      case '15:00-23:00':
-        return 'Смену можно начать с 14:40 или в любое время до 23:00';
-      case '07:00-23:00':
-        return 'Смену можно начать с 06:40 или в любое время до 23:00';
-      default:
-        return 'Смену можно начать только в определённое время';
-    }
-  }
-
   Future<void> _initializeData() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
@@ -116,9 +81,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
       final serverZones =
           await _retryApiCall(() => _apiService.getAvailableZones(_token!));
-      final serverTimeSlots =
-          await _retryApiCall(() => _apiService.getAvailableTimeSlots(_token!));
-
+      final serverTimeSlots = await _retryApiCall(
+          () => _apiService.getAvailableTimeSlotsForStart(_token!));
       final uniqueZones = serverZones.toSet().toList();
       final defaultZone = uniqueZones.isNotEmpty ? uniqueZones.first : null;
 
@@ -195,10 +159,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     }
     if (_selectedTime == null) {
       _showError('Выберите время смены');
-      return;
-    }
-    if (!_canStartShift(_selectedTime!)) {
-      _showError(_getTimeRestrictionMessage(_selectedTime!));
       return;
     }
     if (_zone == null) {
@@ -410,13 +370,39 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           _buildSelfiePreview()
         else
           _buildSelfiePlaceholder(isDarkMode),
+
         
 
-        const SizedBox(height: 10,),
+       // const SizedBox(height: 10,),
+
 
         _buildSelfieButton(isDarkMode),
         const SizedBox(height: 24),
-        if (_timeSlots.isNotEmpty) _buildTimeSlotsSection(isDarkMode),
+        if (_timeSlots.isNotEmpty)
+          _buildTimeSlotsSection(isDarkMode)
+        else
+          Column(
+            children: [
+              const Text(
+                '🕗 Сейчас не время начала смены',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Смены доступны:\n• 06:40–15:00\n• 14:40–23:00',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
         const SizedBox(height: 24),
         if (_zones.isNotEmpty) _buildZoneDropdown(isDarkMode),
         const SizedBox(height: 24),
@@ -535,63 +521,40 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           itemBuilder: (context, index) {
             final timeSlot = _timeSlots[index];
             final isSelected = _selectedTime == timeSlot;
-            final canStart = _canStartShift(timeSlot);
-            return Tooltip(
-              message: canStart ? '' : _getTimeRestrictionMessage(timeSlot),
-              child: ElevatedButton(
-                onPressed: _isLoading || !canStart
-                    ? null
-                    : () {
-                        if (mounted) {
-                          setState(() => _selectedTime = timeSlot);
-                        }
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isSelected
-                      ? Colors.green[700]
-                      : !canStart
-                          ? Colors.grey[400]
-                          : isDarkMode
-                              ? Colors.grey[800]
-                              : Colors.white,
-                  foregroundColor: isSelected
-                      ? Colors.white
-                      : isDarkMode
-                          ? Colors.white
-                          : Colors.black,
-                  side: BorderSide(
-                    color: isSelected
-                        ? Colors.green[700]!
-                        : isDarkMode
-                            ? Colors.grey[700]!
-                            : Colors.grey[300]!,
-                    width: isSelected ? 2 : 1,
-                  ),
-                  padding: const EdgeInsets.all(12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  elevation: isSelected ? 4 : 1,
+            return ElevatedButton(
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      if (mounted) {
+                        setState(() => _selectedTime = timeSlot);
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isSelected
+                    ? Colors.green[700]
+                    : (isDarkMode ? Colors.grey[800] : Colors.white),
+                foregroundColor: isSelected
+                    ? Colors.white
+                    : (isDarkMode ? Colors.white : Colors.black),
+                side: BorderSide(
+                  color: isSelected
+                      ? Colors.green[700]!
+                      : (isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
+                  width: isSelected ? 2 : 1,
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      timeSlot,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.normal,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (!canStart)
-                      Icon(
-                        Icons.lock,
-                        size: 12,
-                        color: isDarkMode ? Colors.grey[300] : Colors.grey[600],
-                      ),
-                  ],
+                padding: const EdgeInsets.all(12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                elevation: isSelected ? 4 : 1,
+              ),
+              child: Text(
+                timeSlot,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+                textAlign: TextAlign.center,
               ),
             );
           },
@@ -647,15 +610,12 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   }
 
   Widget _buildActionButton() {
-    bool canStartSelectedShift =
-        _selectedTime != null && _canStartShift(_selectedTime!);
     bool canSubmit = !_isLoading &&
         !_hasActiveShift &&
         _selectedTime != null &&
         _selfie != null &&
         _position != null &&
-        _zone != null &&
-        canStartSelectedShift;
+        _zone != null;
 
     return SizedBox(
       width: double.infinity,

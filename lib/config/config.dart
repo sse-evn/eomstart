@@ -44,6 +44,8 @@ class AppConfig {
 
   /// URL активной смены
   static String get activeShiftUrl => '$apiBaseUrl/shifts/active';
+  static String get timeSlotsAvailableForStartUrl =>
+      '$apiBaseUrl/time-slots/available-for-start';
 
   /// URL старта смены
   static String get startSlotUrl => '$apiBaseUrl/slot/start';
