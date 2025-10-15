@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
+import 'package:micro_mobility_app/core/themes/colors.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../providers/shift_provider.dart';
@@ -410,6 +411,9 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         else
           _buildSelfiePlaceholder(isDarkMode),
         
+
+        const SizedBox(height: 10,),
+
         _buildSelfieButton(isDarkMode),
         const SizedBox(height: 24),
         if (_timeSlots.isNotEmpty) _buildTimeSlotsSection(isDarkMode),
@@ -660,7 +664,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         style: ElevatedButton.styleFrom(
           backgroundColor: _hasActiveShift
               ? Colors.red[700]
-              : (canSubmit ? Colors.green[700] : Colors.grey[400]),
+              : (canSubmit ? AppColors.primary : Colors.grey[400]),
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

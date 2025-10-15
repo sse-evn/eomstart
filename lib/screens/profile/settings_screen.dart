@@ -82,52 +82,52 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // Переключатель уведомлений
-            Card(
-              elevation: 1,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: SwitchListTile(
-                activeColor: primaryColor,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                title: const Text('Уведомления'),
-                subtitle: Text(
-                  settingsProvider.notificationsEnabled
-                      ? 'Вы получаете уведомления'
-                      : 'Уведомления отключены',
-                  style: TextStyle(fontSize: 12),
-                ),
-                value: settingsProvider.notificationsEnabled,
-                onChanged: (value) {
-                  settingsProvider.toggleNotifications(value);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: primaryColor,
-                      content: Text(
-                        value
-                            ? 'Уведомления включены'
-                            : 'Уведомления отключены',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      duration: const Duration(seconds: 2),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  );
-                },
-                secondary: Icon(
-                  settingsProvider.notificationsEnabled
-                      ? Icons.notifications
-                      : Icons.notifications_off,
-                  color: primaryColor,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
+            // Card(
+            //   elevation: 1,
+            //   shape: RoundedRectangleBorder(
+            //     borderRadius: BorderRadius.circular(12),
+            //   ),
+            //   child: SwitchListTile(
+            //     activeColor: primaryColor,
+            //     contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            //     title: const Text('Уведомления'),
+            //     subtitle: Text(
+            //       settingsProvider.notificationsEnabled
+            //           ? 'Вы получаете уведомления'
+            //           : 'Уведомления отключены',
+            //       style: TextStyle(fontSize: 12),
+            //     ),
+            //     value: settingsProvider.notificationsEnabled,
+            //     onChanged: (value) {
+            //       settingsProvider.toggleNotifications(value);
+            //       ScaffoldMessenger.of(context).showSnackBar(
+            //         SnackBar(
+            //           backgroundColor: primaryColor,
+            //           content: Text(
+            //             value
+            //                 ? 'Уведомления включены'
+            //                 : 'Уведомления отключены',
+            //             style: const TextStyle(color: Colors.white),
+            //           ),
+            //           duration: const Duration(seconds: 2),
+            //           behavior: SnackBarBehavior.floating,
+            //           shape: RoundedRectangleBorder(
+            //             borderRadius: BorderRadius.circular(8),
+            //           ),
+            //         ),
+            //       );
+            //     },
+            //     secondary: Icon(
+            //       settingsProvider.notificationsEnabled
+            //           ? Icons.notifications
+            //           : Icons.notifications_off,
+            //       color: primaryColor,
+            //     ),
+            //     shape: RoundedRectangleBorder(
+            //       borderRadius: BorderRadius.circular(12),
+            //     ),
+            //   ),
+            // ),
           ],
         ),
       ),

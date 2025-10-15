@@ -1,10 +1,14 @@
 // lib/screens/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:micro_mobility_app/core/themes/theme.dart';
+import 'package:micro_mobility_app/providers/theme_provider.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 import 'package:micro_mobility_app/config/config.dart';
+import 'package:provider/provider.dart';
 // 1. Импортируем TasksScreen
 // import 'package:micro_mobility_app/screens/tasks/tasks_screen.dart'; // Убедитесь, что путь правильный
 
@@ -220,19 +224,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.themeData.brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Профиль'),
-        centerTitle: true,
-        backgroundColor: Colors.green[700],
         automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refresh,
-            tooltip: 'Обновить',
-          ),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -263,7 +262,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         return _ProfileHeader(user: snapshot.data!);
                       },
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 10),
                     // === Мои задания (только для скаутов) ===
                     // 4. Добавляем новый пункт меню, видимый только для скаутов
                     // if (_userRole == 'scout') ...[
@@ -283,56 +282,138 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     //   ),
                     //   const Divider(height: 1),
                     // ],
-                    // === Настройки ===
-                    _buildSectionHeader('Настройки'),
-                    _SettingsItem(
-                      icon: Icons.settings,
-                      title: 'Настройки',
-                      route:
-                          '/settings', // Убедитесь, что маршрут существует или реализуйте onTap
-                    ),
-                    const Divider(height: 1),
-                    // === Обновление приложения ===
-                    _buildSectionHeader('Приложение'),
-                    _SettingsItem(
-                      icon: _isCheckingForUpdates
-                          ? Icons.downloading
-                          : Icons.system_update,
-                      title: _isCheckingForUpdates
-                          ? 'Проверка обновлений...'
-                          : 'Проверить обновления',
-                      onTap: _checkForUpdates,
-                      color:
-                          _isCheckingForUpdates ? Colors.orange : Colors.blue,
-                    ),
-                    const Divider(height: 1),
-                    // === Другое ===
-                    _buildSectionHeader('Другое'),
-                    _SettingsItem(
-                      icon: Icons.info,
-                      title: 'О приложении',
-                      route:
-                          '/about', // Убедитесь, что маршрут существует или реализуйте onTap
-                    ),
-                    // === Админ-панель (только для superadmin) ===
-// === Админ-панель (для superadmin, coordinator, supervisor) ===
-                    if (['superadmin', 'coordinator', 'supervisor']
-                        .contains(_userRole)) ...[
-                      const Divider(height: 1),
-                      _SettingsItem(
-                        icon: Icons.admin_panel_settings,
-                        title: 'Админ-панель',
-                        route: '/admin', // Убедись, что маршрут существует
-                      ),
-                    ],
 
-                    const Divider(height: 1),
-                    _SettingsItem(
-                      icon: Icons.logout,
-                      title: 'Выйти',
-                      color: Colors.red,
-                      onTap: _logout,
+
+
+
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: colorScheme.secondary,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colorScheme.shadow,
+                              spreadRadius: 1,
+                              blurRadius: 12,
+                              offset: Offset(0, 6),
+                            ),
+                          ]
+                        ),
+                        padding: const EdgeInsets.all(10),
+
+                        child: Column(
+                          children: [
+
+                            // Admin Panel
+                             if (['superadmin', 'coordinator', 'supervisor']
+                                .contains(_userRole)) ...[                        
+                              _SettingsItem(
+                                icon: Icons.admin_panel_settings,
+                                title: 'Админ-панель',
+                                route: '/admin', // Убедись, что маршрут существует
+                              ),
+                            ],
+
+                            const SizedBox(height: 10,),
+
+                            Material(
+                              color: Colors.transparent,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: (Colors.green[700]!).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                                      color: Colors.green[700],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(
+                                      isDarkMode ? 'Темная тема' : 'Светлая тема',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        // color: color ?? Colors.black87,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+
+                                  Switch(
+                                    value: isDarkMode, 
+                                    onChanged:(value) => themeProvider.setTheme(theme: isDarkMode ? lightMode : darkMode),
+                                  ),
+                                  
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 10,),
+
+
+                            _SettingsItem(
+                              icon: _isCheckingForUpdates
+                                  ? Icons.downloading
+                                  : Icons.system_update,
+                              title: _isCheckingForUpdates
+                                  ? 'Проверка обновлений...'
+                                  : 'Проверить обновления',
+                              onTap: _checkForUpdates,
+                              color:
+                                  _isCheckingForUpdates ? Colors.orange : Colors.blue,
+                            ),
+
+                             const SizedBox(height: 10,),
+      
+                             // === Обновление приложения ===
+                            _SettingsItem(
+                              icon: Icons.info,
+                              title: 'О приложении',
+                              route:
+                                  '/about', // Убедитесь, что маршрут существует или реализуйте onTap
+                            ),
+                              
+                          
+
+                          ],
+                        ),
+                      ),
                     ),
+
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: colorScheme.secondary,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colorScheme.shadow,
+                              spreadRadius: 1,
+                              blurRadius: 12,
+                              offset: Offset(0, 6),
+                            ),
+                          ]
+                        ),
+                        padding: const EdgeInsets.all(10),
+                        child: _SettingsItem(
+                          icon: Icons.logout,
+                          title: 'Выйти',
+                          color: Colors.red,
+                          onTap: _logout,
+                        ),
+                      ),
+                    ),
+
                     const SizedBox(height: 32),
                   ],
                 ),
@@ -376,64 +457,37 @@ class _ProfileHeader extends StatelessWidget {
     final avatarUrl = _safeString(user['avatarUrl']);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.green[700]!,
-            Colors.green[600]!,
-          ],
-        ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.3),
-            spreadRadius: 2,
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 24),
       child: Column(
         children: [
           CircleAvatar(
             radius: 60,
-            backgroundColor: Colors.white.withOpacity(0.9),
+            backgroundColor: Colors.blueGrey,
             backgroundImage:
                 avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
             child: avatarUrl.isEmpty
-                ? Icon(
-                    Icons.person,
-                    size: 60,
-                    color: Colors.green[700],
-                  )
+                ? SvgPicture.asset('assets/images/no_avatar.svg')
                 : null,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 15),
           Text(
             fullName,
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
             ),
           ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.blueGrey,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               _formatRole(role),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 color: Colors.white,
                 fontWeight: FontWeight.w500,
@@ -471,33 +525,19 @@ class _ProfileHeaderShimmer extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.green[700]!.withOpacity(0.7),
-            Colors.green[600]!.withOpacity(0.5),
-          ],
-        ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
-        ),
-      ),
       child: Column(
         children: [
           Container(
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
+              color: Color.fromARGB(255, 240, 242, 243),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.person,
               size: 60,
-              color: Colors.white,
+              color: Color.fromARGB(255, 206, 214, 218),
             ),
           ),
           const SizedBox(height: 20),
@@ -505,7 +545,7 @@ class _ProfileHeaderShimmer extends StatelessWidget {
             width: 200,
             height: 28,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
+              color: const Color.fromARGB(255, 206, 214, 218),
               borderRadius: BorderRadius.circular(14),
             ),
           ),
@@ -514,7 +554,7 @@ class _ProfileHeaderShimmer extends StatelessWidget {
             width: 120,
             height: 24,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: const Color.fromARGB(255, 206, 214, 218),
               borderRadius: BorderRadius.circular(12),
             ),
           ),
@@ -611,44 +651,41 @@ class _SettingsItem extends StatelessWidget {
       child: InkWell(
         // Используем onTap, если он передан, иначе пытаемся использовать route
         onTap: onTap ??
-            (route != null
-                ? () {
-                    // Проверка на существование маршрута или реализация навигации
-                    Navigator.pushNamed(context, route!);
-                  }
-                : null),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: (color ?? Colors.green[700]!).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  color: color ?? Colors.green[700],
-                ),
+          (route != null
+              ? () {
+                  // Проверка на существование маршрута или реализация навигации
+                  Navigator.pushNamed(context, route!);
+                }
+              : null),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: (color ?? Colors.green[700]!).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: color ?? Colors.black87,
-                    fontWeight: FontWeight.w500,
-                  ),
+              child: Icon(
+                icon,
+                color: color ?? Colors.green[700],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  // color: color ?? Colors.black87,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              Icon(
-                Icons.chevron_right,
-                color: Colors.grey[400],
-              ),
-            ],
-          ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: Colors.grey[400],
+            ),
+          ],
         ),
       ),
     );

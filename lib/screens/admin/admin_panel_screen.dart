@@ -105,21 +105,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
       appBar: AppBar(
         title: Text(
           _titles[_currentIndex],
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+          style: const TextStyle(
+            fontWeight: FontWeight.w600, fontSize: 18
+          ),
         ),
-        centerTitle: true,
-        backgroundColor: primaryColor,
-        elevation: 4,
+
         actions: [
           // 🔄 Кнопка просто вызывает setState — и всё обновится
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refreshShifts,
-            tooltip: 'Обновить',
-          ),
+          // IconButton(
+          //   icon: const Icon(Icons.refresh),
+          //   onPressed: _refreshShifts,
+          //   tooltip: 'Обновить',
+          // ),
           PopupMenuButton(
             icon:
-                const Icon(Icons.info_outline, size: 18, color: Colors.white70),
+                const Icon(Icons.info_outline, size: 18, color: Colors.grey),
             tooltip: 'Информация о среде',
             onSelected: (value) {
               if (value == 'env') {
@@ -135,13 +135,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         ],
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.grey[50]!, Colors.white],
-          ),
-        ),
         child: currentBody,
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -154,7 +147,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         type: BottomNavigationBarType.fixed,
         selectedItemColor: primaryColor,
         unselectedItemColor: Colors.grey[600],
-        backgroundColor: Colors.white,
         elevation: 0,
         selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
         unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),

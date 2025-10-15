@@ -4,7 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:micro_mobility_app/screens/home/home_screen.dart';
 import 'package:micro_mobility_app/screens/map_screen/map_screens.dart';
 import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.dart';
-import 'package:micro_mobility_app/screens/profile_screens.dart';
+import 'package:micro_mobility_app/screens/profile/profile_screens.dart';
 import 'package:micro_mobility_app/utils/app_icons.dart';
 
 class DashboardScreen extends StatefulWidget {
