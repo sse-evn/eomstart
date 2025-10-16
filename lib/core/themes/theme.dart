@@ -53,5 +53,6 @@ final ThemeData darkMode = ThemeData(
     primary: primaryColor,
     secondary: const Color.fromARGB(255, 59, 59, 59),
     shadow: const Color.fromARGB(255, 32, 32, 32),
-  )
+  ),
+
 );

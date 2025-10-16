@@ -122,8 +122,9 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
   Widget _buildShiftCard(ActiveShift shift) {
     final duration = _calculateDuration(shift);
     final payment = _calculatePayment(shift);
-
-    return Card(
+    
+    return Card(   
+      color: Theme.of(context).colorScheme.secondary,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -165,7 +166,6 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
-                        color: Colors.black87,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -332,33 +332,6 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('История смен', style: TextStyle(fontSize: 20)),
-        centerTitle: true,
-        backgroundColor: Colors.green[700],
-        elevation: 4,
-        actions: [
-          IconButton(
-            icon: _isExporting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2),
-                  )
-                : const Icon(Icons.upload_file),
-            onPressed: _isExporting
-                ? null
-                : () async {
-                    final shifts = await _shiftsFuture;
-                    await _exportToGoogleSheets(shifts);
-                  },
-            tooltip: 'Выгрузить в Google Таблицу',
-          ),
-          const SizedBox(width: 8),
-        ],
-        automaticallyImplyLeading: false,
-      ),
       body: RefreshIndicator(
         onRefresh: refresh,
         child: FutureBuilder<List<ActiveShift>>(

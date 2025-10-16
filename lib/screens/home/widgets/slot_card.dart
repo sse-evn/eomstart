@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/core/themes/colors.dart';
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
 import '../../../../providers/shift_provider.dart';
@@ -116,7 +117,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
     final String serverTime = activeShift.startTimeString != null
         ? extractTimeFromIsoString(activeShift.startTimeString!)
         : '--:--';
-
+    
     final String slotTime = activeShift.slotTimeRange.isNotEmpty
         ? activeShift.slotTimeRange
         : 'Не указан';
@@ -134,71 +135,110 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
     final minutes = duration.inMinutes.remainder(60);
     final durationStr = '${hours}ч ${minutes}м';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'АКТИВНАЯ СМЕНА',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white.withOpacity(0.9),
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Вы на смене',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              // CircleAvatar(
+              //   radius: 20,
+              //   backgroundColor: Colors.red[400],
+              //   child: _isLoading
+              //       ? const CircularProgressIndicator(
+              //           color: Colors.white, strokeWidth: 2)
+              //       : const Icon(Icons.power_settings_new,
+              //           color: Colors.white, size: 20),
+              // ),
+              _buildSelfiePreview(activeShift),
+
+            ],
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                Text(
-                  'АКТИВНАЯ СМЕНА',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withOpacity(0.9),
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
+                Flexible(
+                  child:
+                      _buildInfoItem('Начало', serverTime, theme, Colors.white),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Вы на смене',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Flexible(
+                  child:
+                      _buildInfoItem('Длит.', durationStr, theme, Colors.white),
+                ),
+                Flexible(
+                  child: _buildInfoItem('Слот', slotTime, theme, Colors.white),
                 ),
               ],
             ),
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: Colors.red[400],
-              child: _isLoading
-                  ? const CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2)
-                  : const Icon(Icons.power_settings_new,
-                      color: Colors.white, size: 20),
+          ),
+          const SizedBox(height: 16),
+       
+          Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.secondary,
+              borderRadius: BorderRadius.circular(12)
             ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.fastfood,
+                  size: 30,
+                ),
+                const SizedBox(width: 10,),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(
+                        'У вас сейчас время перерыва',
+                        textAlign: TextAlign.center,
+                      ),
+                      Text(
+                        '10:00 - 10:40',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold
+                        ),
+                      )
+                    ],
+                  ),
+                )
+              ],
+            ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Flexible(
-                child:
-                    _buildInfoItem('Начало', serverTime, theme, Colors.white),
-              ),
-              Flexible(
-                child:
-                    _buildInfoItem('Длит.', durationStr, theme, Colors.white),
-              ),
-              Flexible(
-                child: _buildInfoItem('Слот', slotTime, theme, Colors.white),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        _buildSelfiePreview(activeShift),
-      ],
+        ],
+      ),
     );
   }
 

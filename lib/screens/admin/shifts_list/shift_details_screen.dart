@@ -248,7 +248,7 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.cardColor,
+        color: theme.colorScheme.secondary,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -326,7 +326,7 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.cardColor,
+        color: theme.colorScheme.secondary,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -345,7 +345,6 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
               'Фото с начала смены',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
               ),
             ),
           ),
@@ -426,11 +425,11 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.cardColor,
+        color: theme.colorScheme.secondary,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: theme.colorScheme.shadow,
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -443,7 +442,6 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
             'Информация о смене',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
             ),
           ),
           const SizedBox(height: 16),
@@ -476,9 +474,8 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.green[50],
+        color: theme.colorScheme.secondary,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.green[200]!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -535,7 +532,6 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
               value,
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.black87,
                 fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
               ),
               softWrap: true,

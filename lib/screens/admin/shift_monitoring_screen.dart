@@ -282,6 +282,18 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
         borderRadius: BorderRadius.circular(14),
         child: Container(
           padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.secondary,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(context).colorScheme.secondary,
+                spreadRadius: 1,
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              )
+            ]
+          ),
           child: Row(
             children: [
               CircleAvatar(

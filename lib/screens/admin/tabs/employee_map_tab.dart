@@ -169,7 +169,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
 
         // Пустой placeholder для списка (если не нужен — удалите)
         Expanded(
-          flex: 2,
+          flex: 1,
           child: Card(
             margin: const EdgeInsets.all(8),
             child: Center(

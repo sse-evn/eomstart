@@ -137,41 +137,51 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
       body: Container(
         child: currentBody,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: primaryColor,
-        unselectedItemColor: Colors.grey[600],
-        elevation: 0,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people_outline),
-            activeIcon: Icon(Icons.people),
-            label: 'Пользователи',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today_outlined),
-            activeIcon: Icon(Icons.calendar_today),
-            label: 'Генератор смен',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            activeIcon: Icon(Icons.map),
-            label: 'Карта',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.access_time_outlined),
-            activeIcon: Icon(Icons.access_time),
-            label: 'Смены',
-          ),
-        ],
+
+
+      bottomNavigationBar: Theme(
+        data: Theme.of(context).copyWith(
+          splashFactory: NoSplash.splashFactory,   
+          highlightColor: Colors.transparent,    
+          splashColor: Colors.transparent,    
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          },
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: primaryColor,
+          unselectedItemColor: Colors.grey[600],
+          elevation: 0,
+          selectedFontSize: 13,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.people_outline),
+              activeIcon: Icon(Icons.people),
+              label: 'Пользователи',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_today_outlined),
+              activeIcon: Icon(Icons.calendar_today),
+              label: 'Генератор смен',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.map_outlined),
+              activeIcon: Icon(Icons.map),
+              label: 'Карта',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.access_time_outlined),
+              activeIcon: Icon(Icons.access_time),
+              label: 'Смены',
+            ),
+          ],
+        ),
       ),
     );
   }

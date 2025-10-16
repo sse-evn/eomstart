@@ -263,6 +263,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
 
   @override
   Widget build(BuildContext context) {
+    
     return Stack(
       children: [
         // Основной контент

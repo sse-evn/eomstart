@@ -304,6 +304,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                       _buildNewShiftForm(isDarkMode),
                     const SizedBox(height: 24),
                     _buildActionButton(),
+                    const SizedBox(height: 24),
+
                   ],
                 ),
               ),
@@ -421,6 +423,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           _buildSelfiePreview()
         else
           _buildSelfiePlaceholder(isDarkMode),
+        
+        const SizedBox(height: 10,),
         _buildSelfieButton(isDarkMode),
         const SizedBox(height: 24),
         if (_timeSlots.isNotEmpty)
