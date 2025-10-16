@@ -36,7 +36,7 @@ class Location {
 }
 
 class EmployeeLocation {
-  final int userId;
+  final String userId;
   final LatLng position;
   final double? battery;
   final DateTime timestamp;

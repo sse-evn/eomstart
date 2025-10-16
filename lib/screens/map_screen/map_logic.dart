@@ -54,7 +54,7 @@ class MapLogic {
 
   void startLiveTracking() {
     if (_liveUpdateTimer != null) return;
-    _liveUpdateTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _liveUpdateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!_disposed) fetchEmployeeLocations();
     });
   }
@@ -577,7 +577,7 @@ class MapLogic {
         final List<dynamic> data = jsonDecode(response.body);
         employeeLocations = data.map((item) {
           return EmployeeLocation(
-            userId: item['user_id'] as int,
+            userId: item['user_id'] as String,
             position: LatLng(
               (item['lat'] as num).toDouble(),
               (item['lon'] as num).toDouble(),
