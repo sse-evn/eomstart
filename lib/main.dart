@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/core/themes/theme.dart';
 import 'package:micro_mobility_app/providers/theme_provider.dart';
+import 'package:micro_mobility_app/screens/profile/promo_code_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -55,7 +56,9 @@ void main() async {
             prefs: _prefs,
           ),
         ),
-        ChangeNotifierProvider(create: (_) => ThemeProvider(),)
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider(),
+        )
         // Предоставляем сервисы как singleton'ы
         // Provider.value(value: _globalWebSocketService), //снять для подключение wss
         // Provider.value(value: _locationTrackingService),
@@ -84,6 +87,7 @@ class MyApp extends StatelessWidget {
         '/profile': (context) => const ProfileScreen(),
         '/settings': (context) => const SettingsScreen(),
         '/about': (context) => const AboutScreen(),
+        '/promo': (context) => const PromoCodeScreen(),
         '/map': (context) => const MapScreen(),
         '/qr_scanner': (context) => const QrScannerScreen(),
         '/admin': (context) => const AdminPanelScreen(),

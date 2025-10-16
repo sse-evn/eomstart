@@ -17,6 +17,10 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
   late final AnimationController _controller;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   bool _isChecking = false;
+  bool _disposed = false; // ← для отслеживания dispose
+
+  // Интервал автопроверки — 30 сек
+  static const Duration _checkInterval = Duration(seconds: 30);
 
   @override
   void initState() {
@@ -31,22 +35,27 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
   }
 
   void _startPeriodicCheck() {
-    Future.delayed(const Duration(seconds: 5), () {
-      if (mounted && !_isChecking) {
+    // Не запускать, если виджет уже удалён
+    if (_disposed) return;
+
+    Future.delayed(_checkInterval, () {
+      if (!_disposed && mounted && !_isChecking) {
         _checkUserStatus();
-        _startPeriodicCheck();
+        _startPeriodicCheck(); // рекурсивно продолжаем
       }
     });
   }
 
   @override
   void dispose() {
+    _disposed = true; // ← флаг для остановки фоновых операций
     _controller.dispose();
     super.dispose();
   }
 
   Future<void> _checkUserStatus() async {
-    if (_isChecking || !mounted) return;
+    if (_isChecking || _disposed || !mounted) return;
+
     setState(() {
       _isChecking = true;
     });
@@ -70,11 +79,13 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
         final userData = jsonDecode(response.body) as Map<String, dynamic>;
         final status = userData['status'] as String?;
         final isActive = userData['is_active'] as bool?;
-        debugPrint('User status: $status, is_active: $isActive');
+
+        // Явная проверка: только если оба условия выполнены — переходим
         if (status == 'active' && isActive == true) {
           _navigateToDashboard();
           return;
         } else {
+          // Любое отклонение от активного состояния = всё ещё на рассмотрении
           _showStillPendingMessage();
         }
       } else if (response.statusCode == 401) {
@@ -86,8 +97,9 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
     } catch (e) {
       debugPrint('Error checking user status: $e');
       _showError('Ошибка соединения: $e');
+      // Автопроверка продолжится сама — не прерываем цикл
     } finally {
-      if (mounted) {
+      if (mounted && !_disposed) {
         setState(() {
           _isChecking = false;
         });
@@ -96,32 +108,43 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
   }
 
   void _navigateToDashboard() {
+    if (_disposed || !mounted) return;
     Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
   }
 
   void _navigateToLogin() {
+    if (_disposed || !mounted) return;
     Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
   }
 
   void _showStillPendingMessage() {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-          content:
-              Text('Ваш аккаунт всё ещё ожидает подтверждения администратором'),
-          duration: Duration(seconds: 2)),
+        content:
+            Text('Ваш аккаунт всё ещё ожидает подтверждения администратором'),
+        duration: Duration(seconds: 2),
+      ),
     );
   }
 
   void _showError(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 3),
-          backgroundColor: Colors.red),
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+        backgroundColor: Colors.red,
+      ),
     );
   }
 
   Future<void> _logout() async {
+    if (_disposed || !mounted) return;
+
+    // Останавливаем дальнейшие проверки
+    _disposed = true;
+
     try {
       final token = await _storage.read(key: 'jwt_token');
       if (token != null) {
@@ -154,11 +177,10 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Лого или анимация
               SizedBox(
                 height: 150,
                 child: Lottie.asset(
-                  'assets/icons/wired-lineal-884-electric-scooter-loop-cycle.json', // Замени на свою анимацию
+                  'assets/icons/wired-lineal-884-electric-scooter-loop-cycle.json',
                   controller: _controller,
                   onLoaded: (composition) {
                     _controller.duration = composition.duration;
@@ -168,7 +190,6 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
               ),
               const SizedBox(height: 20),
 
-              // Заголовок
               Text(
                 'Ожидание подтверждения',
                 style: TextStyle(
@@ -180,7 +201,6 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
               ),
               const SizedBox(height: 12),
 
-              // Подзаголовок
               const Text(
                 'Ваш аккаунт находится на рассмотрении у администратора. Мы свяжемся с вами в ближайшее время.',
                 textAlign: TextAlign.center,
@@ -188,7 +208,6 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
               ),
               const SizedBox(height: 24),
 
-              // Информация о времени
               Container(
                 padding:
                     const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -208,37 +227,8 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
               ),
               const SizedBox(height: 30),
 
-              // Кнопка "Проверить статус"
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  onPressed: _isChecking ? null : _checkUserStatus,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: _isChecking
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation(Colors.white),
-                          ),
-                        )
-                      : const Icon(Icons.refresh,
-                          size: 18, color: Colors.white),
-                  label: _isChecking
-                      ? const Text('Проверка...',
-                          style: TextStyle(color: Colors.white))
-                      : const Text('Проверить статус',
-                          style: TextStyle(color: Colors.white)),
-                ),
-              ),
-              const SizedBox(height: 12),
+              // 🔽 Кнопка "Проверить статус" УДАЛЕНА — проверка и так автоматическая
+              // Вместо неё можно показать статус или просто убрать
 
               // Выход из системы
               TextButton(
@@ -250,11 +240,16 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
               ),
               const SizedBox(height: 12),
 
-              // Автопроверка
+              // Индикатор автопроверки
               if (_isChecking)
                 const Text(
-                  'Автопроверка каждые 5 секунд...',
+                  'Проверка статуса...',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
+                )
+              else
+                Text(
+                  'Следующая проверка через ${_checkInterval.inSeconds} секунд',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
             ],
           ),

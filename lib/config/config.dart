@@ -114,6 +114,7 @@ class AppConfig {
   /// Ссылка на скачивание APK (Android)
   static String get apkDownloadUrl =>
       '$backendHost/uploads/app/app-release.apk';
+  static String get promoApplyUrl => '$apiBaseUrl/promo/apply';
 
   /// Ссылка на страницу приложения (iOS)
   static String get iosAppUrl => '$backendHost/app/your-app';

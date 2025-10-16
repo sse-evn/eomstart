@@ -1050,4 +1050,36 @@ class ApiService {
       throw Exception(errorMessage);
     }
   }
+
+  Future<Map<String, dynamic>> getDailyPromoCodes(String token) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/promo/daily'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    }, token);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Не удалось загрузить промокоды');
+    }
+  }
+
+  Future<void> claimDailyPromo(String token, String promoId) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.post(
+        Uri.parse('${AppConfig.apiBaseUrl}/promo/claim'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'promo_id': promoId}),
+      );
+    }, token);
+
+    if (response.statusCode != 200) {
+      throw Exception('Не удалось получить промокод');
+    }
+  }
 }

@@ -1,5 +1,6 @@
 // lib/screens/profile_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:micro_mobility_app/core/themes/theme.dart';
@@ -9,10 +10,6 @@ import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 import 'package:micro_mobility_app/config/config.dart';
 import 'package:provider/provider.dart';
-// 1. Импортируем TasksScreen
-// import 'package:micro_mobility_app/screens/tasks/tasks_screen.dart'; // Убедитесь, что путь правильный
-
-// 2. Импорты для OTA обновления
 import 'package:upgrader/upgrader.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:io' show Platform;
@@ -20,6 +17,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
@@ -28,8 +26,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ApiService _apiService = ApiService();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   late Future<Map<String, dynamic>> _profileFuture;
-  String _userRole = 'user'; // 2. Храним роль пользователя
-  bool _isCheckingForUpdates = false; // 3. Состояние проверки обновлений
+  String _userRole = 'user';
+  bool _isCheckingForUpdates = false;
+  final _promoCodeController = TextEditingController();
 
   @override
   void initState() {
@@ -37,16 +36,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _profileFuture = _loadProfile();
   }
 
+  @override
+  void dispose() {
+    _promoCodeController.dispose();
+    super.dispose();
+  }
+
   Future<Map<String, dynamic>> _loadProfile() async {
     try {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) throw Exception('Токен не найден');
       final profile = await _apiService.getUserProfile(token);
-      // Сохраняем роль для UI
       final role = (profile['role'] ?? 'user').toString().toLowerCase();
       if (mounted) {
         setState(() {
-          _userRole = role; // 3. Обновляем состояние с ролью
+          _userRole = role;
         });
       }
       return profile;
@@ -99,7 +103,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // 4. Функция проверки обновлений
   Future<void> _checkForUpdates() async {
     if (_isCheckingForUpdates) return;
 
@@ -108,12 +111,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     try {
-      // Получаем информацию о текущей версии
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
-
-      // Здесь можно добавить логику проверки новой версии
-      // Например, запрос к API сервера
       final hasUpdate = await _checkServerForUpdate(currentVersion);
 
       if (hasUpdate && mounted) {
@@ -146,24 +145,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // 5. Проверка обновлений на сервере (заглушка)
   Future<bool> _checkServerForUpdate(String currentVersion) async {
-    // Здесь должна быть логика проверки новой версии на сервере
-    // Пока возвращаем false для примера
     try {
       final token = await _storage.read(key: 'jwt_token');
-      if (token != null) {
-        // Пример запроса к API для проверки версии
-        // final response = await _apiService.checkAppVersion(token);
-        // return response['has_update'] == true;
-      }
+      if (token != null) {}
     } catch (e) {
       debugPrint('Ошибка проверки версии: $e');
     }
-    return false; // Пока без автоматической проверки
+    return false;
   }
 
-  // 6. Показ диалога обновления
   void _showUpdateDialog(String currentVersion) {
     showDialog(
       context: context,
@@ -193,15 +184,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // 7. Загрузка обновления
   Future<void> _downloadUpdate() async {
     try {
       String downloadUrl = '';
 
       if (Platform.isAndroid) {
-        downloadUrl = AppConfig.apkDownloadUrl; // ✅ Используем конфиг
+        downloadUrl = AppConfig.apkDownloadUrl;
       } else if (Platform.isIOS) {
-        downloadUrl = AppConfig.iosAppUrl; // ✅ Используем конфиг
+        downloadUrl = AppConfig.iosAppUrl;
       }
 
       if (await canLaunchUrl(Uri.parse(downloadUrl))) {
@@ -246,7 +236,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // === Заголовок профиля ===
                     FutureBuilder<Map<String, dynamic>>(
                       future: _profileFuture,
                       builder: (context, snapshot) {
@@ -263,29 +252,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       },
                     ),
                     const SizedBox(height: 10),
-                    // === Мои задания (только для скаутов) ===
-                    // 4. Добавляем новый пункт меню, видимый только для скаутов
-                    // if (_userRole == 'scout') ...[
-                    //   _buildSectionHeader('Задания'),
-                    //   _SettingsItem(
-                    //     icon: Icons.assignment, // Иконка заданий
-                    //     title: 'Мои задания',
-                    //     // Переход к экрану заданий
-                    //     onTap: () {
-                    //       Navigator.push(
-                    //         context,
-                    //         MaterialPageRoute(
-                    //           builder: (context) => const TasksScreen(),
-                    //         ),
-                    //       );
-                    //     },
-                    //   ),
-                    //   const Divider(height: 1),
-                    // ],
-
-
-
-
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Container(
@@ -298,27 +264,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               color: colorScheme.shadow,
                               spreadRadius: 1,
                               blurRadius: 12,
-                              offset: Offset(0, 6),
+                              offset: const Offset(0, 6),
                             ),
-                          ]
+                          ],
                         ),
                         padding: const EdgeInsets.all(10),
-
                         child: Column(
                           children: [
-
-                            // Admin Panel
-                             if (['superadmin', 'coordinator', 'supervisor']
-                                .contains(_userRole)) ...[                        
+                            if (['superadmin', 'coordinator', 'supervisor']
+                                .contains(_userRole)) ...[
                               _SettingsItem(
                                 icon: Icons.admin_panel_settings,
                                 title: 'Админ-панель',
-                                route: '/admin', // Убедись, что маршрут существует
+                                route: '/admin',
                               ),
                             ],
-
-                            const SizedBox(height: 10,),
-
+                            const SizedBox(height: 10),
                             Material(
                               color: Colors.transparent,
                               child: Row(
@@ -326,38 +287,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: (Colors.green[700]!).withOpacity(0.1),
+                                      color:
+                                          (Colors.green[700]!).withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Icon(
-                                      isDarkMode ? Icons.dark_mode : Icons.light_mode,
-                                      color: Colors.green[700],
+                                      isDarkMode
+                                          ? Icons.dark_mode
+                                          : Icons.light_mode,
+                                      color: const Color.fromARGB(
+                                          255, 134, 136, 33),
                                     ),
                                   ),
                                   const SizedBox(width: 16),
                                   Expanded(
                                     child: Text(
-                                      isDarkMode ? 'Темная тема' : 'Светлая тема',
-                                      style: TextStyle(
+                                      isDarkMode
+                                          ? 'Темная тема'
+                                          : 'Светлая тема',
+                                      style: const TextStyle(
                                         fontSize: 16,
-                                        // color: color ?? Colors.black87,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                   ),
-
                                   Switch(
-                                    value: isDarkMode, 
-                                    onChanged:(value) => themeProvider.setTheme(theme: isDarkMode ? lightMode : darkMode),
+                                    value: isDarkMode,
+                                    onChanged: (value) =>
+                                        themeProvider.setTheme(
+                                            theme: isDarkMode
+                                                ? lightMode
+                                                : darkMode),
                                   ),
-                                  
                                 ],
                               ),
                             ),
-
-                            const SizedBox(height: 10,),
-
-
+                            const SizedBox(height: 10),
+                            _SettingsItem(
+                              icon: Icons.card_giftcard,
+                              title: 'Промокод',
+                              route: '/promo',
+                              color: const Color(0xFFAA81AA),
+                            ),
+                            const SizedBox(height: 10),
                             _SettingsItem(
                               icon: _isCheckingForUpdates
                                   ? Icons.downloading
@@ -366,28 +338,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ? 'Проверка обновлений...'
                                   : 'Проверить обновления',
                               onTap: _checkForUpdates,
-                              color:
-                                  _isCheckingForUpdates ? Colors.orange : Colors.blue,
+                              color: _isCheckingForUpdates
+                                  ? Colors.orange
+                                  : Colors.blue,
                             ),
-
-                             const SizedBox(height: 10,),
-      
-                             // === Обновление приложения ===
+                            const SizedBox(height: 10),
                             _SettingsItem(
                               icon: Icons.info,
                               title: 'О приложении',
-                              route:
-                                  '/about', // Убедитесь, что маршрут существует или реализуйте onTap
+                              route: '/about',
                             ),
-                              
-                          
-
                           ],
                         ),
                       ),
                     ),
-
-
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Container(
@@ -400,9 +364,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               color: colorScheme.shadow,
                               spreadRadius: 1,
                               blurRadius: 12,
-                              offset: Offset(0, 6),
+                              offset: const Offset(0, 6),
                             ),
-                          ]
+                          ],
                         ),
                         padding: const EdgeInsets.all(10),
                         child: _SettingsItem(
@@ -413,7 +377,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 32),
                   ],
                 ),
@@ -440,7 +403,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// === Заголовок профиля ===
 class _ProfileHeader extends StatelessWidget {
   final Map<String, dynamic> user;
   const _ProfileHeader({required this.user});
@@ -487,7 +449,7 @@ class _ProfileHeader extends StatelessWidget {
             ),
             child: Text(
               _formatRole(role),
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 color: Colors.white,
                 fontWeight: FontWeight.w500,
@@ -516,7 +478,6 @@ class _ProfileHeader extends StatelessWidget {
   }
 }
 
-// === Заглушка при загрузке ===
 class _ProfileHeaderShimmer extends StatelessWidget {
   const _ProfileHeaderShimmer();
 
@@ -531,7 +492,7 @@ class _ProfileHeaderShimmer extends StatelessWidget {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: Color.fromARGB(255, 240, 242, 243),
+              color: const Color.fromARGB(255, 240, 242, 243),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -564,7 +525,6 @@ class _ProfileHeaderShimmer extends StatelessWidget {
   }
 }
 
-// === Ошибка загрузки ===
 class _ProfileErrorCard extends StatelessWidget {
   const _ProfileErrorCard();
 
@@ -627,21 +587,19 @@ class _ProfileErrorCard extends StatelessWidget {
   }
 }
 
-// === Пункт меню ===
-// Убедитесь, что этот класс существует в вашем файле
 class _SettingsItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final Color? color;
   final String? route;
-  final VoidCallback? onTap; // Добавлено onTap
+  final VoidCallback? onTap;
 
   const _SettingsItem({
     required this.icon,
     required this.title,
     this.color,
     this.route,
-    this.onTap, // Добавлено onTap
+    this.onTap,
   });
 
   @override
@@ -649,14 +607,12 @@ class _SettingsItem extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        // Используем onTap, если он передан, иначе пытаемся использовать route
         onTap: onTap ??
-          (route != null
-              ? () {
-                  // Проверка на существование маршрута или реализация навигации
-                  Navigator.pushNamed(context, route!);
-                }
-              : null),
+            (route != null
+                ? () {
+                    Navigator.pushNamed(context, route!);
+                  }
+                : null),
         child: Row(
           children: [
             Container(
@@ -674,9 +630,8 @@ class _SettingsItem extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
-                  // color: color ?? Colors.black87,
                   fontWeight: FontWeight.w500,
                 ),
               ),
