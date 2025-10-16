@@ -1,9 +1,10 @@
+// screens/map_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:micro_mobility_app/utils/map_app_constants.dart';
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
-import 'map_data_loader.dart';
+import 'map_logic.dart'; // убедись, что путь правильный
 
 class MapScreen extends StatefulWidget {
   final String? initialMapId;
@@ -39,6 +40,23 @@ class _MapScreenState extends State<MapScreen> {
         title: const Text('Карта зон'),
         automaticallyImplyLeading: false,
         actions: [
+          // Индикатор офлайна
+          FutureBuilder<bool>(
+            future: logic.isOffline(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.done &&
+                  snapshot.data == true) {
+                return const Tooltip(
+                  message: 'Режим офлайн',
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(Icons.cloud_off, color: Colors.orange),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           if (logic.availableMaps.isNotEmpty)
             PopupMenuButton<int>(
               icon: const Icon(Icons.map),
@@ -70,7 +88,10 @@ class _MapScreenState extends State<MapScreen> {
               tooltip: 'Сохранить карту локально',
             ),
           if (logic.isMapLoadedOffline)
-            const Icon(Icons.cloud_off, color: Colors.grey),
+            const Tooltip(
+              message: 'Карта загружена из офлайн-кеша',
+              child: Icon(Icons.cloud_off, color: Colors.grey),
+            ),
         ],
       ),
       body: Stack(
@@ -94,6 +115,49 @@ class _MapScreenState extends State<MapScreen> {
                 userAgentPackageName: AppConstants.userAgentPackageName,
                 retinaMode: MediaQuery.of(context).devicePixelRatio > 1.0,
               ),
+              if (logic.employeeLocations.isNotEmpty)
+                MarkerLayer(
+                  markers: logic.employeeLocations.map((emp) {
+                    return Marker(
+                      point: emp.position,
+                      width: 36,
+                      height: 36,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Основная иконка
+                          Icon(
+                            Icons.person,
+                            color: Colors.green[700],
+                            size: 32,
+                          ),
+                          // Уровень батареи (если есть)
+                          if (emp.battery != null)
+                            Positioned(
+                              top: -8,
+                              right: -8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '${emp.battery!.toInt()}%',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
               if (logic.geoJsonParser.polygons.isNotEmpty &&
                   logic.showRestrictedZones)
                 PolygonLayer(

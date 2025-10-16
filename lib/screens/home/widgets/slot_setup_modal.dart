@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:micro_mobility_app/core/themes/colors.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../providers/shift_provider.dart';
 import '../../../services/api_service.dart';
 
@@ -177,7 +178,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
     final provider = Provider.of<ShiftProvider>(context, listen: false);
     try {
-      final compressedFile = await _compressImage(File(_selfie!.path));
+      final processedFile =
+          await _processSelfieWithOverlay(File(_selfie!.path));
       debugPrint(
           'Отправка данных на сервер: slotTimeRange=$_selectedTime, position=$_position, zone=$_zone');
 
@@ -185,7 +187,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             slotTimeRange: _selectedTime!,
             position: _position!,
             zone: _zone!,
-            selfie: XFile(compressedFile.path),
+            selfie: XFile(processedFile.path),
           ));
 
       await provider.loadShifts();
@@ -231,19 +233,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         _showError('Ошибка при завершении смены: ${e.toString()}');
       }
     }
-  }
-
-  Future<File> _compressImage(File imageFile) async {
-    final bytes = await imageFile.readAsBytes();
-    final original = img.decodeImage(bytes);
-    if (original == null)
-      throw Exception("Не удалось декодировать изображение");
-    final oriented = img.bakeOrientation(original);
-    final resized = img.copyResize(oriented, width: 800);
-    final jpeg = img.encodeJpg(resized, quality: 80);
-    final tempFile = File(
-        '${imageFile.path}_compressed_${DateTime.now().millisecondsSinceEpoch}.jpg');
-    return await tempFile.writeAsBytes(jpeg);
   }
 
   void _showError(String message) {
@@ -322,6 +311,68 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     );
   }
 
+  Future<File> _processSelfieWithOverlay(File imageFile) async {
+    final now = DateTime.now();
+    final timeStr =
+        '${now.day}.${now.month}.${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+    String locationStr = 'Гео: недоступно';
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        locationStr = 'Гео: сервис отключён';
+      } else {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        if (permission == LocationPermission.whileInUse ||
+            permission == LocationPermission.always) {
+          final position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.medium,
+            timeLimit: const Duration(seconds: 8),
+          );
+          locationStr =
+              'Гео: ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
+        } else {
+          locationStr = 'Гео: доступ запрещён';
+        }
+      }
+    } catch (e) {
+      debugPrint('Ошибка геолокации: $e');
+      locationStr = 'Гео: ошибка';
+    }
+
+    final bytes = await imageFile.readAsBytes();
+    final original = img.decodeImage(bytes);
+    if (original == null)
+      throw Exception('Не удалось декодировать изображение');
+
+    final oriented = img.bakeOrientation(original);
+    final resized = img.copyResize(oriented, width: 800);
+
+    // 🔥 ПРАВИЛЬНО ДЛЯ image ^4.5.4
+    final textColor = img.ColorRgb8(255, 255, 255);
+    final shadowColor = img.ColorRgb8(0, 0, 0);
+    final font = img.arial48; // пример шрифта из пакета image
+    // Тень (чёрный текст)
+    img.drawString(
+        resized, font: font, timeStr, x: 11, y: 11, color: shadowColor);
+    img.drawString(
+        resized, font: font, locationStr, x: 11, y: 41, color: shadowColor);
+
+    // Основной текст (белый)
+    img.drawString(
+        resized, font: font, timeStr, x: 10, y: 10, color: textColor);
+    img.drawString(
+        resized, font: font, locationStr, x: 10, y: 40, color: textColor);
+
+    final jpeg = img.encodeJpg(resized, quality: 100);
+    final tempFile = File(
+        '${imageFile.path}_overlay_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    return await tempFile.writeAsBytes(jpeg);
+  }
+
   Widget _buildActiveShiftInfo() {
     if (_activeShift == null) return const SizedBox.shrink();
     return Column(
@@ -370,12 +421,6 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           _buildSelfiePreview()
         else
           _buildSelfiePlaceholder(isDarkMode),
-
-        
-
-       // const SizedBox(height: 10,),
-
-
         _buildSelfieButton(isDarkMode),
         const SizedBox(height: 24),
         if (_timeSlots.isNotEmpty)

@@ -29,12 +29,6 @@ class AppConstants {
   static const String restrictedZonesGeoJson =
       'assets/geojson/restricted_zones.geojson';
 
-  // Типы геометрий
-  static const String featureTypeZone = 'zone';
-  static const String featureTypeRestricted = 'restricted';
-  static const String featureTypeDanger = 'danger';
-  static const String featureTypeParking = 'parking';
-
   // Свойства GeoJSON
   static const String propertyType = 'type';
   static const String propertyName = 'name';

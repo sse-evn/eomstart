@@ -1,22 +1,26 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'package:battery_plus/battery_plus.dart' show Battery;
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' show Position;
 import 'package:http/http.dart' as http;
 import 'package:micro_mobility_app/config/config.dart' show AppConfig;
-import 'dart:convert';
+import 'package:micro_mobility_app/models/location.dart' show EmployeeLocation;
+import 'package:micro_mobility_app/services/location_service.dart'
+    show LocationService;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../utils/map_app_constants.dart';
-import '../../services/location_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 
 class MapLogic {
   final BuildContext context;
   LatLng? currentLocation;
-  final LocationService locationService = LocationService();
   final GeoJsonParser geoJsonParser = GeoJsonParser();
   late final MapController mapController;
   bool isLoading = false;
@@ -30,26 +34,54 @@ class MapLogic {
   bool isMapLoadedOffline = false;
   bool _disposed = false;
   void Function()? onStateChanged;
+  List<EmployeeLocation> employeeLocations = [];
+  StreamSubscription<Position>? _locationStreamSub;
+  Timer? _liveUpdateTimer;
+  final Battery battery = Battery();
 
+  final LocationService locationService = LocationService();
+  static const String _MAPS_CACHE_KEY = 'cached_maps_list';
+  static const String _MAPS_CACHE_TIMESTAMP_KEY = 'cached_maps_list_timestamp';
+  static const Duration _CACHE_TTL = Duration(minutes: 10);
   MapLogic(this.context) {
     mapController = MapController();
-  }
-
-  void init() {
-    if (_disposed) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_disposed) _initMap();
-    });
-  }
-
-  void dispose() {
-    _disposed = true;
-    mapController.dispose();
   }
 
   void _notify() {
     if (_disposed || onStateChanged == null) return;
     onStateChanged!();
+  }
+
+  void startLiveTracking() {
+    if (_liveUpdateTimer != null) return;
+    _liveUpdateTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!_disposed) fetchEmployeeLocations();
+    });
+  }
+
+  /// Останавливает периодическое обновление
+  void stopLiveTracking() {
+    _liveUpdateTimer?.cancel();
+    _liveUpdateTimer = null;
+  }
+
+  // === ОБНОВЛЕННЫЙ init ===
+  void init() {
+    if (_disposed) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_disposed) _initMap();
+    });
+    // Запускаем трекинг при инициализации
+    startSelfTracking();
+    startLiveTracking();
+  }
+
+  // === ОБНОВЛЕННЫЙ dispose ===
+  void dispose() {
+    _disposed = true;
+    stopSelfTracking();
+    stopLiveTracking();
+    mapController.dispose();
   }
 
   Future<void> _initMap() async {
@@ -77,10 +109,11 @@ class MapLogic {
     _notify();
     try {
       final position = await locationService.determinePosition();
-      if (_disposed) return;
       currentLocation = LatLng(position.latitude, position.longitude);
       isLoading = false;
-      mapController.move(currentLocation!, mapController.camera.zoom);
+      if (currentLocation != null) {
+        mapController.move(currentLocation!, mapController.camera.zoom);
+      }
       _notify();
     } catch (e) {
       if (!_disposed) {
@@ -93,6 +126,36 @@ class MapLogic {
 
   Future<void> _loadAvailableMaps() async {
     if (_disposed) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    String? cachedJson;
+    String? cachedTimestampStr;
+
+    try {
+      cachedJson = await storage.read(key: _MAPS_CACHE_KEY);
+      cachedTimestampStr = await storage.read(key: _MAPS_CACHE_TIMESTAMP_KEY);
+    } catch (e) {
+      debugPrint('Ошибка чтения кеша карт: $e');
+    }
+
+    if (cachedJson != null && cachedTimestampStr != null) {
+      final cachedTimestamp = int.tryParse(cachedTimestampStr);
+      if (cachedTimestamp != null &&
+          now - cachedTimestamp < _CACHE_TTL.inMilliseconds) {
+        try {
+          final decoded = jsonDecode(cachedJson);
+          if (decoded is List) {
+            availableMaps = decoded;
+            _applyFirstMapIfNoneSelected();
+            _notify();
+            return;
+          }
+        } catch (e) {
+          debugPrint('Невалидный кеш карт: $e');
+        }
+      }
+    }
+
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token != null) {
@@ -107,20 +170,51 @@ class MapLogic {
           final dynamic body = jsonDecode(response.body);
           if (body is List) {
             availableMaps = body;
-            if (selectedMapId == -1 && availableMaps.isNotEmpty) {
-              final firstMap = availableMaps.first;
-              if (firstMap is Map<String, dynamic> &&
-                  firstMap.containsKey('id')) {
-                selectedMapId = firstMap['id'] as int;
-              }
-            }
+            _applyFirstMapIfNoneSelected();
+            await storage.write(key: _MAPS_CACHE_KEY, value: response.body);
+            await storage.write(
+                key: _MAPS_CACHE_TIMESTAMP_KEY, value: now.toString());
             _notify();
+          }
+        } else {
+          if (cachedJson != null && availableMaps.isEmpty) {
+            try {
+              final decoded = jsonDecode(cachedJson);
+              if (decoded is List) {
+                availableMaps = decoded;
+                _applyFirstMapIfNoneSelected();
+                _notify();
+              }
+            } catch (e) {
+              debugPrint('Не удалось использовать резервный кеш: $e');
+            }
           }
         }
       }
     } catch (e) {
+      if (cachedJson != null && availableMaps.isEmpty) {
+        try {
+          final decoded = jsonDecode(cachedJson);
+          if (decoded is List) {
+            availableMaps = decoded;
+            _applyFirstMapIfNoneSelected();
+            _notify();
+          }
+        } catch (e) {
+          debugPrint('Не удалось загрузить даже из кеша: $e');
+        }
+      }
       if (!_disposed) {
         _showErrorSnackBar('Ошибка загрузки списка карт: $e');
+      }
+    }
+  }
+
+  void _applyFirstMapIfNoneSelected() {
+    if (selectedMapId == -1 && availableMaps.isNotEmpty) {
+      final firstMap = availableMaps.first;
+      if (firstMap is Map<String, dynamic> && firstMap.containsKey('id')) {
+        selectedMapId = firstMap['id'] as int;
       }
     }
   }
@@ -303,10 +397,9 @@ class MapLogic {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'Настройки слоев',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
+                  const Text('Настройки слоев',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 20),
                   SwitchListTile(
                     title: const Text('Запретные зоны'),
@@ -365,9 +458,8 @@ class MapLogic {
                       width: 24,
                       height: 24,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Colors.green, Colors.yellow],
-                        ),
+                        gradient: LinearGradient(
+                            colors: [Colors.green, Colors.yellow]),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -405,20 +497,104 @@ class MapLogic {
   void _showErrorSnackBar(String message) {
     if (_disposed || !context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
   void _showSuccessSnackBar(String message) {
     if (_disposed || !context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.green),
     );
   }
+
+  Future<bool> isOffline() async {
+    try {
+      final result = await Connectivity().checkConnectivity();
+      return result == ConnectivityResult.none;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  Future<void> startSelfTracking() async {
+    if (_locationStreamSub != null) return;
+    if (_disposed) return;
+
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) return;
+
+      _locationStreamSub =
+          locationService.getPositionStream().listen((position) async {
+        try {
+          final batteryLevel = await battery.batteryLevel;
+          final body = jsonEncode({
+            'lat': position.latitude,
+            'lon': position.longitude,
+            'speed': position.speed,
+            'accuracy': position.accuracy,
+            'battery': batteryLevel,
+            'event': 'tracking',
+          });
+
+          await http.post(
+            Uri.parse(AppConfig.geoTrackUrl),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: body,
+          );
+        } catch (e) {
+          debugPrint('Ошибка отправки геопозиции: $e');
+        }
+      });
+    } catch (e) {
+      debugPrint('Не удалось запустить трекинг: $e');
+    }
+  }
+
+  /// Останавливает отправку геопозиции
+  void stopSelfTracking() {
+    _locationStreamSub?.cancel();
+    _locationStreamSub = null;
+  }
+
+  /// Загружает последние позиции всех сотрудников
+  Future<void> fetchEmployeeLocations() async {
+    if (_disposed) return;
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) return;
+
+      final response = await http.get(
+        Uri.parse(AppConfig.lastLocationsUrl),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        employeeLocations = data.map((item) {
+          return EmployeeLocation(
+            userId: item['user_id'] as int,
+            position: LatLng(
+              (item['lat'] as num).toDouble(),
+              (item['lon'] as num).toDouble(),
+            ),
+            battery: item['battery'] is num
+                ? (item['battery'] as num).toDouble()
+                : null,
+            timestamp:
+                DateTime.tryParse(item['ts'] as String) ?? DateTime.now(),
+          );
+        }).toList();
+        _notify();
+      }
+    } catch (e) {
+      debugPrint('Ошибка загрузки позиций сотрудников: $e');
+    }
+  }
+
+  /// Запускает периодическое обновление позиций сотрудников
 }

@@ -119,6 +119,9 @@ class AppConfig {
   /// Ссылка на страницу приложения (iOS)
   static String get iosAppUrl => '$backendHost/app/your-app';
 
+  static final String geoTrackUrl = '$apiBaseUrl/geo';
+  static final String lastLocationsUrl = '$apiBaseUrl/last';
+
   /// Информация о текущем окружении (для отладки)
   static String get environmentInfo {
     final env = backendHost.contains('duckdns') ? 'DEV' : 'PROD';

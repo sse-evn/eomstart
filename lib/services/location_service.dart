@@ -1,43 +1,44 @@
-// services/location_service.dart
-import 'package:geolocator/geolocator.dart'; // Добавлен импорт geolocator
+import 'package:geolocator/geolocator.dart';
 
 class LocationService {
   /// Определяет текущее местоположение пользователя.
-  /// Запрашивает разрешения на геолокацию и получает позицию.
-  ///
-  /// Выбрасывает исключения, если службы геолокации отключены
-  /// или разрешения не предоставлены.
+  /// Запрашивает разрешения и возвращает [Position].
   Future<Position> determinePosition() async {
     bool serviceEnabled;
     LocationPermission permission;
 
-    // Проверяем, включены ли службы геолокации.
+    // Проверяем, включена ли геолокация
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      // Если службы геолокации отключены, выбрасываем исключение.
       throw Exception('Службы геолокации отключены.');
     }
 
-    // Проверяем статус разрешений на геолокацию.
+    // Проверяем разрешения
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
-      // Если разрешения отклонены, запрашиваем их.
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        // Если разрешения все еще отклонены, выбрасываем исключение.
         throw Exception('Разрешения на геолокацию отклонены.');
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      // Если разрешения отклонены навсегда, выбрасываем исключение.
       throw Exception(
-          'Разрешения на геолокацию отклонены навсегда, мы не можем запросить разрешения.');
+        'Разрешения на геолокацию отклонены навсегда. Измените это в настройках.',
+      );
     }
 
-    // Если разрешения получены, получаем текущее местоположение.
     return await Geolocator.getCurrentPosition();
   }
 
-  // TODO: Добавить методы для фонового отслеживания местоположения (Stream)
+  /// Возвращает поток с обновлениями геопозиции.
+  /// Можно подписаться и получать координаты в реальном времени.
+  Stream<Position> getPositionStream() {
+    const locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.high, // Можно medium/low для экономии батареи
+      distanceFilter: 10, // Обновлять при изменении на 5+ метров
+    );
+
+    return Geolocator.getPositionStream(locationSettings: locationSettings);
+  }
 }
