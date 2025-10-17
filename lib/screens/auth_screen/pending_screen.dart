@@ -189,7 +189,6 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                 ),
               ),
               const SizedBox(height: 20),
-
               Text(
                 'Ожидание подтверждения',
                 style: TextStyle(
@@ -200,14 +199,12 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
-
               const Text(
                 'Ваш аккаунт находится на рассмотрении у администратора. Мы свяжемся с вами в ближайшее время.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey),
               ),
               const SizedBox(height: 24),
-
               Container(
                 padding:
                     const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -226,11 +223,6 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                 ),
               ),
               const SizedBox(height: 30),
-
-              // 🔽 Кнопка "Проверить статус" УДАЛЕНА — проверка и так автоматическая
-              // Вместо неё можно показать статус или просто убрать
-
-              // Выход из системы
               TextButton(
                 onPressed: _isChecking ? null : _logout,
                 child: const Text(
@@ -239,8 +231,6 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                 ),
               ),
               const SizedBox(height: 12),
-
-              // Индикатор автопроверки
               if (_isChecking)
                 const Text(
                   'Проверка статуса...',

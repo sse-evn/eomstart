@@ -36,15 +36,6 @@ void main() async {
   final _apiService = ApiService();
   final _prefs = await SharedPreferences.getInstance();
 
-  // Инициализация сервисов
-  // final _globalWebSocketService = GlobalWebSocketService(); //снять для подключение wss
-  // final _locationTrackingService = LocationTrackingService();
-
-  // 🔗 СВЯЗКА: при обновлении локации — отправляем в WebSocket
-  // _locationTrackingService.setLocationUpdateCallback((location)
-
-  // _globalWebSocketService.updateCurrentLocation(location); //снять для подключение wss
-
   runApp(
     MultiProvider(
       providers: [
@@ -59,9 +50,6 @@ void main() async {
         ChangeNotifierProvider(
           create: (_) => ThemeProvider(),
         )
-        // Предоставляем сервисы как singleton'ы
-        // Provider.value(value: _globalWebSocketService), //снять для подключение wss
-        // Provider.value(value: _locationTrackingService),
       ],
       child: const MyApp(),
     ),
