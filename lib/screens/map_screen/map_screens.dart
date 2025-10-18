@@ -4,7 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:micro_mobility_app/utils/map_app_constants.dart';
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
-import 'map_logic.dart'; // убедись, что путь правильный
+import 'map_logic.dart';
 
 class MapScreen extends StatefulWidget {
   final String? initialMapId;
@@ -36,66 +36,66 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Карта зон'),
-        automaticallyImplyLeading: false,
-        actions: [
-          // Индикатор офлайна
-          FutureBuilder<bool>(
-            future: logic.isOffline(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.done &&
-                  snapshot.data == true) {
-                return const Tooltip(
-                  message: 'Режим офлайн',
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Icon(Icons.cloud_off, color: Colors.orange),
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          if (logic.availableMaps.isNotEmpty)
-            PopupMenuButton<int>(
-              icon: const Icon(Icons.map),
-              onSelected: logic.onMapChanged,
-              itemBuilder: (BuildContext context) {
-                return logic.availableMaps.map((map) {
-                  if (map is Map<String, dynamic>) {
-                    final id = map['id'] as int;
-                    final city = map['city'] as String? ?? 'Неизвестный город';
-                    final description = map['description'] as String? ?? '';
-                    final displayName =
-                        description.isNotEmpty ? '$city - $description' : city;
-                    return PopupMenuItem<int>(
-                      value: id,
-                      child: Text(displayName),
-                    );
-                  }
-                  return const PopupMenuItem<int>(
-                    value: 0,
-                    child: Text('Некорректная карта'),
+        appBar: AppBar(
+          title: const Text('Карта зон'),
+          automaticallyImplyLeading: false,
+          actions: [
+            FutureBuilder<bool>(
+              future: logic.isOffline(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done &&
+                    snapshot.data == true) {
+                  return const Tooltip(
+                    message: 'Режим офлайн',
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Icon(Icons.cloud_off, color: Colors.orange),
+                    ),
                   );
-                }).toList();
+                }
+                return const SizedBox.shrink();
               },
             ),
-          if (logic.selectedMapId != -1)
-            IconButton(
-              icon: const Icon(Icons.download),
-              onPressed: () => logic.downloadMapLocally(logic.selectedMapId),
-              tooltip: 'Сохранить карту локально',
-            ),
-          if (logic.isMapLoadedOffline)
-            const Tooltip(
-              message: 'Карта загружена из офлайн-кеша',
-              child: Icon(Icons.cloud_off, color: Colors.grey),
-            ),
-        ],
-      ),
-      body: Stack(
-        children: [
+            if (logic.availableMaps.isNotEmpty)
+              PopupMenuButton<int>(
+                icon: const Icon(Icons.map),
+                onSelected: logic.onMapChanged,
+                itemBuilder: (BuildContext context) {
+                  return logic.availableMaps.map((map) {
+                    if (map is Map<String, dynamic>) {
+                      final id = map['id'] as int;
+                      final city =
+                          map['city'] as String? ?? 'Неизвестный город';
+                      final description = map['description'] as String? ?? '';
+                      final displayName = description.isNotEmpty
+                          ? '$city - $description'
+                          : city;
+                      return PopupMenuItem<int>(
+                        value: id,
+                        child: Text(displayName),
+                      );
+                    }
+                    return const PopupMenuItem<int>(
+                      value: 0,
+                      child: Text('Некорректная карта'),
+                    );
+                  }).toList();
+                },
+              ),
+            if (logic.selectedMapId != -1)
+              IconButton(
+                icon: const Icon(Icons.download),
+                onPressed: () => logic.downloadMapLocally(logic.selectedMapId),
+                tooltip: 'Сохранить карту локально',
+              ),
+            if (logic.isMapLoadedOffline)
+              const Tooltip(
+                message: 'Карта загружена из офлайн-кеша',
+                child: Icon(Icons.cloud_off, color: Colors.grey),
+              ),
+          ],
+        ),
+        body: Stack(children: [
           FlutterMap(
             mapController: logic.mapController,
             options: MapOptions(
@@ -115,49 +115,6 @@ class _MapScreenState extends State<MapScreen> {
                 userAgentPackageName: AppConstants.userAgentPackageName,
                 retinaMode: MediaQuery.of(context).devicePixelRatio > 1.0,
               ),
-              if (logic.employeeLocations.isNotEmpty)
-                MarkerLayer(
-                  markers: logic.employeeLocations.map((emp) {
-                    return Marker(
-                      point: emp.position,
-                      width: 36,
-                      height: 36,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Основная иконка
-                          Icon(
-                            Icons.person,
-                            color: Colors.green[700],
-                            size: 32,
-                          ),
-                          // Уровень батареи (если есть)
-                          if (emp.battery != null)
-                            Positioned(
-                              top: -8,
-                              right: -8,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 4, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Text(
-                                  '${emp.battery!.toInt()}%',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
               if (logic.geoJsonParser.polygons.isNotEmpty &&
                   logic.showRestrictedZones)
                 PolygonLayer(
@@ -217,14 +174,33 @@ class _MapScreenState extends State<MapScreen> {
                   markers: [
                     Marker(
                       point: logic.currentLocation!,
-                      width: 16,
-                      height: 16,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blue[700],
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
+                      width: 48,
+                      height: 48,
+                      child: ClipOval(
+                        child: logic.currentUserAvatarUrl != null
+                            ? Image.network(
+                                logic.currentUserAvatarUrl!,
+                                fit: BoxFit.cover,
+                                width: 48,
+                                height: 48,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                  color: Colors.blue[700],
+                                  child: const Icon(
+                                    Icons.person,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                color: Colors.blue[700],
+                                child: const Icon(
+                                  Icons.person,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                              ),
                       ),
                     ),
                   ],
@@ -232,30 +208,46 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
           Positioned(
-            bottom: 80,
+            bottom: 30,
             right: 20,
-            child: FloatingActionButton(
-              heroTag: 'layersFab',
-              backgroundColor: Colors.green[700],
-              onPressed: logic.showLayerSettingsDialog,
-              child: const Icon(Icons.layers, color: Colors.white),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton(
+                  heroTag: 'zoomIn',
+                  backgroundColor: Colors.green[700],
+                  onPressed: () {
+                    logic.mapController.move(
+                      logic.mapController.camera.center,
+                      logic.mapController.camera.zoom + 1,
+                    );
+                  },
+                  child: const Icon(Icons.add, color: Colors.white),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton(
+                  heroTag: 'zoomOut',
+                  backgroundColor: Colors.green[700],
+                  onPressed: () {
+                    logic.mapController.move(
+                      logic.mapController.camera.center,
+                      logic.mapController.camera.zoom - 1,
+                    );
+                  },
+                  child: const Icon(Icons.remove, color: Colors.white),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton(
+                  heroTag: 'location',
+                  backgroundColor: Colors.green[700],
+                  onPressed: logic.fetchCurrentLocation,
+                  child: logic.isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Icon(Icons.my_location, color: Colors.white),
+                ),
+              ],
             ),
           ),
-          Positioned(
-            bottom: 20,
-            right: 20,
-            child: FloatingActionButton(
-              heroTag: 'locationFab',
-              backgroundColor: Colors.green[700],
-              onPressed: logic.fetchCurrentLocation,
-              child: logic.isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Icon(Icons.my_location, color: Colors.white),
-            ),
-          ),
-          if (logic.isLoading) const Center(child: CircularProgressIndicator()),
-        ],
-      ),
-    );
+        ]));
   }
 }

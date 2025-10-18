@@ -40,11 +40,13 @@ class EmployeeLocation {
   final LatLng position;
   final double? battery;
   final DateTime timestamp;
+  final String? avatarUrl; // ← ДОБАВЛЕНО
 
   EmployeeLocation({
     required this.userId,
     required this.position,
     this.battery,
     required this.timestamp,
+    this.avatarUrl,
   });
 }

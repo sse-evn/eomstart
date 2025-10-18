@@ -18,26 +18,23 @@ class EmployeeMapLogic {
   late MapController mapController;
   void Function()? onStateChanged;
 
-  // === LIVE-ТРЕКИНГ ДАННЫЕ ===
   final FlutterSecureStorage storage = const FlutterSecureStorage();
   final Battery _battery = Battery();
   StreamSubscription<Position>? _locationStreamSub;
   Timer? _liveUpdateTimer;
 
   List<EmployeeLocation> employeeLocations = [];
+  String? currentUserAvatarUrl;
 
-  // === КОНСТРУКТОР ===
   EmployeeMapLogic() {
     mapController = MapController();
   }
 
-  // === УВЕДОМЛЕНИЕ ОБ ИЗМЕНЕНИИ СОСТОЯНИЯ ===
   void _notify() {
     if (_disposed || onStateChanged == null) return;
     onStateChanged!();
   }
 
-  // === ПОЛУЧЕНИЕ ТЕКУЩЕЙ ГЕОПОЗИЦИИ ПОЛЬЗОВАТЕЛЯ ===
   Future<void> _fetchCurrentLocation() async {
     if (_disposed) return;
 
@@ -75,7 +72,26 @@ class EmployeeMapLogic {
     }
   }
 
-  // === ОТПРАВКА ГЕОПОЗИЦИИ ТЕКУЩЕГО ПОЛЬЗОВАТЕЛЯ ===
+  Future<void> _loadUserProfile() async {
+    if (_disposed) return;
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token != null) {
+        final response = await http.get(
+          Uri.parse(AppConfig.profileUrl),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          currentUserAvatarUrl = data['avatarUrl'] as String?;
+          _notify();
+        }
+      }
+    } catch (e) {
+      debugPrint('Ошибка загрузки профиля: $e');
+    }
+  }
+
   Future<void> startSelfTracking() async {
     if (_locationStreamSub != null || _disposed) return;
 
@@ -122,7 +138,6 @@ class EmployeeMapLogic {
     _locationStreamSub = null;
   }
 
-  // === ЗАГРУЗКА ПОЗИЦИЙ СОТРУДНИКОВ ===
   Future<void> fetchEmployeeLocations() async {
     if (_disposed) return;
     try {
@@ -135,30 +150,54 @@ class EmployeeMapLogic {
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        employeeLocations = data.map((item) {
-          return EmployeeLocation(
-            userId: item['user_id'] as String,
-            position: LatLng(
-              (item['lat'] as num).toDouble(),
-              (item['lon'] as num).toDouble(),
-            ),
-            battery: item['battery'] is num
-                ? (item['battery'] as num).toDouble()
-                : null,
-            timestamp:
-                DateTime.tryParse(item['ts'] as String) ?? DateTime.now(),
-          );
-        }).toList();
+        final dynamic decoded = jsonDecode(response.body);
+
+        // 🔥 Защита от null и неверного типа
+        if (decoded == null) {
+          employeeLocations = [];
+        } else if (decoded is List) {
+          employeeLocations = decoded
+              .map((item) {
+                // Убедись, что item — это Map
+                if (item is! Map<String, dynamic>) {
+                  debugPrint('Пропущен некорректный элемент в списке: $item');
+                  return null;
+                }
+                return EmployeeLocation(
+                  userId: item['user_id']?.toString() ?? 'unknown',
+                  position: LatLng(
+                    (item['lat'] as num?)?.toDouble() ?? 0.0,
+                    (item['lon'] as num?)?.toDouble() ?? 0.0,
+                  ),
+                  battery: item['battery'] is num
+                      ? (item['battery'] as num).toDouble()
+                      : null,
+                  timestamp: DateTime.tryParse(item['ts']?.toString() ?? '') ??
+                      DateTime.now(),
+                  avatarUrl: item['avatarUrl']?.toString(),
+                );
+              })
+              .whereType<EmployeeLocation>()
+              .toList(); // фильтруем null
+        } else {
+          debugPrint('Ожидался список, но получен: ${decoded.runtimeType}');
+          employeeLocations = [];
+        }
 
         _notify();
+      } else {
+        debugPrint(
+            'API вернул статус ${response.statusCode}: ${response.body}');
+        employeeLocations = []; // или оставить как есть
+        _notify();
       }
-    } catch (e) {
-      debugPrint('Ошибка загрузки позиций сотрудников: $e');
+    } catch (e, stack) {
+      debugPrint('Ошибка загрузки позиций сотрудников: $e\n$stack');
+      employeeLocations = []; // опционально: очищать или нет
+      _notify();
     }
   }
 
-  // === ПЕРИОДИЧЕСКОЕ ОБНОВЛЕНИЕ ===
   void startLiveTracking() {
     if (_liveUpdateTimer != null) return;
     _liveUpdateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
@@ -171,7 +210,6 @@ class EmployeeMapLogic {
     _liveUpdateTimer = null;
   }
 
-  // === ИНИЦИАЛИЗАЦИЯ ===
   Future<void> initMap() async {
     if (_disposed) return;
     try {
@@ -179,6 +217,7 @@ class EmployeeMapLogic {
       _notify();
 
       await _fetchCurrentLocation();
+      await _loadUserProfile();
       await fetchEmployeeLocations();
 
       if (!_disposed) {
@@ -189,12 +228,10 @@ class EmployeeMapLogic {
       if (!_disposed) {
         isLoading = false;
         _notify();
-        // Ошибку можно обработать через SnackBar в UI
       }
     }
   }
 
-  // === ЗАПУСК ТРЕКИНГА ПРИ ИНИЦИАЛИЗАЦИИ ===
   void init() {
     if (_disposed) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -206,7 +243,6 @@ class EmployeeMapLogic {
     });
   }
 
-  // === ОСВОБОЖДЕНИЕ РЕСУРСОВ ===
   void dispose() {
     _disposed = true;
     stopSelfTracking();

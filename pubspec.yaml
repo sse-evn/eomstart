@@ -56,6 +56,8 @@ dependencies:
   location: ^8.0.1
   upgrader: ^11.5.0
   battery_plus: ^5.0.0
+  # flutter_map_tile_caching: ^10.0.0
+  flutter_map_tile_caching: ^9.1.4
 
 flutter:
   uses-material-design: true

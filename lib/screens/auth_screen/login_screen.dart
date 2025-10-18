@@ -234,15 +234,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _handleRegularLogin() async {
-    Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
-
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
       final responseData = await _apiService.login(
           _usernameController.text, _passwordController.text);
 
-      final String token = responseData['token'] as String;
+      final String? token = responseData['token'] as String?;
+      if (token == null) {
+        _showError('Не удалось получить токен авторизации');
+        return;
+      }
 
       try {
         final shiftProvider =
@@ -256,13 +258,11 @@ class _LoginScreenState extends State<LoginScreen> {
       final status = profile['status']?.toString() ?? 'pending';
       final role = profile['role']?.toString().toLowerCase() ?? 'user';
 
-      if (status == 'pending' && role != 'superadmin') {
-        if (mounted) {
+      if (mounted) {
+        if (status == 'pending' && role != 'superadmin') {
           Navigator.pushNamedAndRemoveUntil(
               context, '/pending', (route) => false);
-        }
-      } else {
-        if (mounted) {
+        } else {
           Navigator.pushNamedAndRemoveUntil(
               context, '/dashboard', (route) => false);
         }
@@ -347,8 +347,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   'assets/eom2.svg',
                   height: 180,
                 ),
-
-                // const SizedBox(height: 32),
                 Form(
                   key: _formKey,
                   child: Column(
