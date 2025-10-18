@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:micro_mobility_app/models/location.dart';
 import 'package:micro_mobility_app/utils/map_app_constants.dart'
     show AppConstants;
 import 'package:micro_mobility_app/screens/admin/tabs/map_employee_map/employee_map_logic.dart';
@@ -17,6 +18,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   late final EmployeeMapLogic _logic;
   bool _isInitialized = false;
   bool _disposed = false;
+  int? _selectedEmployeeIndex;
 
   @override
   bool get wantKeepAlive => true;
@@ -42,15 +44,16 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     super.dispose();
   }
 
+  void _centerOnEmployee(EmployeeLocation emp) {
+    if (_disposed || !mounted) return;
+    _logic.mapController.move(emp.position, _logic.mapController.camera.zoom);
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
 
-    if (!_isInitialized) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_logic.isLoading) {
+    if (!_isInitialized || _logic.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -58,7 +61,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       children: [
         // Карта
         Expanded(
-          flex: 3,
+          flex: 2,
           child: Stack(
             children: [
               FlutterMap(
@@ -85,55 +88,88 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                       markers: [
                         Marker(
                           point: _logic.currentLocation!,
-                          width: 16,
-                          height: 16,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.blue[700],
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
+                          width: 48,
+                          height: 48,
+                          child: ClipOval(
+                            child: _logic.currentUserAvatarUrl != null
+                                ? Image.network(
+                                    _logic.currentUserAvatarUrl!,
+                                    fit: BoxFit.cover,
+                                    width: 48,
+                                    height: 48,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            Container(
+                                      color: Colors.blue[700],
+                                      child: const Icon(
+                                        Icons.person,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  )
+                                : Container(
+                                    color: Colors.blue[700],
+                                    child: const Icon(
+                                      Icons.person,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
+                                  ),
                           ),
                         ),
                       ],
                     ),
-                  // Live-позиции сотрудников (геотрекинг)
+                  // Маркеры сотрудников
                   if (_logic.employeeLocations.isNotEmpty)
                     MarkerLayer(
-                      markers: _logic.employeeLocations.map((emp) {
+                      markers:
+                          _logic.employeeLocations.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final emp = entry.value;
                         return Marker(
                           point: emp.position,
                           width: 36,
                           height: 36,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Icon(
-                                Icons.person,
-                                color: Colors.green[700],
-                                size: 32,
-                              ),
-                              if (emp.battery != null)
-                                Positioned(
-                                  top: -6,
-                                  right: -6,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black54,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Text(
-                                      '${emp.battery!}%',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _selectedEmployeeIndex = index;
+                              });
+                              _centerOnEmployee(emp);
+                            },
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Icon(
+                                  Icons.person,
+                                  color: _selectedEmployeeIndex == index
+                                      ? Colors.orange
+                                      : Colors.green[700],
+                                  size: 32,
+                                ),
+                                if (emp.battery != null)
+                                  Positioned(
+                                    top: -6,
+                                    right: -6,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Text(
+                                        '${emp.battery!}%',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
                         );
                       }).toList(),
@@ -141,7 +177,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 ],
               ),
 
-              // Индикатор подключения (опционально, можно убрать)
+              // Индикатор подключения
               Positioned(
                 top: 16,
                 right: 16,
@@ -167,18 +203,61 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
           ),
         ),
 
-        // Пустой placeholder для списка (если не нужен — удалите)
+        // Список сотрудников
         Expanded(
           flex: 1,
-          child: Card(
-            margin: const EdgeInsets.all(8),
-            child: Center(
-              child: Text(
-                'Всего сотрудников: ${_logic.employeeLocations.length}',
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
-          ),
+          child: _logic.employeeLocations.isEmpty
+              ? const Center(child: Text('Нет данных о сотрудниках'))
+              : ListView.builder(
+                  itemCount: _logic.employeeLocations.length,
+                  itemBuilder: (context, index) {
+                    final emp = _logic.employeeLocations[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      child: ListTile(
+                        leading: ClipOval(
+                          child: emp.avatarUrl != null
+                              ? Image.network(
+                                  emp.avatarUrl!,
+                                  width: 40,
+                                  height: 40,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Container(
+                                    width: 40,
+                                    height: 40,
+                                    color: Colors.grey[300],
+                                    child: const Icon(Icons.person,
+                                        color: Colors.grey),
+                                  ),
+                                )
+                              : Container(
+                                  width: 40,
+                                  height: 40,
+                                  color: Colors.grey[300],
+                                  child: const Icon(Icons.person,
+                                      color: Colors.grey),
+                                ),
+                        ),
+                        title: Text('Сотрудник ${emp.userId}'),
+                        subtitle: emp.battery != null
+                            ? Text('Батарея: ${emp.battery!.toInt()}%')
+                            : null,
+                        trailing: Icon(
+                          Icons.location_on,
+                          color: Colors.green[700],
+                        ),
+                        onTap: () {
+                          setState(() {
+                            _selectedEmployeeIndex = index;
+                          });
+                          _centerOnEmployee(emp);
+                        },
+                      ),
+                    );
+                  },
+                ),
         ),
       ],
     );
