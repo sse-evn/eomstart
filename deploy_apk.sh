@@ -11,10 +11,10 @@ fi
 
 # Загружаем на сервер
 echo "📤 Загружаю APK на сервер..."
-scp "$APK_PATH" root@eom-sharing.duckdns.org:/root/eom/uploads/app/app-release.apk
+scp "$APK_PATH" root@start.eom.kz:/root/eom/uploads/app/app-release.apk
 
 if [ $? -eq 0 ]; then
-  echo "✅ Успешно загружено: https://eom-sharing.duckdns.org/uploads/app/app-release.apk"
+  echo "✅ Успешно загружено: https://start.eom.kz/uploads/app/app-release.apk"
 else
   echo "❌ Ошибка при загрузке"
   exit 1
