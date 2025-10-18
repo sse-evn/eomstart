@@ -1,14 +1,11 @@
+// lib/screens/map_screen/map_logic.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:battery_plus/battery_plus.dart' show Battery;
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart' show Position;
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:micro_mobility_app/config/config.dart' show AppConfig;
-import 'package:micro_mobility_app/models/location.dart' show EmployeeLocation;
-import 'package:micro_mobility_app/services/location_service.dart'
-    show LocationService;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -34,15 +31,12 @@ class MapLogic {
   bool isMapLoadedOffline = false;
   bool _disposed = false;
   void Function()? onStateChanged;
-  List<EmployeeLocation> employeeLocations = [];
-  StreamSubscription<Position>? _locationStreamSub;
-  Timer? _liveUpdateTimer;
-  final Battery battery = Battery();
+  String? currentUserAvatarUrl;
 
-  final LocationService locationService = LocationService();
   static const String _MAPS_CACHE_KEY = 'cached_maps_list';
   static const String _MAPS_CACHE_TIMESTAMP_KEY = 'cached_maps_list_timestamp';
   static const Duration _CACHE_TTL = Duration(minutes: 10);
+
   MapLogic(this.context) {
     mapController = MapController();
   }
@@ -52,35 +46,15 @@ class MapLogic {
     onStateChanged!();
   }
 
-  void startLiveTracking() {
-    if (_liveUpdateTimer != null) return;
-    _liveUpdateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!_disposed) fetchEmployeeLocations();
-    });
-  }
-
-  /// Останавливает периодическое обновление
-  void stopLiveTracking() {
-    _liveUpdateTimer?.cancel();
-    _liveUpdateTimer = null;
-  }
-
-  // === ОБНОВЛЕННЫЙ init ===
   void init() {
     if (_disposed) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_disposed) _initMap();
     });
-    // Запускаем трекинг при инициализации
-    startSelfTracking();
-    startLiveTracking();
   }
 
-  // === ОБНОВЛЕННЫЙ dispose ===
   void dispose() {
     _disposed = true;
-    stopSelfTracking();
-    stopLiveTracking();
     mapController.dispose();
   }
 
@@ -88,6 +62,7 @@ class MapLogic {
     if (_disposed) return;
     try {
       await fetchCurrentLocation();
+      await _loadUserProfile();
       await _loadAvailableMaps();
       await _loadAndParseGeoJson();
       if (!_disposed) {
@@ -108,7 +83,22 @@ class MapLogic {
     isLoading = true;
     _notify();
     try {
-      final position = await locationService.determinePosition();
+      // Используем Geolocator напрямую, без LocationService
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Служба геолокации отключена');
+      }
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Доступ к местоположению запрещён');
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception('Доступ к местоположению запрещён навсегда');
+      }
+      Position position = await Geolocator.getCurrentPosition();
       currentLocation = LatLng(position.latitude, position.longitude);
       isLoading = false;
       if (currentLocation != null) {
@@ -119,7 +109,7 @@ class MapLogic {
       if (!_disposed) {
         isLoading = false;
         _notify();
-        _showErrorSnackBar('Ошибка получения местоположения');
+        _showErrorSnackBar('Ошибка получения местоположения: $e');
       }
     }
   }
@@ -517,84 +507,23 @@ class MapLogic {
     }
   }
 
-  Future<void> startSelfTracking() async {
-    if (_locationStreamSub != null) return;
+  Future<void> _loadUserProfile() async {
     if (_disposed) return;
-
     try {
       final token = await storage.read(key: 'jwt_token');
-      if (token == null) return;
-
-      _locationStreamSub =
-          locationService.getPositionStream().listen((position) async {
-        try {
-          final batteryLevel = await battery.batteryLevel;
-          final body = jsonEncode({
-            'lat': position.latitude,
-            'lon': position.longitude,
-            'speed': position.speed,
-            'accuracy': position.accuracy,
-            'battery': batteryLevel,
-            'event': 'tracking',
-          });
-
-          await http.post(
-            Uri.parse(AppConfig.geoTrackUrl),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-            body: body,
-          );
-        } catch (e) {
-          debugPrint('Ошибка отправки геопозиции: $e');
+      if (token != null) {
+        final response = await http.get(
+          Uri.parse(AppConfig.profileUrl),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          currentUserAvatarUrl = data['avatarUrl'] as String?;
+          _notify();
         }
-      });
-    } catch (e) {
-      debugPrint('Не удалось запустить трекинг: $e');
-    }
-  }
-
-  /// Останавливает отправку геопозиции
-  void stopSelfTracking() {
-    _locationStreamSub?.cancel();
-    _locationStreamSub = null;
-  }
-
-  /// Загружает последние позиции всех сотрудников
-  Future<void> fetchEmployeeLocations() async {
-    if (_disposed) return;
-    try {
-      final token = await storage.read(key: 'jwt_token');
-      if (token == null) return;
-
-      final response = await http.get(
-        Uri.parse(AppConfig.lastLocationsUrl),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        employeeLocations = data.map((item) {
-          return EmployeeLocation(
-            userId: item['user_id'] as String,
-            position: LatLng(
-              (item['lat'] as num).toDouble(),
-              (item['lon'] as num).toDouble(),
-            ),
-            battery: item['battery'] is num
-                ? (item['battery'] as num).toDouble()
-                : null,
-            timestamp:
-                DateTime.tryParse(item['ts'] as String) ?? DateTime.now(),
-          );
-        }).toList();
-        _notify();
       }
     } catch (e) {
-      debugPrint('Ошибка загрузки позиций сотрудников: $e');
+      debugPrint('Ошибка загрузки профиля: $e');
     }
   }
-
-  /// Запускает периодическое обновление позиций сотрудников
 }
