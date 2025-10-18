@@ -31,7 +31,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   tz_data.initializeTimeZones();
   await initializeDateFormatting('ru', null);
-
   final _storage = const FlutterSecureStorage();
   final _apiService = ApiService();
   final _prefs = await SharedPreferences.getInstance();

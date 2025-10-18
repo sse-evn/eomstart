@@ -7,7 +7,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:micro_mobility_app/config/config.dart' show AppConfig;
 import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
@@ -83,7 +82,6 @@ class MapLogic {
     isLoading = true;
     _notify();
     try {
-      // Используем Geolocator напрямую, без LocationService
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         throw Exception('Служба геолокации отключена');
@@ -239,77 +237,90 @@ class MapLogic {
 
   Future<String> _loadGeoJsonFromServer(int mapId) async {
     if (_disposed) return '';
+
+    // Сначала пробуем загрузить из локального кеша
+    try {
+      final localFile = await _getLocalMapFile(mapId);
+      if (await localFile.exists()) {
+        final content = await localFile.readAsString();
+        if (content.isNotEmpty) {
+          debugPrint('✅ Загружено из офлайн-кеша: ${localFile.path}');
+          isMapLoadedOffline = true;
+          return content;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Не удалось прочитать офлайн-карту: $e');
+    }
+
+    // Если нет локальной — грузим с сервера
     try {
       final token = await storage.read(key: 'jwt_token');
-      if (token != null) {
-        final response = await http.get(
-          Uri.parse(AppConfig.getMapByIdUrl(mapId)),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-        if (response.statusCode == 200 && !_disposed) {
-          final dynamic body = jsonDecode(response.body);
-          if (body is Map<String, dynamic> && body.containsKey('file_name')) {
-            final fileName = body['file_name'] as String;
-            final fileUrl = AppConfig.getMapFileUrl(fileName);
-            final localFile = await _getLocalMapFile(mapId);
-            if (localFile != null && await localFile.exists()) {
-              isMapLoadedOffline = true;
-              return await localFile.readAsString();
-            }
-            final fileResponse = await http.get(
-              Uri.parse(fileUrl),
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/geo+json',
-              },
-            );
-            if (fileResponse.statusCode == 200) {
-              isMapLoadedOffline = false;
-              await _saveMapFileLocally(mapId, fileResponse.body);
-              return fileResponse.body;
-            }
+      if (token == null) throw Exception('Нет токена');
+
+      final response = await http.get(
+        Uri.parse(AppConfig.getMapByIdUrl(mapId)),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('API вернул ${response.statusCode}');
+      }
+
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic> || !body.containsKey('file_name')) {
+        throw Exception('Неверный формат ответа');
+      }
+
+      final fileName = body['file_name'] as String;
+      final fileUrl = AppConfig.getMapFileUrl(fileName);
+
+      final fileResponse = await http.get(
+        Uri.parse(fileUrl),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (fileResponse.statusCode == 200 && fileResponse.body.isNotEmpty) {
+        // Сохраняем на устройство
+        await _saveMapFileLocally(mapId, fileResponse.body);
+        isMapLoadedOffline = false;
+        return fileResponse.body;
+      } else {
+        throw Exception('Пустой или ошибочный GeoJSON-файл');
+      }
+    } catch (e) {
+      // Если всё провалилось — пробуем ещё раз локальный файл (вдруг появился)
+      try {
+        final localFile = await _getLocalMapFile(mapId);
+        if (await localFile.exists()) {
+          final content = await localFile.readAsString();
+          if (content.isNotEmpty) {
+            debugPrint(
+                '🔄 Восстановлено из кеша после ошибки: ${localFile.path}');
+            isMapLoadedOffline = true;
+            return content;
           }
         }
-      }
-    } catch (e) {
-      debugPrint('Ошибка загрузки GeoJSON с сервера: $e');
-      if (!_disposed) {
-        final localFile = await _getLocalMapFile(mapId);
-        if (localFile != null && await localFile.exists()) {
-          isMapLoadedOffline = true;
-          return await localFile.readAsString();
-        }
-      }
+      } catch (_) {}
+      rethrow;
     }
-    throw Exception('Не удалось загрузить карту');
   }
 
-  Future<File?> _getLocalMapFile(int mapId) async {
-    if (_disposed) return null;
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final fileName = 'map_$mapId.geojson';
-      final filePath = path.join(dir.path, fileName);
-      return File(filePath);
-    } catch (e) {
-      debugPrint('Ошибка получения пути к локальному файлу: $e');
-      return null;
-    }
+  Future<File> _getLocalMapFile(int mapId) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final fileName = 'map_$mapId.geojson';
+    return File('${dir.path}/$fileName');
   }
 
   Future<void> _saveMapFileLocally(int mapId, String content) async {
-    if (_disposed) return;
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final fileName = 'map_$mapId.geojson';
-      final filePath = path.join(dir.path, fileName);
-      final file = File(filePath);
-      await file.writeAsString(content);
+      final file = await _getLocalMapFile(mapId);
+      await file.create(recursive: true);
+      await file.writeAsString(content, flush: true);
+      debugPrint('✅ Карта $mapId сохранена в: ${file.path}');
     } catch (e) {
-      debugPrint('Ошибка сохранения файла локально: $e');
+      debugPrint('❌ Ошибка сохранения карты $mapId: $e');
+      rethrow;
     }
   }
 
@@ -340,35 +351,44 @@ class MapLogic {
     if (_disposed) return;
     try {
       final token = await storage.read(key: 'jwt_token');
-      if (token != null) {
-        final response = await http.get(
-          Uri.parse(AppConfig.getMapByIdUrl(mapId)),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-        if (response.statusCode == 200 && !_disposed) {
-          final dynamic body = jsonDecode(response.body);
-          if (body is Map<String, dynamic> && body.containsKey('file_name')) {
-            final fileName = body['file_name'] as String;
-            final fileUrl = AppConfig.getMapFileUrl(fileName);
-            final fileResponse = await http.get(
-              Uri.parse(fileUrl),
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/geo+json',
-              },
-            );
-            if (fileResponse.statusCode == 200) {
-              await _saveMapFileLocally(mapId, fileResponse.body);
-              _showSuccessSnackBar(
-                  'Карта успешно сохранена для оффлайн использования');
-            }
-          }
-        }
+      if (token == null) {
+        _showErrorSnackBar('Не авторизован');
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse(AppConfig.getMapByIdUrl(mapId)),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode != 200) {
+        _showErrorSnackBar('Не удалось получить данные карты');
+        return;
+      }
+
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic> || !body.containsKey('file_name')) {
+        _showErrorSnackBar('Неверный формат данных карты');
+        return;
+      }
+
+      final fileName = body['file_name'] as String;
+      final fileUrl = AppConfig.getMapFileUrl(fileName);
+
+      final fileResponse = await http.get(
+        Uri.parse(fileUrl),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (fileResponse.statusCode == 200 && fileResponse.body.isNotEmpty) {
+        await _saveMapFileLocally(mapId, fileResponse.body);
+        _showSuccessSnackBar(
+            'Карта успешно сохранена для оффлайн использования');
+      } else {
+        _showErrorSnackBar('Пустой или повреждённый GeoJSON-файл');
       }
     } catch (e) {
+      debugPrint('Ошибка при сохранении карты: $e');
       if (!_disposed) {
         _showErrorSnackBar('Ошибка сохранения карты: $e');
       }
