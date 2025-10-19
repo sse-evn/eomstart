@@ -121,6 +121,7 @@ class AppConfig {
 
   static final String geoTrackUrl = '$apiBaseUrl/geo';
   static final String lastLocationsUrl = '$apiBaseUrl/last';
+  static final String locationHistoryUrl = '$apiBaseUrl/history';
 
   /// Информация о текущем окружении (для отладки)
   static String get environmentInfo {

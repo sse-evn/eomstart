@@ -41,8 +41,9 @@ class MapLogic {
   }
 
   void _notify() {
-    if (_disposed || onStateChanged == null) return;
-    onStateChanged!();
+    if (!_disposed && onStateChanged != null) {
+      onStateChanged!();
+    }
   }
 
   void init() {
@@ -60,32 +61,30 @@ class MapLogic {
   Future<void> _initMap() async {
     if (_disposed) return;
     try {
+      isLoading = true;
+      _notify();
       await fetchCurrentLocation();
       await _loadUserProfile();
       await _loadAvailableMaps();
       await _loadAndParseGeoJson();
-      if (!_disposed) {
-        isLoading = false;
-        _notify();
-      }
     } catch (e) {
+      _showErrorSnackBar('Ошибка инициализации: $e');
+    } finally {
       if (!_disposed) {
         isLoading = false;
         _notify();
-        _showErrorSnackBar('Ошибка инициализации: $e');
       }
     }
   }
 
   Future<void> fetchCurrentLocation() async {
     if (_disposed) return;
-    isLoading = true;
-    _notify();
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         throw Exception('Служба геолокации отключена');
       }
+
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -96,25 +95,16 @@ class MapLogic {
       if (permission == LocationPermission.deniedForever) {
         throw Exception('Доступ к местоположению запрещён навсегда');
       }
+
       Position position = await Geolocator.getCurrentPosition();
       currentLocation = LatLng(position.latitude, position.longitude);
-      isLoading = false;
-      if (currentLocation != null) {
-        mapController.move(currentLocation!, mapController.camera.zoom);
-      }
-      _notify();
+      mapController.move(currentLocation!, mapController.camera.zoom);
     } catch (e) {
-      if (!_disposed) {
-        isLoading = false;
-        _notify();
-        _showErrorSnackBar('Ошибка получения местоположения: $e');
-      }
+      _showErrorSnackBar('Ошибка получения местоположения: $e');
     }
   }
 
   Future<void> _loadAvailableMaps() async {
-    if (_disposed) return;
-
     final now = DateTime.now().millisecondsSinceEpoch;
     String? cachedJson;
     String? cachedTimestampStr;
@@ -126,76 +116,55 @@ class MapLogic {
       debugPrint('Ошибка чтения кеша карт: $e');
     }
 
-    if (cachedJson != null && cachedTimestampStr != null) {
-      final cachedTimestamp = int.tryParse(cachedTimestampStr);
-      if (cachedTimestamp != null &&
-          now - cachedTimestamp < _CACHE_TTL.inMilliseconds) {
-        try {
-          final decoded = jsonDecode(cachedJson);
-          if (decoded is List) {
-            availableMaps = decoded;
-            _applyFirstMapIfNoneSelected();
-            _notify();
-            return;
-          }
-        } catch (e) {
-          debugPrint('Невалидный кеш карт: $e');
-        }
-      }
+    final cachedValid = _isCacheValid(cachedJson, cachedTimestampStr, now);
+    if (cachedValid) {
+      availableMaps = jsonDecode(cachedJson!) as List;
+      _applyFirstMapIfNoneSelected();
+      _notify();
+      return;
     }
 
     try {
       final token = await storage.read(key: 'jwt_token');
-      if (token != null) {
-        final response = await http.get(
-          Uri.parse(AppConfig.adminMapsUrl),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-        if (response.statusCode == 200 && !_disposed) {
-          final dynamic body = jsonDecode(response.body);
-          if (body is List) {
-            availableMaps = body;
-            _applyFirstMapIfNoneSelected();
-            await storage.write(key: _MAPS_CACHE_KEY, value: response.body);
-            await storage.write(
-                key: _MAPS_CACHE_TIMESTAMP_KEY, value: now.toString());
-            _notify();
-          }
-        } else {
-          if (cachedJson != null && availableMaps.isEmpty) {
-            try {
-              final decoded = jsonDecode(cachedJson);
-              if (decoded is List) {
-                availableMaps = decoded;
-                _applyFirstMapIfNoneSelected();
-                _notify();
-              }
-            } catch (e) {
-              debugPrint('Не удалось использовать резервный кеш: $e');
-            }
-          }
+      if (token == null) throw Exception('Токен отсутствует');
+
+      final response = await _authenticatedGet(AppConfig.adminMapsUrl, token);
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body is List) {
+          availableMaps = body;
+          _applyFirstMapIfNoneSelected();
+          await storage.write(key: _MAPS_CACHE_KEY, value: response.body);
+          await storage.write(
+              key: _MAPS_CACHE_TIMESTAMP_KEY, value: now.toString());
+          _notify();
+          return;
         }
+      }
+
+      // Если сервер недоступен — попытка использовать старый кеш
+      if (cachedJson != null) {
+        availableMaps = jsonDecode(cachedJson) as List;
+        _applyFirstMapIfNoneSelected();
+        _notify();
+        return;
       }
     } catch (e) {
-      if (cachedJson != null && availableMaps.isEmpty) {
-        try {
-          final decoded = jsonDecode(cachedJson);
-          if (decoded is List) {
-            availableMaps = decoded;
-            _applyFirstMapIfNoneSelected();
-            _notify();
-          }
-        } catch (e) {
-          debugPrint('Не удалось загрузить даже из кеша: $e');
-        }
-      }
-      if (!_disposed) {
+      if (cachedJson != null) {
+        availableMaps = jsonDecode(cachedJson) as List;
+        _applyFirstMapIfNoneSelected();
+        _notify();
+      } else {
         _showErrorSnackBar('Ошибка загрузки списка карт: $e');
       }
     }
+  }
+
+  bool _isCacheValid(String? json, String? timestampStr, int now) {
+    if (json == null || timestampStr == null) return false;
+    final timestamp = int.tryParse(timestampStr);
+    if (timestamp == null) return false;
+    return (now - timestamp) < _CACHE_TTL.inMilliseconds;
   }
 
   void _applyFirstMapIfNoneSelected() {
@@ -224,121 +193,89 @@ class MapLogic {
       } else {
         throw Exception('Нет доступных карт');
       }
-      if (!_disposed) {
-        geoJsonParser.parseGeoJsonAsString(geoJsonString);
-        _notify();
-      }
+
+      geoJsonParser.parseGeoJsonAsString(geoJsonString);
+      _notify();
     } catch (e) {
-      if (!_disposed) {
-        _showErrorSnackBar('Ошибка загрузки GeoJSON: $e');
-      }
+      _showErrorSnackBar('Ошибка загрузки GeoJSON: $e');
     }
   }
 
   Future<String> _loadGeoJsonFromServer(int mapId) async {
-    if (_disposed) return '';
-
-    // Сначала пробуем загрузить из локального кеша
-    try {
-      final localFile = await _getLocalMapFile(mapId);
-      if (await localFile.exists()) {
-        final content = await localFile.readAsString();
-        if (content.isNotEmpty) {
-          debugPrint('✅ Загружено из офлайн-кеша: ${localFile.path}');
-          isMapLoadedOffline = true;
-          return content;
-        }
+    // Попытка загрузить из локального кеша
+    final localFile = await _getLocalMapFile(mapId);
+    if (await localFile.exists()) {
+      final content = await localFile.readAsString();
+      if (content.isNotEmpty) {
+        debugPrint('✅ Загружено из офлайн-кеша: ${localFile.path}');
+        isMapLoadedOffline = true;
+        return content;
       }
-    } catch (e) {
-      debugPrint('⚠️ Не удалось прочитать офлайн-карту: $e');
     }
 
-    // Если нет локальной — грузим с сервера
-    try {
-      final token = await storage.read(key: 'jwt_token');
-      if (token == null) throw Exception('Нет токена');
+    // Загрузка с сервера
+    final token = await storage.read(key: 'jwt_token');
+    if (token == null) throw Exception('Нет токена');
 
-      final response = await http.get(
-        Uri.parse(AppConfig.getMapByIdUrl(mapId)),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      if (response.statusCode != 200) {
-        throw Exception('API вернул ${response.statusCode}');
-      }
-
-      final body = jsonDecode(response.body);
-      if (body is! Map<String, dynamic> || !body.containsKey('file_name')) {
-        throw Exception('Неверный формат ответа');
-      }
-
-      final fileName = body['file_name'] as String;
-      final fileUrl = AppConfig.getMapFileUrl(fileName);
-
-      final fileResponse = await http.get(
-        Uri.parse(fileUrl),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      if (fileResponse.statusCode == 200 && fileResponse.body.isNotEmpty) {
-        // Сохраняем на устройство
-        await _saveMapFileLocally(mapId, fileResponse.body);
-        isMapLoadedOffline = false;
-        return fileResponse.body;
-      } else {
-        throw Exception('Пустой или ошибочный GeoJSON-файл');
-      }
-    } catch (e) {
-      // Если всё провалилось — пробуем ещё раз локальный файл (вдруг появился)
-      try {
-        final localFile = await _getLocalMapFile(mapId);
-        if (await localFile.exists()) {
-          final content = await localFile.readAsString();
-          if (content.isNotEmpty) {
-            debugPrint(
-                '🔄 Восстановлено из кеша после ошибки: ${localFile.path}');
-            isMapLoadedOffline = true;
-            return content;
-          }
-        }
-      } catch (_) {}
-      rethrow;
+    final mapMetaResponse =
+        await _authenticatedGet(AppConfig.getMapByIdUrl(mapId), token);
+    if (mapMetaResponse.statusCode != 200) {
+      throw Exception(
+          'Не удалось получить метаданные карты (${mapMetaResponse.statusCode})');
     }
+
+    final meta = jsonDecode(mapMetaResponse.body) as Map<String, dynamic>;
+    if (!meta.containsKey('file_name')) {
+      throw Exception('Неверный формат метаданных');
+    }
+
+    final fileUrl = AppConfig.getMapFileUrl(meta['file_name'] as String);
+    final fileResponse = await _authenticatedGet(fileUrl, token);
+
+    if (fileResponse.statusCode == 200 && fileResponse.body.isNotEmpty) {
+      await _saveMapFileLocally(mapId, fileResponse.body);
+      isMapLoadedOffline = false;
+      return fileResponse.body;
+    } else {
+      throw Exception('Пустой или ошибочный GeoJSON-файл');
+    }
+  }
+
+  Future<http.Response> _authenticatedGet(String url, String token) async {
+    return http.get(
+      Uri.parse(url),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json'
+      },
+    );
   }
 
   Future<File> _getLocalMapFile(int mapId) async {
     final dir = await getApplicationDocumentsDirectory();
-    final fileName = 'map_$mapId.geojson';
-    return File('${dir.path}/$fileName');
+    return File('${dir.path}/map_$mapId.geojson');
   }
 
   Future<void> _saveMapFileLocally(int mapId, String content) async {
-    try {
-      final file = await _getLocalMapFile(mapId);
-      await file.create(recursive: true);
-      await file.writeAsString(content, flush: true);
-      debugPrint('✅ Карта $mapId сохранена в: ${file.path}');
-    } catch (e) {
-      debugPrint('❌ Ошибка сохранения карты $mapId: $e');
-      rethrow;
-    }
+    final file = await _getLocalMapFile(mapId);
+    await file.create(recursive: true);
+    await file.writeAsString(content, flush: true);
+    debugPrint('✅ Карта $mapId сохранена в: ${file.path}');
   }
 
   Future<void> onMapChanged(int newMapId) async {
     if (_disposed || newMapId == selectedMapId) return;
+
     selectedMapId = newMapId;
     isLoading = true;
     isMapLoadedOffline = false;
     _notify();
+
     try {
       final geoJsonString = await _loadGeoJsonFromServer(newMapId);
-      if (!_disposed) {
-        geoJsonParser.parseGeoJsonAsString(geoJsonString);
-      }
+      geoJsonParser.parseGeoJsonAsString(geoJsonString);
     } catch (e) {
-      if (!_disposed) {
-        _showErrorSnackBar('Ошибка загрузки карты: $e');
-      }
+      _showErrorSnackBar('Ошибка загрузки карты: $e');
     } finally {
       if (!_disposed) {
         isLoading = false;
@@ -356,29 +293,21 @@ class MapLogic {
         return;
       }
 
-      final response = await http.get(
-        Uri.parse(AppConfig.getMapByIdUrl(mapId)),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      if (response.statusCode != 200) {
+      final mapMetaResponse =
+          await _authenticatedGet(AppConfig.getMapByIdUrl(mapId), token);
+      if (mapMetaResponse.statusCode != 200) {
         _showErrorSnackBar('Не удалось получить данные карты');
         return;
       }
 
-      final body = jsonDecode(response.body);
-      if (body is! Map<String, dynamic> || !body.containsKey('file_name')) {
+      final meta = jsonDecode(mapMetaResponse.body) as Map<String, dynamic>;
+      if (!meta.containsKey('file_name')) {
         _showErrorSnackBar('Неверный формат данных карты');
         return;
       }
 
-      final fileName = body['file_name'] as String;
-      final fileUrl = AppConfig.getMapFileUrl(fileName);
-
-      final fileResponse = await http.get(
-        Uri.parse(fileUrl),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final fileUrl = AppConfig.getMapFileUrl(meta['file_name'] as String);
+      final fileResponse = await _authenticatedGet(fileUrl, token);
 
       if (fileResponse.statusCode == 200 && fileResponse.body.isNotEmpty) {
         await _saveMapFileLocally(mapId, fileResponse.body);
@@ -389,9 +318,7 @@ class MapLogic {
       }
     } catch (e) {
       debugPrint('Ошибка при сохранении карты: $e');
-      if (!_disposed) {
-        _showErrorSnackBar('Ошибка сохранения карты: $e');
-      }
+      _showErrorSnackBar('Ошибка сохранения карты: $e');
     }
   }
 
@@ -411,88 +338,35 @@ class MapLogic {
                       style:
                           TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 20),
-                  SwitchListTile(
-                    title: const Text('Запретные зоны'),
-                    subtitle:
-                        const Text('Красные зоны (запрет на проезд/парковку)'),
+                  _buildSwitchTile(
+                    title: 'Запретные зоны',
+                    subtitle: 'Красные зоны (запрет на проезд/парковку)',
                     value: showRestrictedZones,
-                    onChanged: (bool value) {
-                      if (!_disposed) {
-                        setState(() {
-                          showRestrictedZones = value;
-                        });
-                      }
-                    },
-                    secondary: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
+                    color: Colors.red.withOpacity(0.6),
+                    onChanged: (v) => setState(() => showRestrictedZones = v),
                   ),
-                  SwitchListTile(
-                    title: const Text('Зоны парковки'),
-                    subtitle: const Text('Розовые зоны (запрет на парковку)'),
+                  _buildSwitchTile(
+                    title: 'Зоны парковки',
+                    subtitle: 'Розовые зоны (запрет на парковку)',
                     value: showParkingZones,
-                    onChanged: (bool value) {
-                      if (!_disposed) {
-                        setState(() {
-                          showParkingZones = value;
-                        });
-                      }
-                    },
-                    secondary: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.pink.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
+                    color: Colors.pink.withOpacity(0.6),
+                    onChanged: (v) => setState(() => showParkingZones = v),
                   ),
-                  SwitchListTile(
-                    title: const Text('Ограничения скорости'),
-                    subtitle: const Text(
-                        'Зеленые и желтые зоны (ограничение скорости)'),
+                  _buildSwitchTile(
+                    title: 'Ограничения скорости',
+                    subtitle: 'Зеленые и желтые зоны (ограничение скорости)',
                     value: showSpeedLimitZones,
-                    onChanged: (bool value) {
-                      if (!_disposed) {
-                        setState(() {
-                          showSpeedLimitZones = value;
-                        });
-                      }
-                    },
-                    secondary: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                            colors: [Colors.green, Colors.yellow]),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
+                    gradient:
+                        LinearGradient(colors: [Colors.green, Colors.yellow]),
+                    onChanged: (v) => setState(() => showSpeedLimitZones = v),
                   ),
-                  SwitchListTile(
-                    title: const Text('Границы'),
-                    subtitle: const Text('Синие линии (граница рабочей зоны)'),
+                  _buildSwitchTile(
+                    title: 'Границы',
+                    subtitle: 'Синие линии (граница рабочей зоны)',
                     value: showBoundaries,
-                    onChanged: (bool value) {
-                      if (!_disposed) {
-                        setState(() {
-                          showBoundaries = value;
-                        });
-                      }
-                    },
-                    secondary: Container(
-                      width: 24,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
+                    color: Colors.blue,
+                    height: 4,
+                    onChanged: (v) => setState(() => showBoundaries = v),
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -501,6 +375,32 @@ class MapLogic {
           },
         );
       },
+    );
+  }
+
+  Widget _buildSwitchTile({
+    required String title,
+    required String subtitle,
+    required bool value,
+    Color? color,
+    Gradient? gradient,
+    double height = 24,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return SwitchListTile(
+      title: Text(title),
+      subtitle: Text(subtitle),
+      value: value,
+      onChanged: onChanged,
+      secondary: Container(
+        width: 24,
+        height: height,
+        decoration: BoxDecoration(
+          color: color,
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(4),
+        ),
+      ),
     );
   }
 
@@ -522,7 +422,7 @@ class MapLogic {
     try {
       final result = await Connectivity().checkConnectivity();
       return result == ConnectivityResult.none;
-    } catch (e) {
+    } catch (_) {
       return true;
     }
   }
@@ -531,16 +431,13 @@ class MapLogic {
     if (_disposed) return;
     try {
       final token = await storage.read(key: 'jwt_token');
-      if (token != null) {
-        final response = await http.get(
-          Uri.parse(AppConfig.profileUrl),
-          headers: {'Authorization': 'Bearer $token'},
-        );
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body) as Map<String, dynamic>;
-          currentUserAvatarUrl = data['avatarUrl'] as String?;
-          _notify();
-        }
+      if (token == null) return;
+
+      final response = await _authenticatedGet(AppConfig.profileUrl, token);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        currentUserAvatarUrl = data['avatarUrl'] as String?;
+        _notify();
       }
     } catch (e) {
       debugPrint('Ошибка загрузки профиля: $e');

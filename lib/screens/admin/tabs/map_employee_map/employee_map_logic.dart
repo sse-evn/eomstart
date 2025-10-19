@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:micro_mobility_app/config/config.dart' show AppConfig;
-import 'package:micro_mobility_app/models/location.dart' show EmployeeLocation;
+import 'package:micro_mobility_app/models/location.dart';
 
 class EmployeeMapLogic {
   LatLng? currentLocation;
@@ -25,6 +25,9 @@ class EmployeeMapLogic {
 
   List<EmployeeLocation> employeeLocations = [];
   String? currentUserAvatarUrl;
+  List<LatLng> selectedEmployeeHistory = [];
+  String? selectedEmployeeId;
+  String? selectedEmployeeName;
 
   EmployeeMapLogic() {
     mapController = MapController();
@@ -37,13 +40,9 @@ class EmployeeMapLogic {
 
   Future<void> _fetchCurrentLocation() async {
     if (_disposed) return;
-
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw Exception('Служба геолокации отключена.');
-      }
-
+      if (!serviceEnabled) throw Exception('Служба геолокации отключена.');
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -51,11 +50,9 @@ class EmployeeMapLogic {
           throw Exception('Доступ к геолокации запрещён.');
         }
       }
-
       if (permission == LocationPermission.deniedForever) {
         throw Exception('Доступ запрещён навсегда. Измените в настройках.');
       }
-
       if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
         final position = await Geolocator.getCurrentPosition(
@@ -68,7 +65,6 @@ class EmployeeMapLogic {
       }
     } catch (e) {
       debugPrint('Ошибка получения местоположения: $e');
-      rethrow;
     }
   }
 
@@ -94,11 +90,9 @@ class EmployeeMapLogic {
 
   Future<void> startSelfTracking() async {
     if (_locationStreamSub != null || _disposed) return;
-
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) return;
-
       _locationStreamSub = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -115,7 +109,6 @@ class EmployeeMapLogic {
             'battery': batteryLevel,
             'event': 'tracking',
           });
-
           await http.post(
             Uri.parse(AppConfig.geoTrackUrl),
             headers: {
@@ -143,28 +136,19 @@ class EmployeeMapLogic {
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) return;
-
       final response = await http.get(
         Uri.parse(AppConfig.lastLocationsUrl),
         headers: {'Authorization': 'Bearer $token'},
       );
-
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
-
-        // 🔥 Защита от null и неверного типа
-        if (decoded == null) {
-          employeeLocations = [];
-        } else if (decoded is List) {
+        if (decoded is List) {
           employeeLocations = decoded
               .map((item) {
-                // Убедись, что item — это Map
-                if (item is! Map<String, dynamic>) {
-                  debugPrint('Пропущен некорректный элемент в списке: $item');
-                  return null;
-                }
+                if (item is! Map<String, dynamic>) return null;
                 return EmployeeLocation(
                   userId: item['user_id']?.toString() ?? 'unknown',
+                  name: item['name']?.toString(),
                   position: LatLng(
                     (item['lat'] as num?)?.toDouble() ?? 0.0,
                     (item['lon'] as num?)?.toDouble() ?? 0.0,
@@ -178,22 +162,15 @@ class EmployeeMapLogic {
                 );
               })
               .whereType<EmployeeLocation>()
-              .toList(); // фильтруем null
+              .toList();
         } else {
-          debugPrint('Ожидался список, но получен: ${decoded.runtimeType}');
           employeeLocations = [];
         }
-
-        _notify();
-      } else {
-        debugPrint(
-            'API вернул статус ${response.statusCode}: ${response.body}');
-        employeeLocations = []; // или оставить как есть
         _notify();
       }
-    } catch (e, stack) {
-      debugPrint('Ошибка загрузки позиций сотрудников: $e\n$stack');
-      employeeLocations = []; // опционально: очищать или нет
+    } catch (e) {
+      debugPrint('Ошибка загрузки позиций сотрудников: $e');
+      employeeLocations = [];
       _notify();
     }
   }
@@ -210,16 +187,74 @@ class EmployeeMapLogic {
     _liveUpdateTimer = null;
   }
 
+  Future<void> loadEmployeeHistory(String userId) async {
+    if (_disposed) return;
+    selectedEmployeeHistory = [];
+    selectedEmployeeId = userId;
+    final found = employeeLocations.firstWhere(
+      (e) => e.userId == userId,
+      orElse: () => EmployeeLocation(
+        userId: userId,
+        position: const LatLng(43.2389, 76.8897),
+        timestamp: DateTime.now(),
+      ),
+    );
+    selectedEmployeeName = found.name;
+
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) return;
+
+      // Используем UTC!
+      final now = DateTime.now();
+      final startOfDay = DateTime.utc(now.year, now.month, now.day);
+      final endOfDay = startOfDay.add(const Duration(days: 1));
+
+      final url = '${AppConfig.locationHistoryUrl}?user_id=$userId'
+          '&from=${Uri.encodeComponent(startOfDay.toIso8601String())}'
+          '&to=${Uri.encodeComponent(endOfDay.toIso8601String())}';
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is List) {
+          selectedEmployeeHistory = decoded
+              .map((item) {
+                if (item is! Map<String, dynamic>) return null;
+                return LatLng(
+                  (item['lat'] as num?)?.toDouble() ?? 0.0,
+                  (item['lon'] as num?)?.toDouble() ?? 0.0,
+                );
+              })
+              .whereType<LatLng>()
+              .toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('Ошибка загрузки истории: $e');
+    }
+    _notify();
+  }
+
+  void clearHistory() {
+    selectedEmployeeHistory = [];
+    selectedEmployeeId = null;
+    selectedEmployeeName = null;
+    _notify();
+  }
+
   Future<void> initMap() async {
     if (_disposed) return;
     try {
       isLoading = true;
       _notify();
-
       await _fetchCurrentLocation();
       await _loadUserProfile();
       await fetchEmployeeLocations();
-
       if (!_disposed) {
         isLoading = false;
         _notify();

@@ -22,20 +22,6 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- Основной фоновый сервис -->
-        <!-- <service
-            android:name="id.flutter.flutter_background_service.BackgroundService"
-            android:foregroundServiceType="location"
-            android:exported="false"
-            tools:replace="android:exported" /> -->
-
-        <!-- Другие сервисы (если используются) -->
-        <!-- <service
-            android:name="com.almoullim.background_location.BackgroundLocationService"
-            android:foregroundServiceType="location"
-            android:exported="false" /> -->
-
-        <!-- MainActivity и meta-data -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -58,6 +58,8 @@ dependencies:
   battery_plus: ^5.0.0
   # flutter_map_tile_caching: ^10.0.0
   flutter_map_tile_caching: ^9.1.4
+  flutter_background_service: ^5.0.0
+  sqflite: ^2.3.0
 
 flutter:
   uses-material-design: true

@@ -16,9 +16,7 @@ class EmployeeMapTab extends StatefulWidget {
 class _EmployeeMapTabState extends State<EmployeeMapTab>
     with AutomaticKeepAliveClientMixin {
   late final EmployeeMapLogic _logic;
-  bool _isInitialized = false;
   bool _disposed = false;
-  int? _selectedEmployeeIndex;
 
   @override
   bool get wantKeepAlive => true;
@@ -28,11 +26,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     super.initState();
     _logic = EmployeeMapLogic();
     _logic.onStateChanged = () {
-      if (!_disposed && mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-      }
+      if (!_disposed && mounted) setState(() {});
     };
     _logic.init();
   }
@@ -44,24 +38,70 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     super.dispose();
   }
 
-  void _centerOnEmployee(EmployeeLocation emp) {
+  void _showHistory(EmployeeLocation emp) async {
     if (_disposed || !mounted) return;
-    _logic.mapController.move(emp.position, _logic.mapController.camera.zoom);
+    if (_logic.selectedEmployeeId == emp.userId) {
+      _logic.clearHistory();
+    } else {
+      await _logic.loadEmployeeHistory(emp.userId);
+      if (_logic.selectedEmployeeHistory.isNotEmpty) {
+        _logic.mapController.move(_logic.selectedEmployeeHistory.first, 13.0);
+      }
+    }
+    if (mounted && _logic.selectedEmployeeHistory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('История не найдена')),
+      );
+    }
+  }
+
+  Widget _buildFallbackAvatar({double? battery, Color? color}) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: color ?? Colors.green[700],
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          const Icon(Icons.person, color: Colors.white, size: 20),
+          if (battery != null)
+            Positioned(
+              top: -6,
+              right: -6,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '${battery.toInt()}%',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-
-    if (!_isInitialized || _logic.isLoading) {
+    if (_logic.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-
     return Column(
       children: [
-        // Карта
         Expanded(
-          flex: 2,
           child: Stack(
             children: [
               FlutterMap(
@@ -82,7 +122,16 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                     subdomains: AppConstants.cartoDbSubdomains,
                     retinaMode: RetinaMode.isHighDensity(context),
                   ),
-                  // Текущая позиция пользователя
+                  if (_logic.selectedEmployeeHistory.isNotEmpty)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: _logic.selectedEmployeeHistory,
+                          color: Colors.blueAccent,
+                          strokeWidth: 4.0,
+                        ),
+                      ],
+                    ),
                   if (_logic.currentLocation != null)
                     MarkerLayer(
                       markers: [
@@ -99,76 +148,36 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                                     height: 48,
                                     errorBuilder:
                                         (context, error, stackTrace) =>
-                                            Container(
-                                      color: Colors.blue[700],
-                                      child: const Icon(
-                                        Icons.person,
-                                        color: Colors.white,
-                                        size: 24,
-                                      ),
-                                    ),
+                                            _buildFallbackAvatar(
+                                                color: Colors.blue[700]),
                                   )
-                                : Container(
-                                    color: Colors.blue[700],
-                                    child: const Icon(
-                                      Icons.person,
-                                      color: Colors.white,
-                                      size: 24,
-                                    ),
-                                  ),
+                                : _buildFallbackAvatar(color: Colors.blue[700]),
                           ),
                         ),
                       ],
                     ),
-                  // Маркеры сотрудников
                   if (_logic.employeeLocations.isNotEmpty)
                     MarkerLayer(
-                      markers:
-                          _logic.employeeLocations.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final emp = entry.value;
+                      markers: _logic.employeeLocations.map((emp) {
                         return Marker(
                           point: emp.position,
-                          width: 36,
-                          height: 36,
+                          width: 40,
+                          height: 40,
                           child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _selectedEmployeeIndex = index;
-                              });
-                              _centerOnEmployee(emp);
-                            },
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Icon(
-                                  Icons.person,
-                                  color: _selectedEmployeeIndex == index
-                                      ? Colors.orange
-                                      : Colors.green[700],
-                                  size: 32,
-                                ),
-                                if (emp.battery != null)
-                                  Positioned(
-                                    top: -6,
-                                    right: -6,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black54,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Text(
-                                        '${emp.battery!}%',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
+                            onTap: () => _showHistory(emp),
+                            child: ClipOval(
+                              child: emp.avatarUrl != null
+                                  ? Image.network(
+                                      emp.avatarUrl!,
+                                      fit: BoxFit.cover,
+                                      width: 40,
+                                      height: 40,
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              _buildFallbackAvatar(
+                                                  battery: emp.battery),
+                                    )
+                                  : _buildFallbackAvatar(battery: emp.battery),
                             ),
                           ),
                         );
@@ -176,8 +185,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                     ),
                 ],
               ),
-
-              // Индикатор подключения
               Positioned(
                 top: 16,
                 right: 16,
@@ -199,13 +206,27 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                   ),
                 ),
               ),
+              if (_logic.selectedEmployeeId != null)
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  right: 16,
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    child: ListTile(
+                      title: Text(
+                          'История: ${_logic.selectedEmployeeName ?? _logic.selectedEmployeeId}'),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: _logic.clearHistory,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
-
-        // Список сотрудников
         Expanded(
-          flex: 1,
           child: _logic.employeeLocations.isEmpty
               ? const Center(child: Text('Нет данных о сотрудниках'))
               : ListView.builder(
@@ -240,20 +261,17 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                                       color: Colors.grey),
                                 ),
                         ),
-                        title: Text('Сотрудник ${emp.userId}'),
+                        title: Text(emp.name ?? 'Сотрудник ${emp.userId}'),
                         subtitle: emp.battery != null
                             ? Text('Батарея: ${emp.battery!.toInt()}%')
                             : null,
                         trailing: Icon(
-                          Icons.location_on,
-                          color: Colors.green[700],
+                          Icons.history,
+                          color: _logic.selectedEmployeeId == emp.userId
+                              ? Colors.orange
+                              : Colors.grey,
                         ),
-                        onTap: () {
-                          setState(() {
-                            _selectedEmployeeIndex = index;
-                          });
-                          _centerOnEmployee(emp);
-                        },
+                        onTap: () => _showHistory(emp),
                       ),
                     );
                   },

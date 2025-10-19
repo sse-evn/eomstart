@@ -1,6 +1,5 @@
 // lib/utils/map_app_constants.dart
 import 'package:latlong2/latlong.dart';
-import 'package:flutter/material.dart';
 
 class AppConstants {
   static const LatLng defaultMapCenter = LatLng(43.2389, 76.8897);
@@ -17,6 +16,11 @@ class AppConstants {
   static const double maxZoom = 25.0;
   static const double zoneLabelZoomThreshold = 14.0;
 
-  // Кэш для тайлов (добавлено для офлайн-загрузки фоновой карты)
+  // Кэш для тайлов
   static const String tileCacheStoreName = 'map_tiles_cache';
+
+  // Настройки кеширования
+  static const Duration cacheValidDuration = Duration(days: 30);
+  static const int maxTileCount = 5000;
+  static const bool cacheEnabled = true;
 }

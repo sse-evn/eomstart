@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:micro_mobility_app/core/themes/theme.dart';
 import 'package:micro_mobility_app/providers/theme_provider.dart';
 import 'package:micro_mobility_app/screens/profile/promo_code_screen.dart';
 import 'package:provider/provider.dart';

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'info_row.dart';
 import '../../providers/shift_provider.dart';
-import 'dart:math' as math;
+// import 'dart:math' as math;
 
 class BotStatsCard extends StatelessWidget {
   const BotStatsCard({super.key});

@@ -1,6 +1,6 @@
 // lib/models/active_shift.dart
 import 'package:flutter/material.dart' show debugPrint;
-import 'dart:convert';
+// import 'dart:convert';
 
 class ActiveShift {
   final int id;
@@ -119,9 +119,6 @@ class ActiveShift {
     );
   }
 
-  // =============================
-  // ВСПОМОГАТЕЛЬНЫЕ СТАТИЧЕСКИЕ МЕТОДЫ
-  // =============================
 
   /// Извлекает строку из JSON, обрабатывает int/bool как строку
   static String? _extractString(Map<String, dynamic> json, String key) {
