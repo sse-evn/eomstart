@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:micro_mobility_app/config/config.dart' show AppConfig;
+import 'package:micro_mobility_app/config/app_config.dart' show AppConfig;
 import 'package:micro_mobility_app/models/active_shift.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:provider/provider.dart';

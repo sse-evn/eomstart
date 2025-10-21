@@ -10,7 +10,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:micro_mobility_app/config/config.dart' as AppConfig;
+import 'package:micro_mobility_app/config/app_config.dart' as AppConfig;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

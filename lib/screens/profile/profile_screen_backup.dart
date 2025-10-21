@@ -5,7 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
-import 'package:micro_mobility_app/config/config.dart';
+import 'package:micro_mobility_app/config/app_config.dart';
 // 1. Импортируем TasksScreen
 // import 'package:micro_mobility_app/screens/tasks/tasks_screen.dart'; // Убедитесь, что путь правильный
 

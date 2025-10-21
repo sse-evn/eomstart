@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/active_shift.dart' as active_shift;
 import '../models/shift_data.dart' as shift_data;
-import '../config/config.dart';
+import '../config/app_config.dart';
 
 class ApiService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();

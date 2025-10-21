@@ -8,7 +8,7 @@ import 'package:micro_mobility_app/providers/theme_provider.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
-import 'package:micro_mobility_app/config/config.dart';
+import 'package:micro_mobility_app/config/app_config.dart';
 import 'package:provider/provider.dart';
 import 'package:upgrader/upgrader.dart';
 import 'package:url_launcher/url_launcher.dart';

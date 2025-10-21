@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:win32/win32.dart';
 import '../../../services/api_service.dart';
-import '../../../config/config.dart';
+import '../../../config/app_config.dart';
 
 class AdminUsersList extends StatefulWidget {
   const AdminUsersList({Key? key}) : super(key: key);

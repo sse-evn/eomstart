@@ -8,7 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:battery_plus/battery_plus.dart';
-import 'package:micro_mobility_app/config/config.dart' show AppConfig;
+import 'package:micro_mobility_app/config/app_config.dart' show AppConfig;
 import 'package:micro_mobility_app/models/location.dart';
 
 class EmployeeMapLogic {

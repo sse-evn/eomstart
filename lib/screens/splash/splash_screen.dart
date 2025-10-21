@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:micro_mobility_app/config/config.dart';
+import 'package:micro_mobility_app/config/app_config.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart';
 
 class SplashScreen extends StatefulWidget {

@@ -1,8 +1,7 @@
 // lib/screens/profile/promo_code_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:micro_mobility_app/services/api_service.dart';
 import 'package:intl/intl.dart';
+import 'package:micro_mobility_app/services/user_promo_service.dart';
 
 class PromoCodeScreen extends StatefulWidget {
   const PromoCodeScreen({super.key});
@@ -12,11 +11,11 @@ class PromoCodeScreen extends StatefulWidget {
 }
 
 class _PromoCodeScreenState extends State<PromoCodeScreen> {
-  final ApiService _apiService = ApiService();
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final UserPromoService _promoService = UserPromoService();
+
   List<Map<String, dynamic>> _dailyPromos = [];
-  bool _isLoading = true;
   Set<String> _claimedCodes = {};
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -26,14 +25,31 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   Future<void> _loadPromoCodes() async {
     try {
-      final token = await _storage.read(key: 'jwt_token');
-      if (token == null) throw Exception('Не авторизован');
+      final data = await _promoService.fetchDailyPromoCodes();
 
-      final data = await _apiService.getDailyPromoCodes(token);
+      final promosRaw = data['promos'];
+      final claimedRaw = data['claimed'];
+
+      List<Map<String, dynamic>> promos = [];
+      if (promosRaw is List) {
+        promos = promosRaw
+            .where((e) => e is Map<String, dynamic>)
+            .map((e) => e as Map<String, dynamic>)
+            .toList();
+      }
+
+      Set<String> claimed = {};
+      if (claimedRaw is List) {
+        claimed = claimedRaw
+            .where((e) => e is String)
+            .map((e) => e as String)
+            .toSet();
+      }
+
       if (mounted) {
         setState(() {
-          _dailyPromos = List<Map<String, dynamic>>.from(data['promos'] ?? []);
-          _claimedCodes = Set<String>.from(data['claimed'] ?? []);
+          _dailyPromos = promos;
+          _claimedCodes = claimed;
           _isLoading = false;
         });
       }
@@ -41,8 +57,9 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Ошибка загрузки: $e'),
-              backgroundColor: Colors.red),
+            content: Text('Ошибка загрузки промокодов: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
         setState(() {
           _isLoading = false;
@@ -53,10 +70,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   Future<void> _claimPromo(String promoId, DateTime date) async {
     try {
-      final token = await _storage.read(key: 'jwt_token');
-      if (token == null) throw Exception('Не авторизован');
-
-      await _apiService.claimDailyPromo(token, promoId);
+      await _promoService.claimPromoCode(promoId);
 
       if (mounted) {
         setState(() {
@@ -75,7 +89,10 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -94,10 +111,10 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                   itemCount: _dailyPromos.length,
                   itemBuilder: (context, index) {
                     final promo = _dailyPromos[index];
-                    final promoId = promo['id'] as String;
-                    final dateString = promo['date'] as String; // "2025-10-16"
-                    final title = promo['title'] as String? ?? 'Бонус';
-                    final description = promo['description'] as String? ?? '';
+                    final promoId = promo['id']?.toString() ?? '';
+                    final dateString = promo['date']?.toString() ?? '';
+                    final title = promo['title']?.toString() ?? 'Бонус';
+                    final description = promo['description']?.toString() ?? '';
                     final isClaimed = _claimedCodes.contains(promoId);
 
                     final date = DateTime.tryParse(dateString);

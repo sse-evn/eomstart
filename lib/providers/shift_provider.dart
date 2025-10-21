@@ -13,7 +13,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:micro_mobility_app/models/active_shift.dart' as model;
 import '../models/shift_data.dart';
 import '../services/api_service.dart';
-import '../config/config.dart';
+import '../config/app_config.dart';
 
 class ShiftProvider with ChangeNotifier {
   final ApiService _apiService;

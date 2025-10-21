@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:micro_mobility_app/config/config.dart';
+import 'package:micro_mobility_app/config/app_config.dart';
+import 'package:micro_mobility_app/screens/admin/promo_codes_admin_screen.dart'
+    show AdminPromoCodesScreen, AdminPromoScreen;
 import 'package:micro_mobility_app/screens/admin/shift_history_screen.dart';
 import 'package:micro_mobility_app/screens/admin/shift_monitoring_screen.dart';
 import 'package:micro_mobility_app/screens/admin/tasks_screen.dart';
@@ -25,6 +27,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     'Генератор смен',
     'Карта',
     'Смены',
+    'Промокоды',
   ];
 
   late TabController _tabController;
@@ -97,6 +100,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           ],
         );
         break;
+      case 4:
+        currentBody = const AdminPromoScreen();
+        break;
       default:
         currentBody = const AdminUsersList();
     }
@@ -105,11 +111,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
       appBar: AppBar(
         title: Text(
           _titles[_currentIndex],
-          style: const TextStyle(
-            fontWeight: FontWeight.w600, fontSize: 18
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
         ),
-
         actions: [
           // 🔄 Кнопка просто вызывает setState — и всё обновится
           // IconButton(
@@ -118,8 +121,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           //   tooltip: 'Обновить',
           // ),
           PopupMenuButton(
-            icon:
-                const Icon(Icons.info_outline, size: 18, color: Colors.grey),
+            icon: const Icon(Icons.info_outline, size: 18, color: Colors.grey),
             tooltip: 'Информация о среде',
             onSelected: (value) {
               if (value == 'env') {
@@ -137,13 +139,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
       body: Container(
         child: currentBody,
       ),
-
-
       bottomNavigationBar: Theme(
         data: Theme.of(context).copyWith(
-          splashFactory: NoSplash.splashFactory,   
-          highlightColor: Colors.transparent,    
-          splashColor: Colors.transparent,    
+          splashFactory: NoSplash.splashFactory,
+          highlightColor: Colors.transparent,
+          splashColor: Colors.transparent,
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
@@ -179,6 +179,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
               icon: Icon(Icons.access_time_outlined),
               activeIcon: Icon(Icons.access_time),
               label: 'Смены',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.local_offer_outlined),
+              activeIcon: Icon(Icons.local_offer),
+              label: 'Промокоды',
             ),
           ],
         ),
