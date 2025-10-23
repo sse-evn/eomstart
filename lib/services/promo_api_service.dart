@@ -1,4 +1,3 @@
-// lib/services/promo_api_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -108,7 +107,6 @@ class PromoApiService {
     }
   }
 
-  // Обновленный метод для возврата полного ответа
   Future<Map<String, dynamic>> claimPromoByBrand(String brand) async {
     final token = await _getToken();
     if (token == null) {
@@ -135,14 +133,6 @@ class PromoApiService {
     }
   }
 
-  Map<String, dynamic>? _tryParseJson(String body) {
-    try {
-      return jsonDecode(body) as Map<String, dynamic>?;
-    } catch (_) {
-      return null;
-    }
-  }
-
   Future<List<dynamic>> getClaimedPromos() async {
     final token = await _getToken();
     if (token == null) {
@@ -156,7 +146,6 @@ class PromoApiService {
 
     if (response.statusCode == 200) {
       final users = jsonDecode(utf8.decode(response.bodyBytes)) as List;
-      // Фильтруем только пользователей с промокодами
       return users.where((user) {
         if (user is Map && user.containsKey('promo_codes')) {
           final promos = user['promo_codes'] as Map?;
@@ -171,6 +160,80 @@ class PromoApiService {
     } else {
       throw PromoApiServiceException('Ошибка загрузки данных пользователей',
           statusCode: response.statusCode);
+    }
+  }
+
+  Future<void> setActivePromoBrand(String brand, {int days = 10}) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/activate-brand'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json'
+      },
+      body: jsonEncode({'brand': brand, 'days': days}),
+    );
+
+    if (response.statusCode == 401)
+      throw PromoApiServiceException('Сессия истекла', statusCode: 401);
+    if (response.statusCode == 403)
+      throw PromoApiServiceException('Доступ запрещён', statusCode: 403);
+    if (response.statusCode != 200) {
+      final error = _tryParseJson(utf8.decode(response.bodyBytes))?['error'];
+      throw PromoApiServiceException(error ?? 'Неизвестная ошибка',
+          statusCode: response.statusCode);
+    }
+  }
+
+  Future<void> clearActivePromoBrand() async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+
+    final response = await http.delete(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/activate-brand'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 401)
+      throw PromoApiServiceException('Сессия истекла', statusCode: 401);
+    if (response.statusCode == 403)
+      throw PromoApiServiceException('Доступ запрещён', statusCode: 403);
+    if (response.statusCode != 200) {
+      throw PromoApiServiceException('Ошибка при сбросе',
+          statusCode: response.statusCode);
+    }
+  }
+
+  Future<Map<String, dynamic>?> getActivePromoBrand() async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/active-brand'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final body = utf8.decode(response.bodyBytes);
+      if (body == 'null' || body.trim().isEmpty) return null;
+      return jsonDecode(body);
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _tryParseJson(String body) {
+    try {
+      return jsonDecode(body) as Map<String, dynamic>?;
+    } catch (_) {
+      return null;
     }
   }
 }

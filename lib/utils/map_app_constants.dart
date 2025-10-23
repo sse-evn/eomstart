@@ -11,15 +11,12 @@ class AppConstants {
 
   static const String userAgentPackageName = 'kz.evn';
 
-  // Настройки карты
   static const double minZoom = 14.0;
   static const double maxZoom = 25.0;
   static const double zoneLabelZoomThreshold = 14.0;
 
-  // Кэш для тайлов
+  // === Только константы — НИКАКИХ ОБЪЕКТОВ ===
   static const String tileCacheStoreName = 'map_tiles_cache';
-
-  // Настройки кеширования
   static const Duration cacheValidDuration = Duration(days: 30);
   static const int maxTileCount = 5000;
   static const bool cacheEnabled = true;

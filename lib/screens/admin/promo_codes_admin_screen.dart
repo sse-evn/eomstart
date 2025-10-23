@@ -1,10 +1,7 @@
-// lib/screens/admin/admin_promo_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:micro_mobility_app/services/promo_api_service.dart';
-import 'package:micro_mobility_app/main.dart' as app;
-import 'package:micro_mobility_app/utils/auth_utils.dart' as app show logout;
 
 class AdminPromoScreen extends StatelessWidget {
   const AdminPromoScreen({super.key});
@@ -27,6 +24,9 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   bool _isLoading = false;
   Map<String, dynamic>? _stats;
   List<dynamic>? _claimedPromos;
+  Map<String, dynamic>? _activeBrand;
+  String? _selectedBrand;
+  int _days = 10;
 
   @override
   void initState() {
@@ -37,6 +37,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   Future<void> _loadAllData() async {
     await _loadStats();
     await _loadClaimedPromos();
+    await _loadActiveBrand();
   }
 
   Future<void> _loadStats() async {
@@ -71,7 +72,6 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
       final data = await _service.getClaimedPromos();
       if (mounted) setState(() => _claimedPromos = data);
     } on PromoApiServiceException catch (e) {
-      // Не показываем ошибку - просто не отображаем данные
       if (mounted && e.statusCode != 403) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -80,9 +80,14 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
               backgroundColor: Colors.orange),
         );
       }
-    } catch (e) {
-      // Игнорируем
-    }
+    } catch (e) {}
+  }
+
+  Future<void> _loadActiveBrand() async {
+    try {
+      final data = await _service.getActivePromoBrand();
+      if (mounted) setState(() => _activeBrand = data);
+    } catch (e) {}
   }
 
   Future<void> _uploadExcel() async {
@@ -201,6 +206,57 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     );
   }
 
+  Future<void> _activateBrand() async {
+    if (_selectedBrand == null) return;
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      await _service.setActivePromoBrand(_selectedBrand!, days: _days);
+      await _loadActiveBrand();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Активировано!')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _clearActiveBrand() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      await _service.clearActivePromoBrand();
+      await _loadActiveBrand();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Ограничение снято')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   void _handleUnauthorized() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -228,7 +284,53 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // Загрузка промокодов
+                  const Text('Активный бренд:',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  if (_activeBrand != null)
+                    Card(
+                      child: ListTile(
+                        title: Text('Только ${_activeBrand!['brand']}'),
+                        subtitle: Text('До ${_activeBrand!['expires_at']}'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.red),
+                          onPressed: _clearActiveBrand,
+                        ),
+                      ),
+                    )
+                  else
+                    const Text('Все бренды доступны'),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _selectedBrand,
+                    items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
+                        .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedBrand = v),
+                    decoration:
+                        const InputDecoration(labelText: 'Выберите бренд'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                        labelText: 'Дней (по умолчанию 10)'),
+                    onChanged: (v) {
+                      if (v.isEmpty) {
+                        setState(() => _days = 10);
+                      } else {
+                        final n = int.tryParse(v);
+                        setState(() => _days = n != null && n > 0 ? n : 10);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _selectedBrand != null ? _activateBrand : null,
+                    child: const Text('Активировать'),
+                  ),
+                  const SizedBox(height: 24),
                   const Text('Загрузить промокоды:',
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -244,23 +346,16 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                     icon: const Icon(Icons.link),
                     label: const Text('Из Google Таблицы'),
                   ),
-
                   const SizedBox(height: 24),
-
-                  // Статистика по остаткам
                   const Text('Свободные промокоды:',
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   if (_stats == null)
                     const Center(child: Text('Загрузка...'))
-                  else ...[
+                  else
                     _buildDetailedStats(),
-                  ],
-
                   const SizedBox(height: 24),
-
-                  // Выданные промокоды
                   const Text('Выданные промокоды:',
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -289,7 +384,6 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
 
     return Column(
       children: [
-        // Общая сводка
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -319,10 +413,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
             ),
           ),
         ),
-
         const SizedBox(height: 16),
-
-        // По датам
         if (byDate.isNotEmpty) ...[
           const Text('По датам окончания:',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),

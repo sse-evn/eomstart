@@ -1,13 +1,12 @@
-
-// --- Экран главной страницы ---
 import 'package:flutter/material.dart';
-import 'package:micro_mobility_app/screens/home/widgets/report_card.dart';
 import 'package:micro_mobility_app/screens/home/widgets/slot_card.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class DashboardHome extends StatefulWidget {
-  const DashboardHome();
+  const DashboardHome({super.key});
 
   @override
   State<DashboardHome> createState() => _DashboardHomeState();
@@ -16,12 +15,14 @@ class DashboardHome extends StatefulWidget {
 class _DashboardHomeState extends State<DashboardHome> {
   late Future<void> _loadDataFuture;
 
-  // 🔥 УДАЛЕНО: StreamSubscription и _listenToConnectionChanges()
-
   @override
   void initState() {
     super.initState();
     _loadDataFuture = _loadData();
+    // Проверяем разрешения сразу после рендера
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestAllPermissionsForce();
+    });
   }
 
   Future<void> _loadData() async {
@@ -31,8 +32,71 @@ class _DashboardHomeState extends State<DashboardHome> {
 
   Future<void> _refresh() async {
     setState(() {
-      _loadDataFuture = _loadData(); // Явный запрос — уместен
+      _loadDataFuture = _loadData();
     });
+  }
+
+  /// 🔒 Принудительный запрос всех разрешений
+  Future<void> _requestAllPermissionsForce() async {
+    bool allGranted = false;
+
+    while (!allGranted) {
+      allGranted = true;
+
+      // Проверяем сервис геолокации
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        await Geolocator.openLocationSettings();
+      }
+
+      // Запрашиваем геолокацию
+      LocationPermission locPerm = await Geolocator.checkPermission();
+      if (locPerm != LocationPermission.always) {
+        locPerm = await Geolocator.requestPermission();
+        if (locPerm != LocationPermission.always) {
+          allGranted = false;
+        }
+      }
+
+      // Камера
+      PermissionStatus camStatus = await Permission.camera.status;
+      if (!camStatus.isGranted) {
+        camStatus = await Permission.camera.request();
+        if (!camStatus.isGranted) allGranted = false;
+      }
+
+      // Уведомления (опционально)
+      PermissionStatus notifStatus = await Permission.notification.status;
+      if (!notifStatus.isGranted) {
+        notifStatus = await Permission.notification.request();
+        if (!notifStatus.isGranted) allGranted = false;
+      }
+
+      if (!allGranted) {
+        await _showForcePermissionDialog();
+      }
+    }
+  }
+
+  /// Диалог, который не дает пользователю выйти
+  Future<void> _showForcePermissionDialog() async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // нельзя закрыть
+      builder: (ctx) => AlertDialog(
+        title: const Text('Необходимые разрешения'),
+        content: const Text(
+            'Для работы приложения необходимо разрешить все права, особенно геопозицию "Allow all the time". Без них приложение не будет работать.'),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              await openAppSettings(); // пользователь открыл настройки
+            },
+            child: const Text('Открыть настройки'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -49,7 +113,8 @@ class _DashboardHomeState extends State<DashboardHome> {
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
-                  child: CircularProgressIndicator(color: Colors.green));
+                child: CircularProgressIndicator(color: Colors.green),
+              );
             } else if (snapshot.hasError) {
               final errorStr = snapshot.error.toString();
               if (errorStr.contains('SocketException') ||
@@ -88,14 +153,12 @@ class _DashboardHomeState extends State<DashboardHome> {
               }
             } else {
               return SingleChildScrollView(
-                physics: AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.all(16.0),
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16.0),
                 child: Column(
-                  children: [
+                  children: const [
                     SlotCard(),
-
                     SizedBox(height: 10),
-                  
                     // ReportCard(),
                   ],
                 ),
