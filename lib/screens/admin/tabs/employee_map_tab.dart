@@ -119,7 +119,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 children: [
                   TileLayer(
                     urlTemplate: AppConstants.cartoDbPositronUrl,
-                    subdomains: AppConstants.cartoDbSubdomains,
+                    // subdomains: AppConstants.cartoDbSubdomains,
                     retinaMode: RetinaMode.isHighDensity(context),
                   ),
                   if (_logic.selectedEmployeeHistory.isNotEmpty)

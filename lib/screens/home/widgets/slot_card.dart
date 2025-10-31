@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/core/themes/colors.dart';
 import 'package:provider/provider.dart';
@@ -8,74 +7,25 @@ import 'slot_setup_modal.dart';
 import '../../../../utils/time_utils.dart';
 import '../../../config/app_config.dart';
 
-class SlotCard extends StatefulWidget {
+class SlotCard extends StatelessWidget {
   const SlotCard({super.key});
-
-  @override
-  State<SlotCard> createState() => _SlotCardState();
-}
-
-class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
-  bool _isLoading = false;
-  bool _showError = false;
-  String _errorMessage = '';
-  bool _isDataLoaded = false;
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    );
-    _loadInitialData();
-    // 🔥 Таймер удалён — он вызывал лишние запросы каждые 10 секунд
-  }
-
-  Future<void> _loadInitialData() async {
-    try {
-      await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
-      if (mounted) {
-        setState(() => _isDataLoaded = true);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Ошибка загрузки данных: ${e.toString()}';
-          _showError = true;
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<ShiftProvider>(
       builder: (context, provider, child) {
+        // Если данные ещё не загружались — показываем лоадер
+        if (!provider.hasLoadedShifts) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
         final theme = Theme.of(context);
         final isDarkMode = theme.brightness == Brightness.dark;
         final activeShift = provider.activeShift;
         final hasActiveShift = activeShift != null;
 
-        if (!_isDataLoaded) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
         return Column(
           children: [
-            if (_showError) _buildErrorBanner(),
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
@@ -98,7 +48,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                 child: Column(
                   children: [
                     if (hasActiveShift)
-                      _buildActiveShiftUI(activeShift, theme, isDarkMode)
+                      _buildActiveShiftUI(activeShift!, theme, isDarkMode)
                     else
                       _buildInactiveShiftUI(context, theme, isDarkMode),
                     const SizedBox(height: 20),
@@ -117,7 +67,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
     final String serverTime = activeShift.startTimeString != null
         ? extractTimeFromIsoString(activeShift.startTimeString!)
         : '--:--';
-    
+
     final String slotTime = activeShift.slotTimeRange.isNotEmpty
         ? activeShift.slotTimeRange
         : 'Не указан';
@@ -164,17 +114,7 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                   ),
                 ],
               ),
-              // CircleAvatar(
-              //   radius: 20,
-              //   backgroundColor: Colors.red[400],
-              //   child: _isLoading
-              //       ? const CircularProgressIndicator(
-              //           color: Colors.white, strokeWidth: 2)
-              //       : const Icon(Icons.power_settings_new,
-              //           color: Colors.white, size: 20),
-              // ),
               _buildSelfiePreview(activeShift),
-
             ],
           ),
           const SizedBox(height: 24),
@@ -202,12 +142,10 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
             ),
           ),
           const SizedBox(height: 16),
-       
           Container(
             decoration: BoxDecoration(
-              color: theme.colorScheme.secondary,
-              borderRadius: BorderRadius.circular(12)
-            ),
+                color: theme.colorScheme.secondary,
+                borderRadius: BorderRadius.circular(12)),
             padding: const EdgeInsets.all(10),
             child: Row(
               children: [
@@ -215,7 +153,9 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                   Icons.fastfood,
                   size: 30,
                 ),
-                const SizedBox(width: 10,),
+                const SizedBox(
+                  width: 10,
+                ),
                 Expanded(
                   child: Column(
                     children: [
@@ -226,10 +166,9 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
                       Text(
                         '10:00 - 10:40',
                         style: TextStyle(
-                          fontSize: 18,
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold
-                        ),
+                            fontSize: 18,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold),
                       )
                     ],
                   ),
@@ -243,12 +182,10 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
   }
 
   Widget _buildSelfiePreview(ActiveShift activeShift) {
-    // 🔍 Исправление: убедимся, что URL формируется правильно
     String photoUrl;
     if (activeShift.selfie.startsWith('http')) {
       photoUrl = activeShift.selfie;
     } else {
-      // Убедимся, что между baseUrl и путём есть слэш
       final baseUrl = AppConfig.mediaBaseUrl;
       final path = activeShift.selfie;
       photoUrl = baseUrl.endsWith('/') ? '$baseUrl$path' : '$baseUrl/$path';
@@ -350,41 +287,6 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildErrorBanner() {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        margin: const EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: Colors.red[400],
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                _errorMessage,
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.white, size: 20),
-              onPressed: () {
-                if (mounted) {
-                  setState(() => _showError = false);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _openSlotSetupModal(BuildContext context) async {
     try {
       final result = await showModalBottomSheet(
@@ -393,16 +295,14 @@ class _SlotCardState extends State<SlotCard> with TickerProviderStateMixin {
         builder: (ctx) => const SlotSetupModal(),
       );
 
-      if (result == true && mounted) {
+      if (result == true) {
+        // После успешного старта смены — обновляем данные
         await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Ошибка: ${e.toString()}';
-          _showError = true;
-        });
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
     }
   }
 }

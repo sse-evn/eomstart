@@ -5,35 +5,45 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:micro_mobility_app/core/themes/theme.dart';
 import 'package:micro_mobility_app/providers/theme_provider.dart';
-import 'package:micro_mobility_app/services/api_service.dart';
+import 'package:micro_mobility_app/providers/shift_provider.dart';
 import 'package:micro_mobility_app/screens/auth_screen/login_screen.dart';
-import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 import 'package:micro_mobility_app/config/app_config.dart';
+import 'package:micro_mobility_app/services/api_service.dart' show ApiService;
 import 'package:provider/provider.dart';
-import 'package:upgrader/upgrader.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:io' show Platform;
 import 'package:package_info_plus/package_info_plus.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  Widget build(BuildContext context) {
+    return const _ProfileScreenBody();
+  }
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  final ApiService _apiService = ApiService();
+class _ProfileScreenBody extends StatefulWidget {
+  const _ProfileScreenBody();
+
+  @override
+  State<_ProfileScreenBody> createState() => _ProfileScreenBodyState();
+}
+
+class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  late Future<Map<String, dynamic>> _profileFuture;
-  String _userRole = 'user';
   bool _isCheckingForUpdates = false;
   final _promoCodeController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _profileFuture = _loadProfile();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<ShiftProvider>();
+      if (!provider.hasLoadedProfile) {
+        provider.loadProfile();
+      }
+    });
   }
 
   @override
@@ -42,47 +52,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  Future<Map<String, dynamic>> _loadProfile() async {
-    try {
-      final token = await _storage.read(key: 'jwt_token');
-      if (token == null) throw Exception('Токен не найден');
-      final profile = await _apiService.getUserProfile(token);
-      final role = (profile['role'] ?? 'user').toString().toLowerCase();
-      if (mounted) {
-        setState(() {
-          _userRole = role;
-        });
-      }
-      return profile;
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      return {};
-    }
-  }
-
   Future<void> _refresh() async {
-    if (mounted) {
-      setState(() {
-        _profileFuture = _loadProfile();
-      });
-    }
+    final provider = context.read<ShiftProvider>();
+    await provider.loadProfile(force: true);
   }
 
   Future<void> _logout() async {
     try {
       final token = await _storage.read(key: 'jwt_token');
       if (token != null) {
-        await _apiService.logout(token);
+        final apiService = ApiService();
+        await apiService.logout(token);
       }
       await _storage.delete(key: 'jwt_token');
+      await _storage.delete(key: 'refresh_token');
+      context.read<ShiftProvider>().logout();
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -148,11 +132,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<bool> _checkServerForUpdate(String currentVersion) async {
     try {
       final token = await _storage.read(key: 'jwt_token');
-      if (token != null) {}
+      if (token != null) {
+        // Здесь можно добавить реальную проверку версии с сервера
+        // Например: final response = await http.get(...);
+      }
     } catch (e) {
       debugPrint('Ошибка проверки версии: $e');
     }
-    return false;
+    return false; // временно отключено
   }
 
   void _showUpdateDialog(String currentVersion) {
@@ -214,10 +201,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.themeData.brightness == Brightness.dark;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Профиль'),
@@ -225,178 +208,167 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    FutureBuilder<Map<String, dynamic>>(
-                      future: _profileFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const _ProfileHeaderShimmer();
-                        }
-                        if (snapshot.hasError ||
-                            !snapshot.hasData ||
-                            snapshot.data!.isEmpty) {
-                          return const _ProfileErrorCard();
-                        }
-                        return _ProfileHeader(user: snapshot.data!);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: colorScheme.secondary,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: colorScheme.shadow,
-                              spreadRadius: 1,
-                              blurRadius: 12,
-                              offset: const Offset(0, 6),
+        child: Consumer<ShiftProvider>(
+          builder: (context, provider, child) {
+            final colorScheme = Theme.of(context).colorScheme;
+            final themeProvider = Provider.of<ThemeProvider>(context);
+            final isDarkMode =
+                themeProvider.themeData.brightness == Brightness.dark;
+
+            if (!provider.hasLoadedProfile) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final profile = provider.profile ?? {};
+            final userRole =
+                (profile['role'] ?? 'user').toString().toLowerCase();
+
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints:
+                        BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _ProfileHeader(user: profile),
+                        const SizedBox(height: 10),
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: colorScheme.secondary,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colorScheme.shadow,
+                                  spreadRadius: 1,
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        padding: const EdgeInsets.all(10),
-                        child: Column(
-                          children: [
-                            if (['superadmin', 'coordinator', 'supervisor']
-                                .contains(_userRole)) ...[
-                              _SettingsItem(
-                                icon: Icons.admin_panel_settings,
-                                title: 'Админ-панель',
-                                route: '/admin',
-                              ),
-                            ],
-                            const SizedBox(height: 10),
-                            Material(
-                              color: Colors.transparent,
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          (Colors.green[700]!).withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(
-                                      isDarkMode
-                                          ? Icons.dark_mode
-                                          : Icons.light_mode,
-                                      color: const Color.fromARGB(
-                                          255, 134, 136, 33),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Text(
-                                      isDarkMode
-                                          ? 'Темная тема'
-                                          : 'Светлая тема',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                  Switch(
-                                    value: isDarkMode,
-                                    onChanged: (value) =>
-                                        themeProvider.setTheme(
-                                            theme: isDarkMode
-                                                ? lightMode
-                                                : darkMode),
+                            padding: const EdgeInsets.all(10),
+                            child: Column(
+                              children: [
+                                if (['superadmin', 'coordinator', 'supervisor']
+                                    .contains(userRole)) ...[
+                                  _SettingsItem(
+                                    icon: Icons.admin_panel_settings,
+                                    title: 'Админ-панель',
+                                    route: '/admin',
                                   ),
                                 ],
-                              ),
+                                const SizedBox(height: 10),
+                                Material(
+                                  color: Colors.transparent,
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: (Colors.green[700]!)
+                                              .withOpacity(0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Icon(
+                                          isDarkMode
+                                              ? Icons.dark_mode
+                                              : Icons.light_mode,
+                                          color: const Color.fromARGB(
+                                              255, 134, 136, 33),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Text(
+                                          isDarkMode
+                                              ? 'Темная тема'
+                                              : 'Светлая тема',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                      Switch(
+                                        value: isDarkMode,
+                                        onChanged: (value) =>
+                                            themeProvider.setTheme(
+                                                theme: isDarkMode
+                                                    ? lightMode
+                                                    : darkMode),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                _SettingsItem(
+                                  icon: Icons.card_giftcard,
+                                  title: 'Промокод',
+                                  route: '/promo',
+                                  color: const Color(0xFFAA81AA),
+                                ),
+                                const SizedBox(height: 10),
+                                _SettingsItem(
+                                  icon: _isCheckingForUpdates
+                                      ? Icons.downloading
+                                      : Icons.system_update,
+                                  title: _isCheckingForUpdates
+                                      ? 'Проверка обновлений...'
+                                      : 'Проверить обновления',
+                                  onTap: _checkForUpdates,
+                                  color: _isCheckingForUpdates
+                                      ? Colors.orange
+                                      : Colors.blue,
+                                ),
+                                const SizedBox(height: 10),
+                                _SettingsItem(
+                                  icon: Icons.info,
+                                  title: 'О приложении',
+                                  route: '/about',
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 10),
-                            _SettingsItem(
-                              icon: Icons.card_giftcard,
-                              title: 'Промокод',
-                              route: '/promo',
-                              color: const Color(0xFFAA81AA),
-                            ),
-                            const SizedBox(height: 10),
-                            _SettingsItem(
-                              icon: _isCheckingForUpdates
-                                  ? Icons.downloading
-                                  : Icons.system_update,
-                              title: _isCheckingForUpdates
-                                  ? 'Проверка обновлений...'
-                                  : 'Проверить обновления',
-                              onTap: _checkForUpdates,
-                              color: _isCheckingForUpdates
-                                  ? Colors.orange
-                                  : Colors.blue,
-                            ),
-                            const SizedBox(height: 10),
-                            _SettingsItem(
-                              icon: Icons.info,
-                              title: 'О приложении',
-                              route: '/about',
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: colorScheme.secondary,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colorScheme.shadow,
+                                  spreadRadius: 1,
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.all(10),
+                            child: _SettingsItem(
+                              icon: Icons.logout,
+                              title: 'Выйти',
+                              color: Colors.red,
+                              onTap: _logout,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                      ],
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: colorScheme.secondary,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: colorScheme.shadow,
-                              spreadRadius: 1,
-                              blurRadius: 12,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        padding: const EdgeInsets.all(10),
-                        child: _SettingsItem(
-                          icon: Icons.logout,
-                          title: 'Выйти',
-                          color: Colors.red,
-                          onTap: _logout,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             );
           },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          color: Colors.green[700],
         ),
       ),
     );
@@ -475,115 +447,6 @@ class _ProfileHeader extends StatelessWidget {
           'superadmin': 'Суперадмин',
         }[role] ??
         role.toUpperCase();
-  }
-}
-
-class _ProfileHeaderShimmer extends StatelessWidget {
-  const _ProfileHeaderShimmer();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-      child: Column(
-        children: [
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              color: const Color.fromARGB(255, 240, 242, 243),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.person,
-              size: 60,
-              color: Color.fromARGB(255, 206, 214, 218),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            width: 200,
-            height: 28,
-            decoration: BoxDecoration(
-              color: const Color.fromARGB(255, 206, 214, 218),
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            width: 120,
-            height: 24,
-            decoration: BoxDecoration(
-              color: const Color.fromARGB(255, 206, 214, 218),
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileErrorCard extends StatelessWidget {
-  const _ProfileErrorCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.1),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
-        ),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              color: Colors.red,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.error,
-              color: Colors.white,
-              size: 48,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Не удалось загрузить профиль',
-            style: TextStyle(
-              color: Colors.red,
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Повторяем...'),
-                  backgroundColor: Colors.green,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Повторить'),
-          ),
-        ],
-      ),
-    );
   }
 }
 

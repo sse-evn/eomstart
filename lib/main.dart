@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart'
+    show FMTCObjectBoxBackend, FMTCRoot, FMTCStore;
+import 'package:hive_flutter/hive_flutter.dart' show Hive, HiveX;
 import 'package:micro_mobility_app/providers/theme_provider.dart';
 import 'package:micro_mobility_app/screens/profile/promo_code_screen.dart';
-import 'package:micro_mobility_app/utils/map_app_constants.dart' show AppConstants;
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -11,9 +13,6 @@ import 'package:timezone/data/latest.dart' as tz_data;
 // Геолокация и разрешения
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
-
-// 🔥 Добавлен импорт для кеширования карт
-import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 
 // Providers
 import 'package:micro_mobility_app/settings_provider.dart';
@@ -36,11 +35,9 @@ import 'package:micro_mobility_app/screens/splash/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 🔥 1. Инициализация flutter_map_tile_caching (ОБЯЗАТЕЛЬНО!)
-  await FMTCObjectBoxBackend().initialise();
-
+  await Hive.initFlutter();
   // Остальная инициализация
+  await FMTCObjectBoxBackend().initialise();
   tz_data.initializeTimeZones();
   await initializeDateFormatting('ru', null);
   final _storage = const FlutterSecureStorage();

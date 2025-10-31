@@ -18,8 +18,16 @@ class _DashboardHomeState extends State<DashboardHome> {
   @override
   void initState() {
     super.initState();
-    _loadDataFuture = _loadData();
-    // Проверяем разрешения сразу после рендера
+
+    // Загружаем данные ТОЛЬКО если они ещё не загружались
+    final provider = context.read<ShiftProvider>();
+    if (!provider.hasLoadedShifts) {
+      _loadDataFuture = _loadData();
+    } else {
+      _loadDataFuture = Future.value(); // уже есть данные — не грузим
+    }
+
+    // Запрашиваем разрешения после первого рендера
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestAllPermissionsForce();
     });
@@ -31,16 +39,21 @@ class _DashboardHomeState extends State<DashboardHome> {
   }
 
   Future<void> _refresh() async {
-    setState(() {
-      _loadDataFuture = _loadData();
-    });
+    // Принудительно обновляем данные (например, по свайпу вниз)
+    await _loadData();
+    if (mounted) {
+      setState(() {
+        // Перезапускаем FutureBuilder
+        _loadDataFuture = Future.value();
+      });
+    }
   }
 
   /// 🔒 Принудительный запрос всех разрешений
   Future<void> _requestAllPermissionsForce() async {
     bool allGranted = false;
 
-    while (!allGranted) {
+    while (!allGranted && mounted) {
       allGranted = true;
 
       // Проверяем сервис геолокации
@@ -77,11 +90,12 @@ class _DashboardHomeState extends State<DashboardHome> {
     }
   }
 
-  /// Диалог, который не дает пользователю выйти
+  /// Диалог, который не даёт пользователю выйти
   Future<void> _showForcePermissionDialog() async {
+    if (!mounted) return;
     await showDialog(
       context: context,
-      barrierDismissible: false, // нельзя закрыть
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Text('Необходимые разрешения'),
         content: const Text(
@@ -90,7 +104,7 @@ class _DashboardHomeState extends State<DashboardHome> {
           TextButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
-              await openAppSettings(); // пользователь открыл настройки
+              await openAppSettings();
             },
             child: const Text('Открыть настройки'),
           ),
@@ -113,8 +127,7 @@ class _DashboardHomeState extends State<DashboardHome> {
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
-                child: CircularProgressIndicator(color: Colors.green),
-              );
+                  child: CircularProgressIndicator(color: Colors.green));
             } else if (snapshot.hasError) {
               final errorStr = snapshot.error.toString();
               if (errorStr.contains('SocketException') ||
@@ -159,7 +172,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                   children: const [
                     SlotCard(),
                     SizedBox(height: 10),
-                    // ReportCard(),
+                    // ReportCard(), // раскомментируйте, если нужно
                   ],
                 ),
               );
@@ -197,9 +210,10 @@ class NoInternetWidget extends StatelessWidget {
             const Text(
               'Нет подключения к интернету',
               style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87),
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),

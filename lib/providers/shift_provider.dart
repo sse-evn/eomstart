@@ -38,6 +38,8 @@ class ShiftProvider with ChangeNotifier {
 
   // 🔑 НОВЫЙ ФЛАГ: данные уже загружались хотя бы раз
   bool _hasLoadedShifts = false;
+  bool get hasLoadedShifts => _hasLoadedShifts;
+  static const Duration _cacheDuration = Duration(minutes: 5); // например
 
   ShiftProvider({
     required ApiService apiService,
@@ -430,5 +432,38 @@ class ShiftProvider with ChangeNotifier {
   void dispose() {
     _connectivitySubscription?.cancel();
     super.dispose();
+  }
+
+  // Внутри ShiftProvider
+  Map<String, dynamic>? _profile;
+  DateTime? _lastProfileFetchTime;
+  bool _hasLoadedProfile = false;
+
+  Map<String, dynamic>? get profile => _profile;
+  bool get hasLoadedProfile => _hasLoadedProfile;
+
+  Future<Map<String, dynamic>?> loadProfile({bool force = false}) async {
+    if (_token == null) return null;
+
+    // Если не принудительное обновление — используем кэш
+    if (!force &&
+        _lastProfileFetchTime != null &&
+        DateTime.now().difference(_lastProfileFetchTime!) <
+            const Duration(minutes: 10)) {
+      return _profile;
+    }
+
+    try {
+      final profile = await _apiService.getUserProfile(_token!);
+      _profile = profile;
+      _lastProfileFetchTime = DateTime.now();
+      _hasLoadedProfile = true;
+      await _saveToCache();
+      notifyListeners();
+      return profile;
+    } catch (e) {
+      debugPrint('Ошибка загрузки профиля: $e');
+      return null;
+    }
   }
 }

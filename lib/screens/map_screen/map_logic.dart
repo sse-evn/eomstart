@@ -1,4 +1,3 @@
-// lib/screens/map_screen/map_logic.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -11,8 +10,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import '../../utils/map_app_constants.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
+
+import '../../utils/map_app_constants.dart';
 
 class MapLogic {
   final BuildContext context;
@@ -30,13 +31,21 @@ class MapLogic {
   bool isMapLoadedOffline = false;
   bool _disposed = false;
   void Function()? onStateChanged;
+
+  // FMTC tile provider — теперь nullable
+  FMTCTileProvider? tileProvider;
+
+  // Для отслеживания, были ли тайлы предзагружены
+  bool _tilesPrefetched = false;
+
   String? currentUserAvatarUrl;
 
   static const String _MAPS_CACHE_KEY = 'cached_maps_list';
   static const String _MAPS_CACHE_TIMESTAMP_KEY = 'cached_maps_list_timestamp';
   static const Duration _CACHE_TTL = Duration(minutes: 10);
 
-  MapLogic(this.context) {
+  MapLogic(this.context, {String? initialAvatarUrl})
+      : currentUserAvatarUrl = initialAvatarUrl {
     mapController = MapController();
   }
 
@@ -46,11 +55,31 @@ class MapLogic {
     }
   }
 
-  void init() {
+  void init() async {
     if (_disposed) return;
+
+    await _initCaching(); // Теперь дожидаемся завершения
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_disposed) _initMap();
     });
+  }
+
+  Future<void> _initCaching() async {
+    const storeName = 'mapStore';
+    final store = FMTCStore(storeName);
+    if (!(await store.manage.ready)) {
+      await store.manage.create();
+    }
+
+    tileProvider = FMTCTileProvider(
+      stores: const {
+        storeName: BrowseStoreStrategy.readUpdateCreate,
+      },
+      loadingStrategy: BrowseLoadingStrategy.onlineFirst,
+    );
+
+    _notify(); // Важно: уведомить UI, что tileProvider готов
   }
 
   void dispose() {
@@ -63,8 +92,12 @@ class MapLogic {
     try {
       isLoading = true;
       _notify();
+
       await fetchCurrentLocation();
-      await _loadUserProfile();
+      if (currentLocation != null && await isOnline()) {
+        // await _prefetchTilesIfNeeded();
+      }
+
       await _loadAvailableMaps();
       await _loadAndParseGeoJson();
     } catch (e) {
@@ -76,6 +109,27 @@ class MapLogic {
       }
     }
   }
+
+  // Future<void> _prefetchTilesIfNeeded() async {
+  //   if (_tilesPrefetched || tileProvider == null || currentLocation == null) {
+  //     return;
+  //   }
+
+  //   try {
+  //     debugPrint('🔄 Предзагрузка тайлов для офлайн-режима...');
+  //     await tileProvider!.prefetch(
+  //       center: currentLocation!,
+  //       minZoom: 14,
+  //       maxZoom: 17,
+  //       radius: 25,
+  //     );
+  //     _tilesPrefetched = true;
+  //     debugPrint('✅ Тайлы успешно закэшированы');
+  //   } catch (e) {
+  //     debugPrint('⚠️ Не удалось предзагрузить тайлы: $e');
+  //     // Не показываем ошибку пользователю — это фоновая операция
+  //   }
+  // }
 
   Future<void> fetchCurrentLocation() async {
     if (_disposed) return;
@@ -98,7 +152,7 @@ class MapLogic {
 
       Position position = await Geolocator.getCurrentPosition();
       currentLocation = LatLng(position.latitude, position.longitude);
-      mapController.move(currentLocation!, mapController.camera.zoom);
+      mapController.move(currentLocation!, 16.0); // Установите разумный zoom
     } catch (e) {
       _showErrorSnackBar('Ошибка получения местоположения: $e');
     }
@@ -136,18 +190,18 @@ class MapLogic {
           _applyFirstMapIfNoneSelected();
           await storage.write(key: _MAPS_CACHE_KEY, value: response.body);
           await storage.write(
-              key: _MAPS_CACHE_TIMESTAMP_KEY, value: now.toString());
+            key: _MAPS_CACHE_TIMESTAMP_KEY,
+            value: now.toString(),
+          );
           _notify();
           return;
         }
       }
 
-      // Если сервер недоступен — попытка использовать старый кеш
       if (cachedJson != null) {
         availableMaps = jsonDecode(cachedJson) as List;
         _applyFirstMapIfNoneSelected();
         _notify();
-        return;
       }
     } catch (e) {
       if (cachedJson != null) {
@@ -202,7 +256,6 @@ class MapLogic {
   }
 
   Future<String> _loadGeoJsonFromServer(int mapId) async {
-    // Попытка загрузить из локального кеша
     final localFile = await _getLocalMapFile(mapId);
     if (await localFile.exists()) {
       final content = await localFile.readAsString();
@@ -213,7 +266,6 @@ class MapLogic {
       }
     }
 
-    // Загрузка с сервера
     final token = await storage.read(key: 'jwt_token');
     if (token == null) throw Exception('Нет токена');
 
@@ -334,9 +386,10 @@ class MapLogic {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Настройки слоев',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Настройки слоев',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 20),
                   _buildSwitchTile(
                     title: 'Запретные зоны',
@@ -419,28 +472,17 @@ class MapLogic {
   }
 
   Future<bool> isOffline() async {
+    return !(await isOnline());
+  }
+
+  Future<bool> isOnline() async {
     try {
       final result = await Connectivity().checkConnectivity();
-      return result == ConnectivityResult.none;
+      return result != ConnectivityResult.none;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 
-  Future<void> _loadUserProfile() async {
-    if (_disposed) return;
-    try {
-      final token = await storage.read(key: 'jwt_token');
-      if (token == null) return;
-
-      final response = await _authenticatedGet(AppConfig.profileUrl, token);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        currentUserAvatarUrl = data['avatarUrl'] as String?;
-        _notify();
-      }
-    } catch (e) {
-      debugPrint('Ошибка загрузки профиля: $e');
-    }
-  }
+  bool get isMapReady => tileProvider != null && currentLocation != null;
 }

@@ -1,5 +1,3 @@
-// lib/screens/admin/shifts_list/shift_history_screen.dart
-
 import 'dart:async' show Timer;
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -41,17 +39,12 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
     try {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) throw Exception('Токен не найден');
-
       final url =
           Uri.parse('${AppConfig.AppConfig.apiBaseUrl}/admin/ended-shifts');
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
+      final response = await http.get(url, headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      });
       if (response.statusCode == 200) {
         final dynamic jsonResponse =
             jsonDecode(utf8.decode(response.bodyBytes));
@@ -81,8 +74,7 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
       }
     }
     return Map.fromEntries(
-      grouped.entries.toList()..sort((a, b) => b.key.compareTo(a.key)),
-    );
+        grouped.entries.toList()..sort((a, b) => b.key.compareTo(a.key)));
   }
 
   String _formatDate(String isoDate) {
@@ -92,7 +84,6 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
       final today = DateTime(now.year, now.month, now.day);
       final yesterday = DateTime(now.year, now.month, now.day - 1);
       final shiftDate = DateTime(date.year, date.month, date.day);
-
       if (shiftDate.isAtSameMomentAs(today)) return 'Сегодня';
       if (shiftDate.isAtSameMomentAs(yesterday)) return 'Вчера';
       return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
@@ -110,7 +101,7 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
-    return '$hours ч ${minutes} мин';
+    return '$hours ч $minutes мин';
   }
 
   double _calculatePayment(ActiveShift shift) {
@@ -119,11 +110,16 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
     return hours * GoogleSheetsConfig.hourlyRate;
   }
 
+  String extractTimeFromUtcPlus5(String isoString) {
+    if (isoString.isEmpty) return '';
+    final dt = DateTime.parse(isoString);
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
   Widget _buildShiftCard(ActiveShift shift) {
     final duration = _calculateDuration(shift);
     final payment = _calculatePayment(shift);
-    
-    return Card(   
+    return Card(
       color: Theme.of(context).colorScheme.secondary,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       elevation: 3,
@@ -133,8 +129,7 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ShiftDetailsScreen(shift: shift),
-            ),
+                builder: (context) => ShiftDetailsScreen(shift: shift)),
           );
         },
         child: Padding(
@@ -142,7 +137,6 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Фото
               CircleAvatar(
                 radius: 32,
                 backgroundColor: Colors.grey[300],
@@ -155,8 +149,6 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
                     : null,
               ),
               const SizedBox(width: 16),
-
-              // Информация
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,17 +156,12 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
                     Text(
                       shift.username,
                       style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                          fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '${shift.position} • ${shift.zone}',
-                      style: TextStyle(
-                        color: Colors.grey[700],
-                        fontSize: 14,
-                      ),
+                      style: TextStyle(color: Colors.grey[700], fontSize: 14),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -184,7 +171,7 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            '${extractTimeFromIsoString(shift.startTimeString)} – ${extractTimeFromIsoString(shift.endTimeString)}',
+                            '${extractTimeFromUtcPlus5(shift.startTimeString!)} – ${extractTimeFromUtcPlus5(shift.endTimeString!)}',
                             style: const TextStyle(fontSize: 14),
                           ),
                         ),
@@ -195,27 +182,22 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
                       children: [
                         const Icon(Icons.timer, size: 16, color: Colors.blue),
                         const SizedBox(width: 4),
-                        Text(
-                          _formatDuration(duration),
-                          style: const TextStyle(fontSize: 14),
-                        ),
+                        Text(_formatDuration(duration),
+                            style: const TextStyle(fontSize: 14)),
                       ],
                     ),
                   ],
                 ),
               ),
-
-              // Оплата
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
                     '${payment.toStringAsFixed(0)} ${GoogleSheetsConfig.currency}',
                     style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.green,
-                    ),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.green),
                   ),
                   const SizedBox(height: 8),
                   const Icon(Icons.chevron_right, color: Colors.grey),
@@ -228,19 +210,13 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
     );
   }
 
-  // ✅ Экспорт в Google Sheets
   Future<void> _exportToGoogleSheets(List<ActiveShift> shifts) async {
     if (shifts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нет данных для выгрузки')),
-      );
+          const SnackBar(content: Text('Нет данных для выгрузки')));
       return;
     }
-
-    setState(() {
-      _isExporting = true;
-    });
-
+    setState(() => _isExporting = true);
     try {
       final List<List<String>> data = [
         [
@@ -253,79 +229,53 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
           'Оплата (₸)'
         ]
       ];
-
       for (final shift in shifts) {
         final duration = _calculateDuration(shift);
         final hours =
             duration.inHours + duration.inMinutes.remainder(60) / 60.0;
         final payment =
             (hours * GoogleSheetsConfig.hourlyRate).toStringAsFixed(0);
-
         data.add([
           shift.username,
           shift.position,
           shift.zone,
-          '${_formatDate(shift.startTimeString!)} ${extractTimeFromIsoString(shift.startTimeString)}',
-          extractTimeFromIsoString(shift.endTimeString),
+          '${_formatDate(shift.startTimeString!)} ${extractTimeFromUtcPlus5(shift.startTimeString!)}',
+          extractTimeFromUtcPlus5(shift.endTimeString!),
           _formatDuration(duration),
           payment,
         ]);
       }
-
       final response = await http.post(
         Uri.parse(GoogleSheetsConfig.googleSheetUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'data': data}),
       );
-
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Данные отправлены в Google Таблицу!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('✅ Данные отправлены в Google Таблицу!'),
+          backgroundColor: Colors.green,
+        ));
       } else {
         throw Exception('Ошибка: ${response.body}');
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Ошибка: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+          SnackBar(content: Text('❌ Ошибка: $e'), backgroundColor: Colors.red));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isExporting = false;
-        });
-      }
+      if (mounted) setState(() => _isExporting = false);
     }
   }
 
-  // ✅ Автоматическая выгрузка в 00:30
   void _setupAutoExport() {
     final now = DateTime.now();
-    var nextRun = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      GoogleSheetsConfig.autoExportHour,
-      GoogleSheetsConfig.autoExportMinute,
-    );
-
-    if (now.isAfter(nextRun)) {
-      nextRun = nextRun.add(const Duration(days: 1));
-    }
-
+    var nextRun = DateTime(now.year, now.month, now.day,
+        GoogleSheetsConfig.autoExportHour, GoogleSheetsConfig.autoExportMinute);
+    if (now.isAfter(nextRun)) nextRun = nextRun.add(const Duration(days: 1));
     final delay = nextRun.difference(now);
     _autoExportTimer = Timer(delay, () async {
       final shifts = await _shiftsFuture;
-      if (shifts.isNotEmpty) {
-        await _exportToGoogleSheets(shifts);
-      }
-      _setupAutoExport(); // Перезапуск на завтра
+      if (shifts.isNotEmpty) await _exportToGoogleSheets(shifts);
+      _setupAutoExport();
     });
   }
 
@@ -343,14 +293,10 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
             } else if (snapshot.hasError) {
               return Center(child: Text('Ошибка: ${snapshot.error}'));
             }
-
             final shifts = snapshot.data ?? [];
-            if (shifts.isEmpty) {
+            if (shifts.isEmpty)
               return const Center(child: Text('Нет завершённых смен'));
-            }
-
             final grouped = _groupShiftsByDate(shifts);
-
             return ListView(
               children: [
                 for (final entry in grouped.entries)
@@ -362,16 +308,14 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
                         padding: const EdgeInsets.symmetric(
                             vertical: 8, horizontal: 12),
                         decoration: BoxDecoration(
-                          color: Colors.green[700],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                            color: Colors.green[700],
+                            borderRadius: BorderRadius.circular(12)),
                         child: Text(
                           _formatDate(entry.key),
                           style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Colors.white,
-                          ),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.white),
                         ),
                       ),
                       ...entry.value.map(_buildShiftCard),
