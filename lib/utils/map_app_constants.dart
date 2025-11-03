@@ -14,7 +14,7 @@ class AppConstants {
 
   static const String userAgentPackageName = 'kz.evn';
 
-  static const double minZoom = 14.0;
+  static const double minZoom = 12.0;
   static const double maxZoom = 25.0;
   static const double zoneLabelZoomThreshold = 14.0;
 }

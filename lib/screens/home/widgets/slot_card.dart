@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
 import '../../../../providers/shift_provider.dart';
 import 'slot_setup_modal.dart';
-import '../../../../utils/time_utils.dart';
 import '../../../config/app_config.dart';
 
 class SlotCard extends StatelessWidget {
@@ -14,7 +13,6 @@ class SlotCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ShiftProvider>(
       builder: (context, provider, child) {
-        // Если данные ещё не загружались — показываем лоадер
         if (!provider.hasLoadedShifts) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -62,10 +60,20 @@ class SlotCard extends StatelessWidget {
     );
   }
 
+  String _formatLocalTime(String isoString) {
+    try {
+      final utcTime = DateTime.parse(isoString);
+      final localTime = utcTime.toLocal();
+      return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return '--:--';
+    }
+  }
+
   Widget _buildActiveShiftUI(
       ActiveShift activeShift, ThemeData theme, bool isDarkMode) {
     final String serverTime = activeShift.startTimeString != null
-        ? extractTimeFromIsoString(activeShift.startTimeString!)
+        ? _formatLocalTime(activeShift.startTimeString!)
         : '--:--';
 
     final String slotTime = activeShift.slotTimeRange.isNotEmpty
@@ -79,8 +87,7 @@ class SlotCard extends StatelessWidget {
       );
     }
 
-    final startTime = DateTime.parse(activeShift.startTimeString!);
-    final duration = DateTime.now().difference(startTime);
+    final duration = Duration(seconds: activeShift.currentDurationSeconds ?? 0);
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final durationStr = '${hours}ч ${minutes}м';
@@ -296,7 +303,6 @@ class SlotCard extends StatelessWidget {
       );
 
       if (result == true) {
-        // После успешного старта смены — обновляем данные
         await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
       }
     } catch (e) {

@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:micro_mobility_app/config/app_config.dart';
 import 'package:micro_mobility_app/providers/shift_provider.dart';
+import 'package:micro_mobility_app/services/api_service.dart'; // ← Убедитесь, что путь правильный
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() =>
-      _SplashScreenState(); // ← ИСПРАВЛЕНО: SplashScreen, не SplashScreenState
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
@@ -38,33 +37,43 @@ class _SplashScreenState extends State<SplashScreen> {
         (result) => result != ConnectivityResult.none,
       );
 
+      final shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
+      final apiService = ApiService(); // Временный экземпляр
+
       if (hasInternet) {
-        debugPrint('Access token found. Validating online...');
-        final response = await http.get(
-          Uri.parse(AppConfig.profileUrl),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
+        debugPrint(
+            'Access token found. Validating online with refresh support...');
+        try {
+          final profile = await apiService.getUserProfile(token);
+          final username = profile['username'] as String?;
+          if (username != null) {
+            shiftProvider.setCurrentUsername(
+                username); // ← Должен быть реализован в ShiftProvider
+            debugPrint('Online profile validated. Navigating to dashboard.');
+            if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
+            return;
+          }
+        } catch (e) {
+          debugPrint('Profile validation failed (even after refresh): $e');
+          // Продолжаем с offline-проверкой
+        }
       }
 
-      // Offline fallback
-      debugPrint('No internet or profile check failed. Trying cache...');
-      final shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
-
-      await shiftProvider
-          .loadShifts(); // ← безопасно: не делает запрос без интернета
+      // Offline fallback: попробуем загрузить смены из кэша
+      debugPrint('Trying offline cache...');
+      await shiftProvider.loadShifts();
 
       if (shiftProvider.currentUsername != null) {
-        debugPrint('Cache hit. Navigating to dashboard offline.');
+        debugPrint('Offline cache valid. Navigating to dashboard.');
         if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
         return;
       }
 
+      // Если ни онлайн, ни оффлайн — логин
+      debugPrint('No valid session found. Redirecting to login.');
       if (mounted) Navigator.pushReplacementNamed(context, '/login');
     } catch (e) {
-      debugPrint('Error in splash screen: $e');
+      debugPrint('Critical error in splash screen: $e');
       if (mounted) Navigator.pushReplacementNamed(context, '/login');
     }
   }
@@ -73,7 +82,7 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.green[700],
-      body: const Center(
+      body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

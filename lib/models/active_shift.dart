@@ -1,11 +1,6 @@
-// lib/models/active_shift.dart
-import 'package:flutter/material.dart' show debugPrint;
-// import 'dart:convert';
-
 class ActiveShift {
   final int id;
   final int userId;
-
   final String username;
   final String slotTimeRange;
   final String position;
@@ -16,6 +11,7 @@ class ActiveShift {
   final String selfie;
   final String? endTimeString;
   final DateTime? endTime;
+  final int? currentDurationSeconds;
 
   ActiveShift({
     required this.id,
@@ -30,19 +26,16 @@ class ActiveShift {
     required this.selfie,
     this.endTimeString,
     this.endTime,
+    this.currentDurationSeconds,
   });
 
-  /// Создаёт [ActiveShift] из JSON
   factory ActiveShift.fromJson(Map<String, dynamic> json) {
-    // Парсинг startTime
     final startTimeStr = _extractString(json, 'start_time');
     final parsedStartTime = _parseDateTime(startTimeStr);
 
-    // Парсинг endTime
     final endTimeStr = _extractString(json, 'end_time');
     final parsedEndTime = _parseDateTime(endTimeStr);
 
-    // Парсинг ID
     final id = _parseInt(json['id'], 'id');
     final userId = _parseInt(json['user_id'], 'user_id');
 
@@ -59,10 +52,12 @@ class ActiveShift {
       isActive: _parseBool(json['is_active']),
       endTimeString: endTimeStr,
       endTime: parsedEndTime,
+      currentDurationSeconds: json  ['current_duration_seconds'] is int
+          ? json['current_duration_seconds'] as int
+          : null,
     );
   }
 
-  /// Экспортирует объект в JSON
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -80,7 +75,7 @@ class ActiveShift {
 
   @override
   String toString() {
-    return 'ActiveShift(id: $id, userId: $userId, username: $username, slotTimeRange: $slotTimeRange, position: $position, zone: $zone, startTime: $startTime, endTime: $endTime, isActive: $isActive)';
+    return 'ActiveShift(id: $id, userId: $userId, username: $username, slotTimeRange: $slotTimeRange, position: $position, zone: $zone, startTime: $startTime, endTime: $endTime, isActive: $isActive, currentDurationSeconds: $currentDurationSeconds)';
   }
 
   @override
@@ -98,7 +93,8 @@ class ActiveShift {
         endTimeString == other.endTimeString &&
         endTime == other.endTime &&
         isActive == other.isActive &&
-        selfie == other.selfie;
+        selfie == other.selfie &&
+        currentDurationSeconds == other.currentDurationSeconds;
   }
 
   @override
@@ -116,30 +112,26 @@ class ActiveShift {
       endTime,
       isActive,
       selfie,
+      currentDurationSeconds,
     );
   }
 
-
-  /// Извлекает строку из JSON, обрабатывает int/bool как строку
   static String? _extractString(Map<String, dynamic> json, String key) {
     final value = json[key];
     if (value == null) return null;
     return value.toString();
   }
 
-  /// Парсит int, безопасно обрабатывает String
   static int _parseInt(dynamic value, String field) {
     if (value == null) return 0;
     if (value is int) return value;
     if (value is String) {
       final parsed = int.tryParse(value);
       if (parsed != null) return parsed;
-      debugPrint('❌ ActiveShift: Не удалось распарсить $field: $value');
     }
     return 0;
   }
 
-  /// Парсит bool (true/false, "true"/"false", 1/0)
   static bool _parseBool(dynamic value) {
     if (value == null) return false;
     if (value is bool) return value;
@@ -153,13 +145,11 @@ class ActiveShift {
     return false;
   }
 
-  /// Парсит DateTime, логирует ошибки
   static DateTime? _parseDateTime(String? value) {
     if (value == null || value.isEmpty) return null;
     try {
       return DateTime.parse(value);
     } catch (e) {
-      debugPrint('❌ ActiveShift: Ошибка парсинга времени: $value → $e');
       return null;
     }
   }

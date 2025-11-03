@@ -5,7 +5,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/config/app_config.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
 import 'package:micro_mobility_app/screens/admin/shifts_list/shift_details_screen.dart';
-import 'package:micro_mobility_app/utils/time_utils.dart';
 
 class ShiftMonitoringScreen extends StatefulWidget {
   const ShiftMonitoringScreen({super.key});
@@ -25,40 +24,29 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
   }
 
   Future<List<ActiveShift>> _fetchActiveShifts() async {
-    try {
-      final token = await _storage.read(key: 'jwt_token');
-      if (token == null) throw Exception('Токен не найден');
+    final token = await _storage.read(key: 'jwt_token');
+    if (token == null) throw Exception('Токен не найден');
 
-      final url = Uri.parse('${AppConfig.apiBaseUrl}/admin/active-shifts');
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
+    final url = Uri.parse('${AppConfig.apiBaseUrl}/admin/active-shifts');
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
 
-      if (response.statusCode == 200) {
-        final dynamic jsonResponse =
-            jsonDecode(utf8.decode(response.bodyBytes));
-        final List<dynamic> jsonList = jsonResponse is List ? jsonResponse : [];
-        final List<ActiveShift> shifts =
-            jsonList.map((json) => ActiveShift.fromJson(json)).toList();
-        return shifts;
-      } else {
-        String errorMessage = 'Ошибка загрузки';
-        try {
-          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
-          errorMessage = errorBody['error'] ?? errorMessage;
-        } catch (e) {}
-        throw Exception('$errorMessage: ${response.statusCode}');
-      }
-    } catch (e) {
-      if (e is http.ClientException ||
-          e.toString().contains('SocketException')) {
-        throw Exception('Нет соединения с интернетом');
-      }
-      rethrow;
+    if (response.statusCode == 200) {
+      final dynamic jsonResponse = jsonDecode(utf8.decode(response.bodyBytes));
+      final List<dynamic> jsonList = jsonResponse is List ? jsonResponse : [];
+      return jsonList.map((json) => ActiveShift.fromJson(json)).toList();
+    } else {
+      String errorMessage = 'Ошибка загрузки';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error'] ?? errorMessage;
+      } catch (e) {}
+      throw Exception('$errorMessage: ${response.statusCode}');
     }
   }
 
@@ -73,7 +61,10 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
     for (final shift in shifts) {
       if (shift.startTimeString != null && shift.startTimeString!.isNotEmpty) {
         try {
-          final dateKey = shift.startTimeString!.split('T').first;
+          final utcTime = DateTime.parse(shift.startTimeString!);
+          final localDate = utcTime.toLocal();
+          final dateKey =
+              '${localDate.year}-${localDate.month.toString().padLeft(2, '0')}-${localDate.day.toString().padLeft(2, '0')}';
           grouped.putIfAbsent(dateKey, () => []);
           grouped[dateKey]!.add(shift);
         } catch (e) {}
@@ -87,24 +78,26 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
     return sortedMap;
   }
 
-  String _formatDate(String isoDate) {
+  String _formatDate(String dateKey) {
     try {
-      final date = DateTime.parse(isoDate);
+      final parts = dateKey.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final day = int.parse(parts[2]);
+      final shiftDate = DateTime(year, month, day);
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final yesterday = DateTime(now.year, now.month, now.day - 1);
-      final shiftDate = DateTime(date.year, date.month, date.day);
-
       if (shiftDate.isAtSameMomentAs(today)) return 'Сегодня';
       if (shiftDate.isAtSameMomentAs(yesterday)) return 'Вчера';
-      return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+      return '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.${year}';
     } catch (e) {
-      return isoDate;
+      return dateKey;
     }
   }
 
-  String _getShiftType(DateTime startTime) {
-    final timeInMinutes = startTime.hour * 60 + startTime.minute;
+  String _getShiftType(DateTime localStartTime) {
+    final timeInMinutes = localStartTime.hour * 60 + localStartTime.minute;
     if (timeInMinutes >= 420 && timeInMinutes < 900) return 'morning';
     if (timeInMinutes >= 900 && timeInMinutes < 1380) return 'evening';
     return 'other';
@@ -117,8 +110,10 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
     final other = <ActiveShift>[];
 
     for (final shift in shifts) {
-      if (shift.startTime != null) {
-        final type = _getShiftType(shift.startTime!);
+      if (shift.startTimeString != null) {
+        final utcTime = DateTime.parse(shift.startTimeString!);
+        final localTime = utcTime.toLocal();
+        final type = _getShiftType(localTime);
         switch (type) {
           case 'morning':
             morning.add(shift);
@@ -261,8 +256,17 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
     return widgets;
   }
 
+  String _formatLocalTime(String isoString) {
+    try {
+      final utcTime = DateTime.parse(isoString);
+      final localTime = utcTime.toLocal();
+      return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return '--:--';
+    }
+  }
+
   Widget _buildShiftCard(ActiveShift shift) {
-    // ✅ Уникальный URL для обхода кэширования
     final photoUrl =
         '${AppConfig.mediaBaseUrl}${shift.selfie.trim()}?t=${DateTime.now().millisecondsSinceEpoch}';
 
@@ -285,14 +289,6 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.secondary,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Theme.of(context).colorScheme.secondary,
-                spreadRadius: 1,
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              )
-            ]
           ),
           child: Row(
             children: [
@@ -325,10 +321,9 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
                         style: const TextStyle(fontSize: 13)),
                     Text('Зона: ${shift.zone}',
                         style: const TextStyle(fontSize: 13)),
-                    if (shift.startTimeString != null &&
-                        shift.startTimeString!.isNotEmpty)
+                    if (shift.startTimeString != null)
                       Text(
-                        'Начало: ${extractTimeFromIsoString(shift.startTimeString!)}',
+                        'Начало: ${_formatLocalTime(shift.startTimeString!)}',
                         style:
                             const TextStyle(fontSize: 13, color: Colors.grey),
                       ),

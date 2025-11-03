@@ -1,4 +1,3 @@
-// lib/providers/shift_provider.dart
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
@@ -9,7 +8,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:jwt_decode/jwt_decode.dart';
-import 'package:timezone/timezone.dart' as tz;
 import 'package:micro_mobility_app/models/active_shift.dart' as model;
 import '../models/shift_data.dart';
 import '../services/api_service.dart';
@@ -22,7 +20,7 @@ class ShiftProvider with ChangeNotifier {
   String? _token;
   model.ActiveShift? _activeShift;
   List<ShiftData> _shiftHistory = [];
-  DateTime _selectedDate = _toAlmatyTime(DateTime.now());
+  DateTime _selectedDate = DateTime.now().toLocal(); // ← Локальное время
   bool _isEndingSlot = false;
   bool _isStartingSlot = false;
   Map<String, dynamic>? _botStatsData;
@@ -35,11 +33,11 @@ class ShiftProvider with ChangeNotifier {
   static const String _lastCacheTimeKey = 'shifts_cache_time';
   bool _isLoadingActiveShift = false;
   DateTime? _lastActiveShiftFetchTime;
-
-  // 🔑 НОВЫЙ ФЛАГ: данные уже загружались хотя бы раз
   bool _hasLoadedShifts = false;
-  bool get hasLoadedShifts => _hasLoadedShifts;
-  static const Duration _cacheDuration = Duration(minutes: 5); // например
+  static const Duration _cacheDuration = Duration(minutes: 5);
+  Map<String, dynamic>? _profile;
+  DateTime? _lastProfileFetchTime;
+  bool _hasLoadedProfile = false;
 
   ShiftProvider({
     required ApiService apiService,
@@ -52,17 +50,6 @@ class ShiftProvider with ChangeNotifier {
     _token = initialToken;
     _initializeShiftProvider();
     _setupConnectivityListener();
-  }
-
-  static DateTime _toAlmatyTime(DateTime dateTime) {
-    final almatyLocation = tz.getLocation('Asia/Almaty');
-    final tzDateTime = tz.TZDateTime.from(dateTime, almatyLocation);
-    return tzDateTime.toLocal();
-  }
-
-  static DateTime _nowInAlmaty() {
-    final almatyLocation = tz.getLocation('Asia/Almaty');
-    return tz.TZDateTime.now(almatyLocation).toLocal();
   }
 
   bool _isTokenValid(String token) {
@@ -85,7 +72,6 @@ class ShiftProvider with ChangeNotifier {
         final bool isCurrentlyOnline = result != ConnectivityResult.none;
 
         if (isCurrentlyOnline && !_isOnline) {
-          // 🔥 ИЗМЕНЕНО: не перезагружаем автоматически, если уже загружали
           if (!_hasLoadedShifts && _token != null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               loadShifts();
@@ -153,10 +139,13 @@ class ShiftProvider with ChangeNotifier {
   Map<String, dynamic>? get botStatsData => _botStatsData;
   bool get isLoadingBotStats => _isLoadingBotStats;
   String? get currentUsername => _currentUsername;
+  bool get hasLoadedShifts => _hasLoadedShifts;
+  bool get hasLoadedProfile => _hasLoadedProfile;
+  Map<String, dynamic>? get profile => _profile;
 
   String get formattedWorkTime {
     if (_activeShift?.startTime == null) return '0ч 0мин 0с';
-    final now = _nowInAlmaty();
+    final now = DateTime.now().toLocal(); // ← Локальное время
     final duration = now.difference(_activeShift!.startTime!);
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
@@ -248,10 +237,7 @@ class ShiftProvider with ChangeNotifier {
     throw Exception('API call failed after $maxRetries retries');
   }
 
-  // 🔥 ОСНОВНОЙ МЕТОД: loadShifts
   Future<void> loadShifts() async {
-    // Устанавливаем флаг, что загрузка началась
-    // (даже если будет ошибка — считаем, что "пытались")
     final isFirstLoad = !_hasLoadedShifts;
     _hasLoadedShifts = true;
 
@@ -287,11 +273,9 @@ class ShiftProvider with ChangeNotifier {
       });
     } catch (e) {
       debugPrint('ShiftProvider.loadShifts error: $e');
-      // Если первая загрузка и нет интернета — грузим из кэша
       if (isFirstLoad && !_isOnline) {
         await loadFromCache();
       } else {
-        // Иначе — сбрасываем данные (ошибка сети/сервера)
         _shiftHistory = [];
         _activeShift = null;
         _currentUsername = null;
@@ -303,7 +287,8 @@ class ShiftProvider with ChangeNotifier {
   }
 
   void selectDate(DateTime date) {
-    _selectedDate = _toAlmatyTime(DateTime(date.year, date.month, date.day));
+    _selectedDate =
+        DateTime(date.year, date.month, date.day).toLocal(); // ← Локальная дата
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
     });
@@ -330,7 +315,7 @@ class ShiftProvider with ChangeNotifier {
             selfieImage: imageFile,
           ));
       debugPrint('✅ Смена начата');
-      await loadShifts(); // Здесь уместно — действие пользователя
+      await loadShifts();
     } catch (e) {
       debugPrint('❌ Ошибка старта смены: $e');
       rethrow;
@@ -354,7 +339,7 @@ class ShiftProvider with ChangeNotifier {
       _lastActiveShiftFetchTime = null;
       _activeShift = null;
       _currentUsername = null;
-      await loadShifts(); // Уместно — действие пользователя
+      await loadShifts();
     } catch (e) {
       debugPrint('❌ Ошибка завершения смены: $e');
       await loadShifts();
@@ -420,7 +405,7 @@ class ShiftProvider with ChangeNotifier {
     _activeShift = null;
     _currentUsername = null;
     _botStatsData = null;
-    _hasLoadedShifts = false; // Сбрасываем при выходе
+    _hasLoadedShifts = false;
     await _storage.delete(key: 'jwt_token');
     await _prefs.remove(_shiftsCacheKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -434,18 +419,9 @@ class ShiftProvider with ChangeNotifier {
     super.dispose();
   }
 
-  // Внутри ShiftProvider
-  Map<String, dynamic>? _profile;
-  DateTime? _lastProfileFetchTime;
-  bool _hasLoadedProfile = false;
-
-  Map<String, dynamic>? get profile => _profile;
-  bool get hasLoadedProfile => _hasLoadedProfile;
-
   Future<Map<String, dynamic>?> loadProfile({bool force = false}) async {
     if (_token == null) return null;
 
-    // Если не принудительное обновление — используем кэш
     if (!force &&
         _lastProfileFetchTime != null &&
         DateTime.now().difference(_lastProfileFetchTime!) <
@@ -464,6 +440,14 @@ class ShiftProvider with ChangeNotifier {
     } catch (e) {
       debugPrint('Ошибка загрузки профиля: $e');
       return null;
+    }
+  }
+
+  void setCurrentUsername(String? username) {
+    if (_currentUsername != username) {
+      _currentUsername = username;
+      _saveToCache();
+      notifyListeners();
     }
   }
 }

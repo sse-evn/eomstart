@@ -23,8 +23,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
 
   List<Map<String, dynamic>> _availableScouts = [];
   Set<String> _busyShifts = {};
-  List<Map<String, dynamic>> _previewResult =
-      []; // {date, morning: [id], evening: [id]}
+  List<Map<String, dynamic>> _previewResult = [];
 
   bool _isLoading = false;
   bool _isCalculating = false;
@@ -53,9 +52,8 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
           .where((u) => u is Map && u['role'] == 'scout')
           .map((u) => {
                 'id': u['id'] as int,
-                'name': (u['first_name'] as String?) ??
-                    (u['username'] as String?) ??
-                    'Без имени',
+                'first_name': u['first_name'] as String?,
+                'username': u['username'] as String?,
               })
           .toList();
 
@@ -123,21 +121,17 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
     _loadScoutsAndBusyShifts();
   }
 
-  // Симуляция назначения (без записи в БД)
   List<int> _simulateAssignment(List<int> scoutIds, int needed, DateTime date,
       String shiftType, Set<String> currentBusy) {
     final dateStr =
         '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     final candidates = <int>[];
-
     for (int id in scoutIds) {
       final key = '$id-$dateStr-$shiftType';
       if (!currentBusy.contains(key)) {
         candidates.add(id);
       }
     }
-
-    // Просто берём первых N (можно улучшить балансировкой)
     return candidates.take(needed).toList();
   }
 
@@ -166,13 +160,10 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
           scoutIds, _morningCount, date, 'morning', workingBusy);
       final evening = _simulateAssignment(
           scoutIds, _eveningCount, date, 'evening', workingBusy);
-
-      // Обновляем workingBusy для следующих дней (в рамках превью)
       final dateStr =
           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
       for (var id in morning) workingBusy.add('$id-$dateStr-morning');
       for (var id in evening) workingBusy.add('$id-$dateStr-evening');
-
       result.add({
         'date': date,
         'morning': morning,
@@ -188,53 +179,51 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
     }
   }
 
-  String _getNameById(int id) {
+  String _getTelegramHandle(int id) {
     for (final scout in _availableScouts) {
       if (scout['id'] == id) {
-        return scout['name'] as String;
+        final username = scout['username'] as String?;
+        if (username != null && username.isNotEmpty) {
+          return '@$username';
+        }
+        return 'user$id';
       }
     }
-    return '???';
+    return 'user$id';
   }
 
-  // Форматирование расписания в текст для Telegram
   String _formatScheduleForTelegram() {
     if (_previewResult.isEmpty) return 'Нет данных для экспорта.';
-
     final buffer = StringBuffer();
-    buffer.writeln('📅 *Расписание смен*');
-    buffer.writeln(
-        'От: ${_startDate.day}.${_startDate.month}.${_startDate.year}');
-    buffer.writeln(_isWeekly ? 'Период: 7 дней' : 'Период: 1 день');
-    buffer.writeln('=' * 30);
+    final date = _startDate;
+    buffer.writeln('📅 Расписание на ${date.day}.${date.month}.${date.year}г:');
     buffer.writeln();
-
     for (final day in _previewResult) {
-      final date = day['date'] as DateTime;
       final morning = List<int>.from(day['morning']);
       final evening = List<int>.from(day['evening']);
-
-      final dayName =
-          ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][date.weekday - 1];
-      buffer.writeln('*${date.day}.${date.month} ($dayName)*');
-
       if (morning.isNotEmpty) {
-        final names = morning.map((id) => _getNameById(id)).join(', ');
-        buffer.writeln('🕗 Утро: $names');
-      } else {
-        buffer.writeln('🕗 Утро: —');
+        buffer.writeln('    07:00-15:00');
+        for (int i = 0; i < morning.length; i++) {
+          buffer.writeln(
+              '${i + 1}. ${_getTelegramHandle(morning[i])} - ${morning[i]}');
+        }
+        buffer.writeln();
       }
-
       if (evening.isNotEmpty) {
-        final names = evening.map((id) => _getNameById(id)).join(', ');
-        buffer.writeln('🕖 Вечер: $names');
-      } else {
-        buffer.writeln('🕖 Вечер: —');
+        buffer.writeln('    15:00-23:00');
+        for (int i = 0; i < evening.length; i++) {
+          buffer.writeln(
+              '${i + 1}. ${_getTelegramHandle(evening[i])} - ${evening[i]}');
+        }
+        buffer.writeln();
       }
-
-      buffer.writeln();
     }
-
+    final totalMorning = _previewResult.fold(
+        0, (sum, day) => sum + (day['morning'] as List).length);
+    final totalEvening = _previewResult.fold(
+        0, (sum, day) => sum + (day['evening'] as List).length);
+    buffer.writeln(
+        '7-15: $totalMorning | 15-23: $totalEvening | Всего: ${totalMorning + totalEvening}');
     return buffer.toString();
   }
 
@@ -249,9 +238,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
 
   Future<void> _sendToTelegram() async {
     final text = Uri.encodeComponent(_formatScheduleForTelegram());
-    // Замени на username твоего бота или канала, или просто открой чат с ботом
     final uri = Uri.parse('https://t.me/share/url?url=&text=$text');
-
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
@@ -272,17 +259,12 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // const Text('Генератор смен',
-              //     style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              // const SizedBox(height: 20),
-
               _buildToggleRow('День/Неделя', _isWeekly, _toggleWeekly),
               _buildDateRow(),
               _buildShiftInput(
                   'Утро (07:00–15:00)', _morningCount, _updateMorningCount),
               _buildShiftInput(
                   'Вечер (15:00–23:00)', _eveningCount, _updateEveningCount),
-
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -299,10 +281,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
                   label: const Text('Рассчитать расписание'),
                 ),
               ),
-
               const SizedBox(height: 24),
-
-// Результат
               if (_previewResult.isNotEmpty) ...[
                 const Text('Расписание',
                     style:
@@ -312,11 +291,10 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
                   final date = day['date'] as DateTime;
                   final morning = List<int>.from(day['morning']);
                   final evening = List<int>.from(day['evening']);
-
-                  // Получаем имена
-                  final morningNames = morning.map(_getNameById).join(', ');
-                  final eveningNames = evening.map(_getNameById).join(', ');
-
+                  final morningNames =
+                      morning.map((id) => _getTelegramHandle(id)).join(', ');
+                  final eveningNames =
+                      evening.map((id) => _getTelegramHandle(id)).join(', ');
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     child: Padding(
@@ -324,10 +302,9 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '${date.day}.${date.month}.${date.year}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                          Text('${date.day}.${date.month}.${date.year}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
                           Text(
                               '🕗 Утро: ${morningNames.isEmpty ? '—' : morningNames}'),

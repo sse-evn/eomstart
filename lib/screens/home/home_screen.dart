@@ -4,6 +4,8 @@ import 'package:micro_mobility_app/providers/shift_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:io' show InternetAddress;
+import 'dart:io' show SocketException;
 
 class DashboardHome extends StatefulWidget {
   const DashboardHome({super.key});
@@ -14,39 +16,73 @@ class DashboardHome extends StatefulWidget {
 
 class _DashboardHomeState extends State<DashboardHome> {
   late Future<void> _loadDataFuture;
+  bool _hasInternet = true; // флаг наличия интернета
 
   @override
   void initState() {
     super.initState();
 
-    // Загружаем данные ТОЛЬКО если они ещё не загружались
-    final provider = context.read<ShiftProvider>();
-    if (!provider.hasLoadedShifts) {
-      _loadDataFuture = _loadData();
-    } else {
-      _loadDataFuture = Future.value(); // уже есть данные — не грузим
-    }
+    // Проверяем интернет и запускаем загрузку только если он есть
+    _loadDataFuture = _checkInternetAndLoad();
 
-    // Запрашиваем разрешения после первого рендера
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestAllPermissionsForce();
     });
   }
 
-  Future<void> _loadData() async {
+  Future<void> _checkInternetAndLoad() async {
+    bool internetAvailable = await _hasNetworkConnection();
+    if (!internetAvailable) {
+      setState(() {
+        _hasInternet = false;
+      });
+      return; // не грузим данные
+    }
+
     final provider = context.read<ShiftProvider>();
-    await provider.loadShifts();
+    if (!provider.hasLoadedShifts) {
+      await provider.loadShifts();
+    }
+  }
+
+  Future<bool> _hasNetworkConnection() async {
+    try {
+      final result = await InternetAddress.lookup('google.com');
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } on SocketException catch (_) {
+      return false;
+    }
   }
 
   Future<void> _refresh() async {
-    // Принудительно обновляем данные (например, по свайпу вниз)
+    bool internetAvailable = await _hasNetworkConnection();
+    if (!internetAvailable) {
+      if (mounted) {
+        setState(() {
+          _hasInternet = false;
+        });
+      }
+      return;
+    }
+
+    // Сбрасываем флаг отсутствия интернета
+    if (!_hasInternet && mounted) {
+      setState(() {
+        _hasInternet = true;
+      });
+    }
+
     await _loadData();
     if (mounted) {
       setState(() {
-        // Перезапускаем FutureBuilder
         _loadDataFuture = Future.value();
       });
     }
+  }
+
+  Future<void> _loadData() async {
+    final provider = context.read<ShiftProvider>();
+    await provider.loadShifts();
   }
 
   /// 🔒 Принудительный запрос всех разрешений
@@ -56,12 +92,10 @@ class _DashboardHomeState extends State<DashboardHome> {
     while (!allGranted && mounted) {
       allGranted = true;
 
-      // Проверяем сервис геолокации
       if (!await Geolocator.isLocationServiceEnabled()) {
         await Geolocator.openLocationSettings();
       }
 
-      // Запрашиваем геолокацию
       LocationPermission locPerm = await Geolocator.checkPermission();
       if (locPerm != LocationPermission.always) {
         locPerm = await Geolocator.requestPermission();
@@ -70,14 +104,12 @@ class _DashboardHomeState extends State<DashboardHome> {
         }
       }
 
-      // Камера
       PermissionStatus camStatus = await Permission.camera.status;
       if (!camStatus.isGranted) {
         camStatus = await Permission.camera.request();
         if (!camStatus.isGranted) allGranted = false;
       }
 
-      // Уведомления (опционально)
       PermissionStatus notifStatus = await Permission.notification.status;
       if (!notifStatus.isGranted) {
         notifStatus = await Permission.notification.request();
@@ -90,7 +122,6 @@ class _DashboardHomeState extends State<DashboardHome> {
     }
   }
 
-  /// Диалог, который не даёт пользователю выйти
   Future<void> _showForcePermissionDialog() async {
     if (!mounted) return;
     await showDialog(
@@ -125,6 +156,11 @@ class _DashboardHomeState extends State<DashboardHome> {
         child: FutureBuilder<void>(
           future: _loadDataFuture,
           builder: (context, snapshot) {
+            // Сначала проверяем, есть ли интернет
+            if (!_hasInternet) {
+              return NoInternetWidget(onRetry: _refresh);
+            }
+
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
                   child: CircularProgressIndicator(color: Colors.green));
@@ -172,7 +208,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                   children: const [
                     SlotCard(),
                     SizedBox(height: 10),
-                    // ReportCard(), // раскомментируйте, если нужно
+                    // ReportCard(),
                   ],
                 ),
               );

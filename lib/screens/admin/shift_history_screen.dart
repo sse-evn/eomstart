@@ -1,4 +1,4 @@
-import 'dart:async' show Timer;
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -7,7 +7,6 @@ import 'package:micro_mobility_app/config/app_config.dart' as AppConfig;
 import 'package:micro_mobility_app/config/google_sheets_config.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
 import 'package:micro_mobility_app/screens/admin/shifts_list/shift_details_screen.dart';
-import 'package:micro_mobility_app/utils/time_utils.dart';
 
 class ShiftHistoryScreen extends StatefulWidget {
   const ShiftHistoryScreen({super.key});
@@ -36,25 +35,20 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
   }
 
   Future<List<ActiveShift>> _fetchEndedShifts() async {
-    try {
-      final token = await _storage.read(key: 'jwt_token');
-      if (token == null) throw Exception('Токен не найден');
-      final url =
-          Uri.parse('${AppConfig.AppConfig.apiBaseUrl}/admin/ended-shifts');
-      final response = await http.get(url, headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      });
-      if (response.statusCode == 200) {
-        final dynamic jsonResponse =
-            jsonDecode(utf8.decode(response.bodyBytes));
-        final List<dynamic> jsonList = jsonResponse is List ? jsonResponse : [];
-        return jsonList.map((json) => ActiveShift.fromJson(json)).toList();
-      } else {
-        throw Exception('Ошибка загрузки: ${response.statusCode}');
-      }
-    } catch (e) {
-      rethrow;
+    final token = await _storage.read(key: 'jwt_token');
+    if (token == null) throw Exception('Токен не найден');
+    final url =
+        Uri.parse('${AppConfig.AppConfig.apiBaseUrl}/admin/ended-shifts');
+    final response = await http.get(url, headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    });
+    if (response.statusCode == 200) {
+      final dynamic jsonResponse = jsonDecode(utf8.decode(response.bodyBytes));
+      final List<dynamic> jsonList = jsonResponse is List ? jsonResponse : [];
+      return jsonList.map((json) => ActiveShift.fromJson(json)).toList();
+    } else {
+      throw Exception('Ошибка загрузки: ${response.statusCode}');
     }
   }
 
@@ -68,7 +62,10 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
     final Map<String, List<ActiveShift>> grouped = {};
     for (final shift in shifts) {
       if (shift.endTimeString != null && shift.endTimeString!.isNotEmpty) {
-        final dateKey = shift.endTimeString!.split('T').first;
+        final utcTime = DateTime.parse(shift.endTimeString!);
+        final localDate = utcTime.toLocal();
+        final dateKey =
+            '${localDate.year}-${localDate.month.toString().padLeft(2, '0')}-${localDate.day.toString().padLeft(2, '0')}';
         grouped.putIfAbsent(dateKey, () => []);
         grouped[dateKey]!.add(shift);
       }
@@ -77,18 +74,21 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
         grouped.entries.toList()..sort((a, b) => b.key.compareTo(a.key)));
   }
 
-  String _formatDate(String isoDate) {
+  String _formatDate(String dateKey) {
     try {
-      final date = DateTime.parse(isoDate);
+      final parts = dateKey.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final day = int.parse(parts[2]);
+      final shiftDate = DateTime(year, month, day);
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final yesterday = DateTime(now.year, now.month, now.day - 1);
-      final shiftDate = DateTime(date.year, date.month, date.day);
       if (shiftDate.isAtSameMomentAs(today)) return 'Сегодня';
       if (shiftDate.isAtSameMomentAs(yesterday)) return 'Вчера';
-      return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+      return '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.${year}';
     } catch (e) {
-      return isoDate;
+      return dateKey;
     }
   }
 
@@ -110,10 +110,14 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
     return hours * GoogleSheetsConfig.hourlyRate;
   }
 
-  String extractTimeFromUtcPlus5(String isoString) {
-    if (isoString.isEmpty) return '';
-    final dt = DateTime.parse(isoString);
-    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  String _formatLocalTime(String isoString) {
+    try {
+      final utcTime = DateTime.parse(isoString);
+      final localTime = utcTime.toLocal();
+      return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return '--:--';
+    }
   }
 
   Widget _buildShiftCard(ActiveShift shift) {
@@ -171,7 +175,7 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            '${extractTimeFromUtcPlus5(shift.startTimeString!)} – ${extractTimeFromUtcPlus5(shift.endTimeString!)}',
+                            '${_formatLocalTime(shift.startTimeString!)} – ${_formatLocalTime(shift.endTimeString!)}',
                             style: const TextStyle(fontSize: 14),
                           ),
                         ),
@@ -235,12 +239,15 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
             duration.inHours + duration.inMinutes.remainder(60) / 60.0;
         final payment =
             (hours * GoogleSheetsConfig.hourlyRate).toStringAsFixed(0);
+        final startLocal = DateTime.parse(shift.startTimeString!).toLocal();
+        final startDate =
+            '${startLocal.day.toString().padLeft(2, '0')}.${startLocal.month.toString().padLeft(2, '0')}.${startLocal.year}';
         data.add([
           shift.username,
           shift.position,
           shift.zone,
-          '${_formatDate(shift.startTimeString!)} ${extractTimeFromUtcPlus5(shift.startTimeString!)}',
-          extractTimeFromUtcPlus5(shift.endTimeString!),
+          '$startDate ${_formatLocalTime(shift.startTimeString!)}',
+          _formatLocalTime(shift.endTimeString!),
           _formatDuration(duration),
           payment,
         ]);
