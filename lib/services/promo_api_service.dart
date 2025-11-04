@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/config/app_config.dart';
+import 'package:http_parser/http_parser.dart';
 
 class PromoApiServiceException implements Exception {
   final int? statusCode;
@@ -30,7 +31,13 @@ class PromoApiService {
     final request = http.MultipartRequest('POST', uri);
     request.headers['Authorization'] = 'Bearer $token';
     request.files.add(
-      http.MultipartFile.fromBytes('file', fileBytes, filename: 'promos.xlsx'),
+      http.MultipartFile.fromBytes(
+        'file',
+        fileBytes,
+        filename: 'promos.xlsx',
+        contentType: MediaType('application',
+            'vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+      ),
     );
 
     final response = await request.send();
