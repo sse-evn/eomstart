@@ -7,7 +7,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
-import 'package:battery_plus/battery_plus.dart';
 import 'package:micro_mobility_app/config/app_config.dart' show AppConfig;
 import 'package:micro_mobility_app/models/location.dart';
 
@@ -19,10 +18,6 @@ class EmployeeMapLogic {
   void Function()? onStateChanged;
 
   final FlutterSecureStorage storage = const FlutterSecureStorage();
-  final Battery _battery = Battery();
-  StreamSubscription<Position>? _locationStreamSub;
-  Timer? _liveUpdateTimer;
-
   List<EmployeeLocation> employeeLocations = [];
   String? currentUserAvatarUrl;
   List<LatLng> selectedEmployeeHistory = [];
@@ -56,7 +51,9 @@ class EmployeeMapLogic {
       if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
         final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+          ),
         );
         currentLocation = LatLng(position.latitude, position.longitude);
         _notify();
@@ -86,49 +83,6 @@ class EmployeeMapLogic {
     } catch (e) {
       debugPrint('Ошибка загрузки профиля: $e');
     }
-  }
-
-  Future<void> startSelfTracking() async {
-    if (_locationStreamSub != null || _disposed) return;
-    try {
-      final token = await storage.read(key: 'jwt_token');
-      if (token == null) return;
-      _locationStreamSub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 10,
-        ),
-      ).listen((position) async {
-        try {
-          final batteryLevel = await _battery.batteryLevel;
-          final body = jsonEncode({
-            'lat': position.latitude,
-            'lon': position.longitude,
-            'speed': position.speed,
-            'accuracy': position.accuracy,
-            'battery': batteryLevel,
-            'event': 'tracking',
-          });
-          await http.post(
-            Uri.parse(AppConfig.geoTrackUrl),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-            body: body,
-          );
-        } catch (e) {
-          debugPrint('Ошибка отправки геопозиции: $e');
-        }
-      });
-    } catch (e) {
-      debugPrint('Не удалось запустить трекинг: $e');
-    }
-  }
-
-  void stopSelfTracking() {
-    _locationStreamSub?.cancel();
-    _locationStreamSub = null;
   }
 
   Future<void> fetchEmployeeLocations() async {
@@ -176,16 +130,12 @@ class EmployeeMapLogic {
   }
 
   void startLiveTracking() {
-    if (_liveUpdateTimer != null) return;
-    _liveUpdateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!_disposed) fetchEmployeeLocations();
     });
   }
 
-  void stopLiveTracking() {
-    _liveUpdateTimer?.cancel();
-    _liveUpdateTimer = null;
-  }
+  void stopLiveTracking() {}
 
   Future<void> loadEmployeeHistory(String userId) async {
     if (_disposed) return;
@@ -205,7 +155,6 @@ class EmployeeMapLogic {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) return;
 
-      // Используем UTC!
       final now = DateTime.now();
       final startOfDay = DateTime.utc(now.year, now.month, now.day);
       final endOfDay = startOfDay.add(const Duration(days: 1));
@@ -272,7 +221,6 @@ class EmployeeMapLogic {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_disposed) {
         initMap();
-        startSelfTracking();
         startLiveTracking();
       }
     });
@@ -280,7 +228,6 @@ class EmployeeMapLogic {
 
   void dispose() {
     _disposed = true;
-    stopSelfTracking();
     stopLiveTracking();
     mapController.dispose();
   }

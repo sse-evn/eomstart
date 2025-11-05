@@ -4,6 +4,8 @@ import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart'
 import 'package:hive_flutter/hive_flutter.dart' show Hive, HiveX;
 import 'package:micro_mobility_app/providers/theme_provider.dart';
 import 'package:micro_mobility_app/screens/profile/promo_code_screen.dart';
+import 'package:micro_mobility_app/services/geo_tracking_service.dart'
+    show startBackgroundTracking;
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -37,6 +39,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   // Остальная инициализация
+  startBackgroundTracking();
   await FMTCObjectBoxBackend().initialise();
   tz_data.initializeTimeZones();
   await initializeDateFormatting('ru', null);

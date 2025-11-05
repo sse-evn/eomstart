@@ -22,7 +22,11 @@
         android:label="EOM START"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-
+         <service
+            android:name="id.flutter.flutter_background_service.BackgroundService"
+            android:foregroundServiceType="location"
+            android:exported="false"
+            tools:replace="android:exported" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -31,6 +35,8 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
+
+            
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
