@@ -38,6 +38,7 @@ class EmployeeMapLogic {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) throw Exception('Служба геолокации отключена.');
+
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -45,9 +46,11 @@ class EmployeeMapLogic {
           throw Exception('Доступ к геолокации запрещён.');
         }
       }
+
       if (permission == LocationPermission.deniedForever) {
         throw Exception('Доступ запрещён навсегда. Измените в настройках.');
       }
+
       if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
         final position = await Geolocator.getCurrentPosition(
@@ -90,10 +93,12 @@ class EmployeeMapLogic {
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) return;
+
       final response = await http.get(
         Uri.parse(AppConfig.lastLocationsUrl),
         headers: {'Authorization': 'Bearer $token'},
       );
+
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
         if (decoded is List) {
@@ -141,15 +146,6 @@ class EmployeeMapLogic {
     if (_disposed) return;
     selectedEmployeeHistory = [];
     selectedEmployeeId = userId;
-    final found = employeeLocations.firstWhere(
-      (e) => e.userId == userId,
-      orElse: () => EmployeeLocation(
-        userId: userId,
-        position: const LatLng(43.2389, 76.8897),
-        timestamp: DateTime.now(),
-      ),
-    );
-    selectedEmployeeName = found.name;
 
     try {
       final token = await storage.read(key: 'jwt_token');
@@ -171,7 +167,7 @@ class EmployeeMapLogic {
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
         if (decoded is List) {
-          selectedEmployeeHistory = decoded
+          final gpsPoints = decoded
               .map((item) {
                 if (item is! Map<String, dynamic>) return null;
                 return LatLng(
@@ -181,12 +177,31 @@ class EmployeeMapLogic {
               })
               .whereType<LatLng>()
               .toList();
+
+          selectedEmployeeHistory = _smoothPolyline(gpsPoints);
         }
       }
     } catch (e) {
       debugPrint('Ошибка загрузки истории: $e');
     }
+
     _notify();
+  }
+
+  /// Простое сглаживание GPS-точек
+  List<LatLng> _smoothPolyline(List<LatLng> points) {
+    if (points.length < 3) return points;
+    final smoothed = <LatLng>[points.first];
+    for (int i = 1; i < points.length - 1; i++) {
+      final prev = points[i - 1];
+      final current = points[i];
+      final next = points[i + 1];
+      final avgLat = (prev.latitude + current.latitude + next.latitude) / 3;
+      final avgLon = (prev.longitude + current.longitude + next.longitude) / 3;
+      smoothed.add(LatLng(avgLat, avgLon));
+    }
+    smoothed.add(points.last);
+    return smoothed;
   }
 
   void clearHistory() {

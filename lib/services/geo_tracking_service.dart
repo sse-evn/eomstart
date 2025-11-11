@@ -25,7 +25,7 @@ FutureOr<bool> onStart(ServiceInstance service) async {
     _backgroundTimer = null;
   });
 
-  _backgroundTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+  _backgroundTimer = Timer.periodic(const Duration(seconds: 60), (timer) async {
     try {
       final position = await Geolocator.getCurrentPosition(
         locationSettings:

@@ -127,7 +127,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                       polylines: [
                         Polyline(
                           points: _logic.selectedEmployeeHistory,
-                          color: Colors.blueAccent,
+                          color: Colors.red,
                           strokeWidth: 4.0,
                         ),
                       ],

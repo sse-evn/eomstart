@@ -17,8 +17,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
 
-  // 🔥 УДАЛЕНО: больше не нужен connectivity subscription здесь
-  // Потому что ShiftProvider сам управляет загрузкой по сети
 
   final List<Widget> _screens = [
     const DashboardHome(),
