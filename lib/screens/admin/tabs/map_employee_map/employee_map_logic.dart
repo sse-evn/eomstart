@@ -20,9 +20,13 @@ class EmployeeMapLogic {
   final FlutterSecureStorage storage = const FlutterSecureStorage();
   List<EmployeeLocation> employeeLocations = [];
   String? currentUserAvatarUrl;
+
+  // --- ИСТОРИЯ ---
+  Map<String, List<EmployeeLocation>> _cachedHistories = {};
   List<LatLng> selectedEmployeeHistory = [];
   String? selectedEmployeeId;
   String? selectedEmployeeName;
+  DateTimeRange? selectedHistoryRange; // Диапазон для фильтрации истории
 
   EmployeeMapLogic() {
     mapController = MapController();
@@ -135,29 +139,44 @@ class EmployeeMapLogic {
   }
 
   void startLiveTracking() {
-    Timer.periodic(const Duration(seconds: 5), (timer) {
+    Timer.periodic(const Duration(seconds: 30), (timer) {
       if (!_disposed) fetchEmployeeLocations();
     });
   }
 
   void stopLiveTracking() {}
 
-  Future<void> loadEmployeeHistory(String userId) async {
+  /// Загрузка истории с фильтрацией по диапазону
+  Future<void> loadEmployeeHistory(
+    String userId, {
+    DateTimeRange? range,
+  }) async {
     if (_disposed) return;
-    selectedEmployeeHistory = [];
+
     selectedEmployeeId = userId;
+    selectedHistoryRange = range;
+
+    final effectiveRange = range ?? _getDefaultRange();
+
+    // Ключ кэша
+    final cacheKey =
+        "$userId|${effectiveRange.start.toIso8601String()}|${effectiveRange.end.toIso8601String()}";
+
+    // Проверяем кэш
+    if (_cachedHistories.containsKey(cacheKey)) {
+      final cached = _cachedHistories[cacheKey]!;
+      selectedEmployeeHistory = cached.map((e) => e.position).toList();
+      _notify();
+      return;
+    }
 
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) return;
 
-      final now = DateTime.now();
-      final startOfDay = DateTime.utc(now.year, now.month, now.day);
-      final endOfDay = startOfDay.add(const Duration(days: 1));
-
       final url = '${AppConfig.locationHistoryUrl}?user_id=$userId'
-          '&from=${Uri.encodeComponent(startOfDay.toIso8601String())}'
-          '&to=${Uri.encodeComponent(endOfDay.toIso8601String())}';
+          '&from=${Uri.encodeComponent(effectiveRange.start.toIso8601String())}'
+          '&to=${Uri.encodeComponent(effectiveRange.end.toIso8601String())}';
 
       final response = await http.get(
         Uri.parse(url),
@@ -166,16 +185,51 @@ class EmployeeMapLogic {
 
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
-        if (decoded is List) {
-          final gpsPoints = decoded
+
+        /// ---- ВАЖНО ----
+        /// Backend возвращает объект:
+        /// {
+        ///   "user_id": ...,
+        ///   "total_points": ...,
+        ///   "limit": ...,
+        ///   "period": {...},
+        ///   "points": [ ... ]
+        /// }
+        /// ----------------
+
+        if (decoded is Map<String, dynamic> && decoded['points'] is List) {
+          final points = decoded['points'] as List<dynamic>;
+
+          final gpsPoints = points
               .map((item) {
                 if (item is! Map<String, dynamic>) return null;
-                return LatLng(
-                  (item['lat'] as num?)?.toDouble() ?? 0.0,
-                  (item['lon'] as num?)?.toDouble() ?? 0.0,
-                );
+                final lat = (item['lat'] as num?)?.toDouble();
+                final lon = (item['lon'] as num?)?.toDouble();
+                if (lat == null || lon == null) return null;
+                return LatLng(lat, lon);
               })
               .whereType<LatLng>()
+              .toList();
+
+          // Кэшируем
+          _cachedHistories[cacheKey] = points
+              .map((item) {
+                final map = item as Map<String, dynamic>;
+                return EmployeeLocation(
+                  userId: userId,
+                  name: map['name']?.toString(),
+                  position: LatLng(
+                    (map['lat'] as num?)?.toDouble() ?? 0.0,
+                    (map['lon'] as num?)?.toDouble() ?? 0.0,
+                  ),
+                  battery: (map['battery'] as num?)?.toDouble(),
+                  timestamp:
+                      DateTime.tryParse(map['timestamp']?.toString() ?? '') ??
+                          DateTime.now(),
+                  avatarUrl: map['avatarUrl']?.toString(),
+                );
+              })
+              .whereType<EmployeeLocation>()
               .toList();
 
           selectedEmployeeHistory = _smoothPolyline(gpsPoints);
@@ -186,6 +240,13 @@ class EmployeeMapLogic {
     }
 
     _notify();
+  }
+
+  DateTimeRange _getDefaultRange() {
+    final now = DateTime.now();
+    final startOfDay = DateTime.utc(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+    return DateTimeRange(start: startOfDay, end: endOfDay);
   }
 
   /// Простое сглаживание GPS-точек
@@ -208,6 +269,7 @@ class EmployeeMapLogic {
     selectedEmployeeHistory = [];
     selectedEmployeeId = null;
     selectedEmployeeName = null;
+    selectedHistoryRange = null;
     _notify();
   }
 

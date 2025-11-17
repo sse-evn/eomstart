@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart'
-    show FMTCObjectBoxBackend, FMTCRoot, FMTCStore;
+import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:hive_flutter/hive_flutter.dart' show Hive, HiveX;
 import 'package:micro_mobility_app/providers/theme_provider.dart';
 import 'package:micro_mobility_app/screens/profile/promo_code_screen.dart';
 import 'package:micro_mobility_app/services/geo_tracking_service.dart'
-    show startBackgroundTracking;
+    show startBackgroundTracking, stopBackgroundTracking;
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -35,11 +34,14 @@ import 'package:micro_mobility_app/screens/qr_scanner_screen/qr_scanner_screen.d
 import 'package:micro_mobility_app/screens/admin/admin_panel_screen.dart';
 import 'package:micro_mobility_app/screens/splash/splash_screen.dart';
 
+// ✅ Импорты для синхронизации гео данных
+import 'package:connectivity_plus/connectivity_plus.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Hive.initFlutter();
-  // Остальная инициализация
-  startBackgroundTracking();
+  // ❌ Удалён: flutter_map_tile_caching
   await FMTCObjectBoxBackend().initialise();
   tz_data.initializeTimeZones();
   await initializeDateFormatting('ru', null);
@@ -67,6 +69,17 @@ void main() async {
       child: const MyApp(),
     ),
   );
+
+  // ❌ УБРАНО: Слушаем смену подключения и синхронизируем данные
+  // Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
+  //   final ConnectivityResult result =
+  //       results.isNotEmpty ? results.last : ConnectivityResult.none;
+  //   if (result != ConnectivityResult.none) {
+  //     // Интернет появился — синхронизируем
+  //     // GeoTrackingService.syncBufferedData(); // вызов из вашего сервиса
+  //     // Или вызов через Provider, если нужно
+  //   }
+  // });
 }
 
 /// 🔒 Запрос всех нужных разрешений

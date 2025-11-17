@@ -1,6 +1,8 @@
 // lib/screens/profile_screen.dart
+import 'dart:async';
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:micro_mobility_app/core/themes/theme.dart';
@@ -11,8 +13,14 @@ import 'package:micro_mobility_app/config/app_config.dart';
 import 'package:micro_mobility_app/services/api_service.dart' show ApiService;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:io' show Platform;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// Импортируем функции трекинга (предполагается, что они экспортированы)
+import '/services/geo_tracking_service.dart'
+    show startBackgroundTracking, stopBackgroundTracking;
+
+const String _SHARED_PREFS_BG_RUNNING_KEY = 'is_bg_geo_tracking_running';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -35,15 +43,108 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
   bool _isCheckingForUpdates = false;
   final _promoCodeController = TextEditingController();
 
+  bool _isGeoTrackingEnabled = false;
+  bool _isLoadingGeoStatus = true;
+  bool _hasLoadedGeoStatusOnce = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = context.read<ShiftProvider>();
       if (!provider.hasLoadedProfile) {
-        provider.loadProfile();
+        await provider.loadProfile();
       }
+      // Загружаем статус геотрекинга один раз при инициализации
+      await _loadGeoTrackingStatus();
     });
+  }
+
+  // Убрали didChangeDependencies — лишние перерисовки вызывали странное поведение
+
+  Future<void> _loadGeoTrackingStatus() async {
+    // Запускаем индикатор
+    if (mounted) {
+      setState(() {
+        _isLoadingGeoStatus = true;
+      });
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isRunning = prefs.getBool(_SHARED_PREFS_BG_RUNNING_KEY) ?? false;
+
+      if (mounted) {
+        setState(() {
+          _isGeoTrackingEnabled = isRunning;
+          _isLoadingGeoStatus = false;
+          _hasLoadedGeoStatusOnce = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Ошибка загрузки статуса геотрекинга: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingGeoStatus = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleGeoTracking(bool newValue) async {
+    // Блокируем переключатель на время операции
+    if (_isLoadingGeoStatus) return;
+
+    // Оптимистично меняем положение переключателя (UX)
+    if (mounted) {
+      setState(() {
+        _isGeoTrackingEnabled = newValue;
+        _isLoadingGeoStatus = true;
+      });
+    }
+
+    try {
+      if (newValue) {
+        int? activeShiftId = context.read<ShiftProvider>().activeShift?.id;
+        if (activeShiftId != null && activeShiftId > 0) {
+          await startBackgroundTracking(shiftId: activeShiftId);
+        } else {
+          // Нельзя включить — нет смены
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content:
+                    Text('Невозможно включить трекинг: нет активной смены'),
+                backgroundColor: Colors.orange,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          // Откатываем переключатель
+          if (mounted) {
+            setState(() {
+              _isGeoTrackingEnabled = false;
+            });
+          }
+        }
+      } else {
+        await stopBackgroundTracking();
+      }
+    } catch (e) {
+      debugPrint('Ошибка переключения геотрекинга: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при изменении статуса трекинга: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      // Всегда перечитываем статус из SharedPreferences, чтобы синхронизировать состояние
+      await _loadGeoTrackingStatus();
+    }
   }
 
   @override
@@ -133,13 +234,12 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
     try {
       final token = await _storage.read(key: 'jwt_token');
       if (token != null) {
-        // Здесь можно добавить реальную проверку версии с сервера
-        // Например: final response = await http.get(...);
+        // TODO: запросите актуальную версию с вашего API и сравните
       }
     } catch (e) {
       debugPrint('Ошибка проверки версии: $e');
     }
-    return false; // временно отключено
+    return false;
   }
 
   void _showUpdateDialog(String currentVersion) {
@@ -307,6 +407,72 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                                   ),
                                 ),
                                 const SizedBox(height: 10),
+                                if (!_isLoadingGeoStatus) ...[
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: (Colors.blue[700]!)
+                                                .withOpacity(0.1),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Icon(
+                                            Icons.location_on,
+                                            color: Colors.blue[700],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Text(
+                                            'Отправка геоданных',
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                        Switch(
+                                          value: _isGeoTrackingEnabled,
+                                          onChanged: (val) =>
+                                              _toggleGeoTracking(val),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ] else ...[
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 16.0),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Загрузка статуса...',
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 10),
                                 _SettingsItem(
                                   icon: Icons.card_giftcard,
                                   title: 'Промокод',
@@ -444,7 +610,7 @@ class _ProfileHeader extends StatelessWidget {
           'scout': 'Скаут',
           'supervisor': 'Супервайзер',
           'coordinator': 'Координатор',
-          'superadmin': 'Суперадмин',
+          'superadmin': 'Суперадмин'
         }[role] ??
         role.toUpperCase();
   }
@@ -457,13 +623,12 @@ class _SettingsItem extends StatelessWidget {
   final String? route;
   final VoidCallback? onTap;
 
-  const _SettingsItem({
-    required this.icon,
-    required this.title,
-    this.color,
-    this.route,
-    this.onTap,
-  });
+  const _SettingsItem(
+      {required this.icon,
+      required this.title,
+      this.color,
+      this.route,
+      this.onTap});
 
   @override
   Widget build(BuildContext context) {

@@ -1,6 +1,10 @@
+// ====== AdminPromoScreen.dart (ОБНОВЛЕНО С КНОПКОЙ И ПОИСКОМ ДЛЯ АУДИТА) ======
+
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:micro_mobility_app/services/promo_api_service.dart';
 
 class AdminPromoScreen extends StatelessWidget {
@@ -23,10 +27,15 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   final PromoApiService _service = PromoApiService();
   bool _isLoading = false;
   Map<String, dynamic>? _stats;
-  List<dynamic>? _claimedPromos;
+  List<dynamic>?
+      _claimedPromos; // Будет содержать {user: ..., promo_codes: {...}, created_at: ...}
   Map<String, dynamic>? _activeBrand;
   String? _selectedBrand;
-  int _days = 10;
+  DateTime? _endDate;
+
+  // --- НОВЫЕ ПЕРЕМЕННЫЕ ---
+  bool _showClaimedPromos = false; // Управляет видимостью списка
+  String _searchQuery = ''; // Для поиска по имени
 
   @override
   void initState() {
@@ -36,7 +45,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
 
   Future<void> _loadAllData() async {
     await _loadStats();
-    await _loadClaimedPromos();
+    await _loadClaimedPromos(); // Теперь загружает и даты
     await _loadActiveBrand();
   }
 
@@ -109,7 +118,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Промокоды загружены!'),
+              content: Text('Промокоды загружены и обработаны!'),
               backgroundColor: Colors.green),
         );
         _loadAllData();
@@ -172,7 +181,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content: Text('Промокоды загружены!'),
+                        content: Text('Промокоды загружены и обработаны!'),
                         backgroundColor: Colors.green),
                   );
                   _loadAllData();
@@ -207,12 +216,18 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   }
 
   Future<void> _activateBrand() async {
-    if (_selectedBrand == null) return;
+    if (_selectedBrand == null || _endDate == null) return;
+
+    final now = DateTime.now();
+    final difference = _endDate!.difference(now).inDays;
+    final daysToSet = difference > 0 ? difference : 1;
+
     setState(() {
       _isLoading = true;
     });
+
     try {
-      await _service.setActivePromoBrand(_selectedBrand!, days: _days);
+      await _service.setActivePromoBrand(_selectedBrand!, days: daysToSet);
       await _loadActiveBrand();
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -284,6 +299,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  // Активный бренд
                   const Text('Активный бренд:',
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -291,6 +307,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                   if (_activeBrand != null)
                     Card(
                       child: ListTile(
+                        leading: Icon(_getBrandIcon(_activeBrand!['brand'])),
                         title: Text('Только ${_activeBrand!['brand']}'),
                         subtitle: Text('До ${_activeBrand!['expires_at']}'),
                         trailing: IconButton(
@@ -300,8 +317,19 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                       ),
                     )
                   else
-                    const Text('Все бренды доступны'),
-                  const SizedBox(height: 16),
+                    const Card(
+                      child: ListTile(
+                        leading: Icon(Icons.check_circle_outline),
+                        title: Text('Все бренды доступны'),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+
+                  // Форма активации
+                  const Text('Активировать бренд:',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _selectedBrand,
                     items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
@@ -312,28 +340,64 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                         const InputDecoration(labelText: 'Выберите бренд'),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                        labelText: 'Дней (по умолчанию 10)'),
-                    onChanged: (v) {
-                      if (v.isEmpty) {
-                        setState(() => _days = 10);
-                      } else {
-                        final n = int.tryParse(v);
-                        setState(() => _days = n != null && n > 0 ? n : 10);
+                  TextFormField(
+                    readOnly: true,
+                    onTap: () async {
+                      final pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate:
+                            DateTime.now().add(const Duration(days: 7)),
+                        firstDate:
+                            DateTime.now().subtract(const Duration(days: 1)),
+                        lastDate: DateTime(2030),
+                      );
+                      if (pickedDate != null) {
+                        setState(() {
+                          _endDate = pickedDate;
+                        });
                       }
                     },
+                    decoration: InputDecoration(
+                      labelText: 'Дата окончания активности',
+                      hintText: _endDate == null
+                          ? 'Выберите дату'
+                          : _endDate!.toLocal().toString().split(' ')[0],
+                      suffixIcon: const Icon(Icons.calendar_today),
+                    ),
                   ),
+                  if (_endDate != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Будет активно примерно ${_endDate!.difference(DateTime.now()).inDays.abs()} дней.',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: _selectedBrand != null ? _activateBrand : null,
-                    child: const Text('Активировать'),
+                    onPressed: _selectedBrand != null && _endDate != null
+                        ? _activateBrand
+                        : null,
+                    child: const Text('Активировать бренд'),
                   ),
                   const SizedBox(height: 24),
+
+                  // Загрузка промокодов (с уточнением)
                   const Text('Загрузить промокоды:',
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Загрузите Excel/CSV файл с одной колонкой "Промокод".\n'
+                    'Бренд будет определен автоматически по формату кода.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: _uploadExcel,
@@ -347,6 +411,8 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                     label: const Text('Из Google Таблицы'),
                   ),
                   const SizedBox(height: 24),
+
+                  // Статистика (Свободные промокоды)
                   const Text('Свободные промокоды:',
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -356,16 +422,64 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                   else
                     _buildDetailedStats(),
                   const SizedBox(height: 24),
-                  const Text('Выданные промокоды:',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+
+                  // --- НОВЫЙ БЛОК: КНОПКА И СПИСОК ВЫДАННЫХ ПРОМОКОДОВ ---
+
+                  // Кнопка для показа/скрытия списка
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _showClaimedPromos = !_showClaimedPromos;
+                            });
+                          },
+                          icon: Icon(_showClaimedPromos
+                              ? Icons.arrow_drop_up
+                              : Icons.arrow_drop_down),
+                          label: Text(
+                            _showClaimedPromos
+                                ? 'Скрыть выданные промокоды'
+                                : 'Показать выданные промокоды',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
-                  if (_claimedPromos == null)
-                    const Center(child: Text('Загрузка...'))
-                  else if (_claimedPromos!.isEmpty)
-                    const Center(child: Text('Нет выданных промокодов'))
-                  else
-                    _buildClaimedPromosList(),
+
+                  // Поле поиска (видимо только если список открыт)
+                  if (_showClaimedPromos) ...[
+                    TextField(
+                      decoration: const InputDecoration(
+                        labelText: 'Поиск по имени пользователя',
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value.toLowerCase();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Список выданных промокодов (видимый только при _showClaimedPromos == true)
+                  if (_showClaimedPromos) ...[
+                    const Text('Выданные промокоды:',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    if (_claimedPromos == null)
+                      const Center(child: Text('Загрузка...'))
+                    else if (_claimedPromos!.isEmpty)
+                      const Center(child: Text('Нет выданных промокодов'))
+                    else
+                      _buildClaimedPromosListByDate(), // Новый метод
+                  ],
+
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -395,13 +509,14 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                         TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 12),
                 DataTable(
+                  columnSpacing: 16,
                   columns: const [
                     DataColumn(label: Text('Бренд')),
                     DataColumn(label: Text('Свободно')),
                     DataColumn(label: Text('Формат кода')),
                   ],
                   rows: [
-                    _buildBrandRow('JET', summary['JET'] ?? 0, 'GT10-XXXXXX'),
+                    _buildBrandRow('JET', summary['JET'] ?? 0, 'GT9-XXXXXX'),
                     _buildBrandRow(
                         'YANDEX', summary['YANDEX'] ?? 0, 'ocf/ocm + цифры'),
                     _buildBrandRow(
@@ -431,6 +546,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                     const SizedBox(height: 8),
                     if (item['counts'] is Map) ...[
                       DataTable(
+                        columnSpacing: 16,
                         columns: const [
                           DataColumn(label: Text('Бренд')),
                           DataColumn(label: Text('Количество')),
@@ -465,49 +581,160 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   DataRow _buildBrandRow(String brand, int count, String format) {
     return DataRow(
       cells: [
-        DataCell(Text(brand)),
+        DataCell(Row(
+          children: [
+            Icon(_getBrandIcon(brand), size: 18),
+            const SizedBox(width: 8),
+            Text(brand),
+          ],
+        )),
         DataCell(Text('$count')),
         DataCell(Text(format)),
       ],
     );
   }
 
-  Widget _buildClaimedPromosList() {
-    return Column(
-      children: [
-        for (final user in _claimedPromos!)
-          if (user is Map<String, dynamic> &&
-              user['promo_codes'] != null &&
-              (user['promo_codes'] as Map).isNotEmpty)
-            Card(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                        '${user['username'] ?? 'Пользователь'} (${user['first_name'] ?? ''})',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16)),
-                    const SizedBox(height: 8),
-                    for (final entry
-                        in (user['promo_codes'] as Map<String, dynamic>)
-                            .entries)
-                      if (entry.value is List &&
-                          (entry.value as List).isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Text(
-                            '${entry.key}: ${(entry.value as List).join(", ")}',
-                            style: const TextStyle(fontFamily: 'monospace'),
-                          ),
+  // --- НОВЫЙ МЕТОД: ГРУППИРОВКА ПО ДАТАМ С ПОИСКОМ ---
+  Widget _buildClaimedPromosListByDate() {
+    // Фильтруем пользователей по поисковому запросу
+    final filteredUsers = <Map<String, dynamic>>[];
+
+    for (final item in _claimedPromos!) {
+      if (item is Map<String, dynamic> &&
+          item['promo_codes'] != null &&
+          (item['promo_codes'] as Map).isNotEmpty) {
+        // Получаем имя пользователя
+        final username = (item['username'] as String?)?.toLowerCase() ?? '';
+        final firstName = (item['first_name'] as String?)?.toLowerCase() ?? '';
+
+        // Проверяем, соответствует ли пользователь поисковому запросу
+        if (_searchQuery.isEmpty ||
+            username.contains(_searchQuery) ||
+            firstName.contains(_searchQuery)) {
+          filteredUsers.add(item);
+        }
+      }
+    }
+
+    // Если нет результатов поиска, показываем сообщение
+    if (filteredUsers.isEmpty && _searchQuery.isNotEmpty) {
+      return const Center(
+        child: Text(
+          'Ничего не найдено',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    // Группируем отфильтрованных пользователей по дате выдачи
+    final groupedByDate = <String, List<Map<String, dynamic>>>{};
+
+    for (final item in filteredUsers) {
+      // Получаем дату выдачи
+      final createdAtStr = item['created_at'] as String?;
+      if (createdAtStr != null) {
+        final date = DateTime.parse(createdAtStr).toLocal();
+        final dateKey = date.toIso8601String().split('T')[0];
+
+        if (!groupedByDate.containsKey(dateKey)) {
+          groupedByDate[dateKey] = [];
+        }
+        groupedByDate[dateKey]!.add(item);
+      }
+    }
+
+    // Создаем список карточек по датам
+    final dateWidgets = <Widget>[];
+
+    // Сортируем ключи (даты) по убыванию (новые сверху)
+    final sortedDates = groupedByDate.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    for (final dateKey in sortedDates) {
+      final usersForDate = groupedByDate[dateKey]!;
+      // Форматируем дату для отображения
+      final displayDate =
+          DateFormat('dd.MM.yyyy').format(DateTime.parse(dateKey));
+      // Определяем название дня недели
+      final dayOfWeek =
+          DateFormat('EEEE', 'ru_RU').format(DateTime.parse(dateKey));
+      final headerText = '$displayDate ($dayOfWeek)';
+
+      dateWidgets.add(
+        Container(
+          margin: const EdgeInsets.only(top: 16, bottom: 8),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.blue.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            headerText,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ),
+      );
+
+      for (final user in usersForDate) {
+        dateWidgets.add(
+          Card(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                      '${user['username'] ?? 'Пользователь'} (${user['first_name'] ?? ''})',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  for (final entry
+                      in (user['promo_codes'] as Map<String, dynamic>).entries)
+                    if (entry.value is List && (entry.value as List).isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: [
+                            Icon(_getBrandIcon(entry.key), size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${entry.key}: ${(entry.value as List).join(", ")}',
+                                style: const TextStyle(fontFamily: 'monospace'),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
-                  ],
-                ),
+                      ),
+                ],
               ),
             ),
-      ],
-    );
+          ),
+        );
+      }
+    }
+
+    return Column(children: dateWidgets);
+  }
+
+  // Вспомогательная функция для иконок брендов
+  IconData _getBrandIcon(String brand) {
+    switch (brand) {
+      case 'JET':
+        return Icons.electric_scooter;
+      case 'YANDEX':
+        return Icons.map;
+      case 'WHOOSH':
+        return Icons.directions_bike;
+      case 'BOLT':
+        return Icons.bolt;
+      default:
+        return Icons.help;
+    }
   }
 }

@@ -260,7 +260,7 @@ class _ReportCardState extends State<ReportCard> {
           ],
         );
       case ReportMode.period:
-        return const PeriodCard(key: ValueKey('period-mode'));
+      // return const PeriodCard(key: ValueKey('period-mode'));
       case ReportMode.bot:
         return const BotStatsCard(key: ValueKey('bot-mode'));
     }

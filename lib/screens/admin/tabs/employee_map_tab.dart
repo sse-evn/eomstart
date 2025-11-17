@@ -40,19 +40,45 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
 
   void _showHistory(EmployeeLocation emp) async {
     if (_disposed || !mounted) return;
-    if (_logic.selectedEmployeeId == emp.userId) {
-      _logic.clearHistory();
-    } else {
-      await _logic.loadEmployeeHistory(emp.userId);
-      if (_logic.selectedEmployeeHistory.isNotEmpty) {
-        _logic.mapController.move(_logic.selectedEmployeeHistory.first, 13.0);
-      }
+
+    // Открыть диалог выбора диапазона
+    final range = await _showDateRangePicker(context);
+    if (range == null) return;
+
+    await _logic.loadEmployeeHistory(emp.userId, range: range);
+    if (_logic.selectedEmployeeHistory.isNotEmpty) {
+      _logic.mapController.move(_logic.selectedEmployeeHistory.first, 13.0);
     }
     if (mounted && _logic.selectedEmployeeHistory.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('История не найдена')),
       );
     }
+  }
+
+  Future<DateTimeRange?> _showDateRangePicker(BuildContext context) async {
+    final now = DateTime.now();
+    final firstDate = DateTime(now.year - 1);
+    final initialDateRange = DateTimeRange(
+      start: DateTime(now.year, now.month, now.day),
+      end: DateTime(now.year, now.month, now.day + 1),
+    );
+
+    return await showDateRangePicker(
+      context: context,
+      firstDate: firstDate,
+      lastDate: now,
+      initialDateRange: initialDateRange,
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: Colors.green,
+            onPrimary: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
   }
 
   Widget _buildFallbackAvatar({double? battery, Color? color}) {
@@ -119,7 +145,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 children: [
                   TileLayer(
                     urlTemplate: AppConstants.cartoDbPositronUrl,
-                    // subdomains: AppConstants.cartoDbSubdomains,
                     retinaMode: RetinaMode.isHighDensity(context),
                   ),
                   if (_logic.selectedEmployeeHistory.isNotEmpty)
@@ -216,6 +241,10 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                     child: ListTile(
                       title: Text(
                           'История: ${_logic.selectedEmployeeName ?? _logic.selectedEmployeeId}'),
+                      subtitle: _logic.selectedHistoryRange != null
+                          ? Text(
+                              'С ${_logic.selectedHistoryRange!.start.day}.${_logic.selectedHistoryRange!.start.month} по ${_logic.selectedHistoryRange!.end.day}.${_logic.selectedHistoryRange!.end.month}')
+                          : null,
                       trailing: IconButton(
                         icon: const Icon(Icons.close),
                         onPressed: _logic.clearHistory,

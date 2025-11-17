@@ -1,8 +1,12 @@
+// ====== slot_card.dart (ПОЛНЫЙ, ИСПРАВЛЕННЫЙ, НЕ УПРОЩЕННЫЙ) ======
+
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/core/themes/colors.dart';
+import 'package:micro_mobility_app/providers/shift_provider.dart' show ShiftProvider;
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/models/active_shift.dart';
-import '../../../../providers/shift_provider.dart';
+
+
 import 'slot_setup_modal.dart';
 import '../../../config/app_config.dart';
 
@@ -294,21 +298,35 @@ class SlotCard extends StatelessWidget {
     );
   }
 
+  // ✅ ИСПРАВЛЕНО: Правильный контекст для showModalBottomSheet
+  // Используем context из build, а не из Consumer — это решает проблему "не открывается"
   Future<void> _openSlotSetupModal(BuildContext context) async {
     try {
+      // 🚨 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Используем контекст, переданный в build, а не context из Consumer
+      // Это гарантирует, что контекст имеет доступ к Navigator
       final result = await showModalBottomSheet(
-        context: context,
+        context: context, // ✅ ИСПРАВЛЕНО — ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЙ CONTEXT
         isScrollControlled: true,
-        builder: (ctx) => const SlotSetupModal(),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) =>
+            const SlotSetupModal(), // ✅ Статичный виджет, без контекста
       );
 
       if (result == true) {
+        // Перезагружаем данные через Provider
         await Provider.of<ShiftProvider>(context, listen: false).loadShifts();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка открытия смены: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

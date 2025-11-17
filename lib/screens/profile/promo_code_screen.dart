@@ -1,3 +1,7 @@
+// ====== PromoCodeScreen.dart ======
+
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/services/promo_api_service.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
@@ -15,14 +19,20 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
   final ApiService _apiService = ApiService();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
+  // Для хранения состояния активного бренда
+  String? _activeBrand;
+  // Для хранения состояния смены
+  bool? _isShiftActive;
+  // Для хранения полученных промокодов (будут сохранены в storage)
+  final Map<String, List<String>> _claimed = {};
+
+  // Для отслеживания загрузки каждого бренда
   final Map<String, bool> _isLoading = {
     'JET': false,
     'YANDEX': false,
     'WHOOSH': false,
     'BOLT': false,
   };
-  final Map<String, List<String>> _claimed = {};
-  bool? _isShiftActive;
 
   @override
   void initState() {
@@ -31,27 +41,25 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
   }
 
   Future<void> _loadData() async {
-    await _loadClaimedPromos();
-    await _checkShiftStatus();
+    await _loadClaimedPromos(); // Загружаем сохраненные промокоды
+    await _checkShiftStatus(); // Проверяем смену
+    await _loadActiveBrand(); // Загружаем активный бренд
   }
 
   Future<void> _loadClaimedPromos() async {
     try {
-      final token = await _storage.read(key: 'jwt_token');
-      if (token == null) return;
-
-      final profile = await _apiService.getUserProfile(token);
-      if (profile.containsKey('promo_codes') &&
-          profile['promo_codes'] != null) {
-        final promoCodes = profile['promo_codes'] as Map<String, dynamic>;
+      // Читаем из хранилища
+      final savedClaimed = await _storage.read(key: 'claimed_promos');
+      if (savedClaimed != null) {
         setState(() {
-          _claimed['JET'] = promoCodes['JET']?.cast<String>() ?? [];
-          _claimed['YANDEX'] = promoCodes['YANDEX']?.cast<String>() ?? [];
-          _claimed['WHOOSH'] = promoCodes['WHOOSH']?.cast<String>() ?? [];
-          _claimed['BOLT'] = promoCodes['BOLT']?.cast<String>() ?? [];
+          _claimed.addAll(
+            jsonDecode(savedClaimed) as Map<String, List<String>>,
+          );
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      // Игнорируем ошибку, просто не загрузим старые данные
+    }
   }
 
   Future<void> _checkShiftStatus() async {
@@ -77,6 +85,24 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     }
   }
 
+  Future<void> _loadActiveBrand() async {
+    try {
+      final response = await _promoService.getActivePromoBrand();
+      if (mounted) {
+        setState(() {
+          _activeBrand = response?['brand'];
+        });
+      }
+    } catch (e) {
+      // Если ошибка, считаем что активных брендов нет (все доступны)
+      if (mounted) {
+        setState(() {
+          _activeBrand = null;
+        });
+      }
+    }
+  }
+
   Future<void> _claimPromo(String brand) async {
     if (_isShiftActive != true) return;
 
@@ -90,10 +116,18 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
       final alreadyClaimed = response['already_claimed'] ?? false;
 
       if (mounted) {
+        // Обновляем состояние
         setState(() {
           _claimed[brand] = codes;
         });
 
+        // Сохраняем в хранилище
+        await _storage.write(
+          key: 'claimed_promos',
+          value: jsonEncode(_claimed),
+        );
+
+        // Показываем сообщение
         final codeText = codes.length == 1 ? codes[0] : codes.join(', ');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -169,48 +203,127 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildBrandCard('JET', Icons.electric_scooter),
-            _buildBrandCard('YANDEX', Icons.map),
-            _buildBrandCard('WHOOSH', Icons.directions_bike),
-            _buildBrandCard('BOLT', Icons.bolt),
+            // Выводим информацию об активном бренде
+            if (_activeBrand != null)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.star, color: Colors.amber),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Сейчас активен бренд: $_activeBrand',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: Text(
+                  'Все бренды доступны',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+            // Список брендов
+            ...[
+              'JET',
+              'YANDEX',
+              'WHOOSH',
+              'BOLT',
+            ].map((brand) {
+              // Проверяем, нужно ли показывать этот бренд
+              if (_activeBrand != null && brand != _activeBrand) {
+                // Не показываем, если активен другой бренд
+                return const SizedBox.shrink();
+              }
+
+              final isClaimed = _claimed.containsKey(brand) &&
+                  (_claimed[brand]?.isNotEmpty ?? false);
+              final isLoading = _isLoading[brand] ?? false;
+              final canClaim =
+                  _isShiftActive == true && !isClaimed && !isLoading;
+
+              String subtitleText;
+              Color? subtitleColor;
+              IconData trailingIcon = Icons.arrow_forward_ios;
+              Color trailingColor = Colors.grey;
+
+              if (_isShiftActive == null) {
+                subtitleText = 'Проверка смены...';
+                subtitleColor = Colors.grey;
+              } else if (!_isShiftActive!) {
+                subtitleText = 'Недоступно: смена не начата';
+                subtitleColor = Colors.red;
+              } else if (isClaimed) {
+                subtitleText = 'Получено: ${_claimed[brand]!.join(", ")}';
+                subtitleColor = Colors.green;
+                trailingIcon = Icons.check_circle;
+                trailingColor = Colors.green;
+              } else {
+                subtitleText = 'Нажмите, чтобы получить промокод';
+                subtitleColor = Colors.blue;
+              }
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: ListTile(
+                  leading: Icon(
+                    _getBrandIcon(brand),
+                    size: 32,
+                    color: canClaim ? Colors.blue : Colors.grey,
+                  ),
+                  title: Text(
+                    brand,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: canClaim ? Colors.blue : Colors.grey,
+                    ),
+                  ),
+                  subtitle: Text(
+                    subtitleText,
+                    style: TextStyle(color: subtitleColor),
+                  ),
+                  trailing: isLoading
+                      ? const CircularProgressIndicator()
+                      : Icon(trailingIcon, color: trailingColor),
+                  onTap: canClaim ? () => _claimPromo(brand) : null,
+                  enabled: canClaim,
+                ),
+              );
+            }).toList(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBrandCard(String brand, IconData icon) {
-    final isClaimed =
-        _claimed.containsKey(brand) && (_claimed[brand]?.isNotEmpty ?? false);
-    final isLoading = _isLoading[brand] ?? false;
-    final canClaim = _isShiftActive == true && !isClaimed && !isLoading;
-
-    String subtitleText;
-    if (_isShiftActive == null) {
-      subtitleText = 'Проверка смены...';
-    } else if (!_isShiftActive!) {
-      subtitleText = 'Недоступно: смена не начата';
-    } else if (isClaimed) {
-      subtitleText = 'Получено: ${_claimed[brand]!.join(", ")}';
-    } else {
-      subtitleText = 'Нажмите, чтобы получить промокод';
+  // Вспомогательная функция для иконок брендов
+  IconData _getBrandIcon(String brand) {
+    switch (brand) {
+      case 'JET':
+        return Icons.electric_scooter;
+      case 'YANDEX':
+        return Icons.map;
+      case 'WHOOSH':
+        return Icons.directions_bike;
+      case 'BOLT':
+        return Icons.bolt;
+      default:
+        return Icons.help;
     }
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Opacity(
-        opacity: _isShiftActive == false ? 0.5 : 1.0,
-        child: ListTile(
-          leading: Icon(icon, size: 32),
-          title:
-              Text(brand, style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text(subtitleText),
-          trailing: isLoading
-              ? const CircularProgressIndicator()
-              : Icon(isClaimed ? Icons.check_circle : Icons.arrow_forward_ios),
-          onTap: canClaim ? () => _claimPromo(brand) : null,
-        ),
-      ),
-    );
   }
 }

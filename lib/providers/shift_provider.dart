@@ -1,17 +1,24 @@
+// lib/providers/shift_provider.dart
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:math' show e;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:jwt_decode/jwt_decode.dart';
 import 'package:micro_mobility_app/models/active_shift.dart' as model;
 import '../models/shift_data.dart';
 import '../services/api_service.dart';
 import '../config/app_config.dart';
+import '../services/geo_tracking_service.dart'
+    show
+        startBackgroundTracking,
+        stopBackgroundTracking,
+        syncBufferedData,
+        isBackgroundTrackingRunning;
 
 class ShiftProvider with ChangeNotifier {
   final ApiService _apiService;
@@ -20,7 +27,7 @@ class ShiftProvider with ChangeNotifier {
   String? _token;
   model.ActiveShift? _activeShift;
   List<ShiftData> _shiftHistory = [];
-  DateTime _selectedDate = DateTime.now().toLocal(); // ← Локальное время
+  DateTime _selectedDate = DateTime.now().toLocal();
   bool _isEndingSlot = false;
   bool _isStartingSlot = false;
   Map<String, dynamic>? _botStatsData;
@@ -34,10 +41,10 @@ class ShiftProvider with ChangeNotifier {
   bool _isLoadingActiveShift = false;
   DateTime? _lastActiveShiftFetchTime;
   bool _hasLoadedShifts = false;
-  static const Duration _cacheDuration = Duration(minutes: 5);
   Map<String, dynamic>? _profile;
   DateTime? _lastProfileFetchTime;
   bool _hasLoadedProfile = false;
+  bool _isLoadingProfile = false;
 
   ShiftProvider({
     required ApiService apiService,
@@ -50,18 +57,6 @@ class ShiftProvider with ChangeNotifier {
     _token = initialToken;
     _initializeShiftProvider();
     _setupConnectivityListener();
-  }
-
-  bool _isTokenValid(String token) {
-    try {
-      final payload = Jwt.parseJwt(token);
-      final exp = payload['exp'] as int?;
-      if (exp == null) return false;
-      final expiryDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
-      return expiryDate.isAfter(DateTime.now());
-    } catch (e) {
-      return false;
-    }
   }
 
   void _setupConnectivityListener() {
@@ -77,6 +72,9 @@ class ShiftProvider with ChangeNotifier {
               loadShifts();
             });
           }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            syncBufferedData();
+          });
         }
 
         _isOnline = isCurrentlyOnline;
@@ -85,7 +83,7 @@ class ShiftProvider with ChangeNotifier {
         });
       },
       onError: (error) {
-        debugPrint('❌ Ошибка мониторинга сети: $error');
+        debugPrint('❌ Ошибка мониторинга сети: $e');
       },
     );
   }
@@ -97,6 +95,8 @@ class ShiftProvider with ChangeNotifier {
         'activeShift': _activeShift?.toJson(),
         'username': _currentUsername,
         'botStatsData': _botStatsData,
+        'profile': _profile,
+        'hasLoadedProfile': _hasLoadedProfile,
         'timestamp': DateTime.now().toIso8601String(),
       };
       await _prefs.setString(_shiftsCacheKey, jsonEncode(data));
@@ -123,6 +123,8 @@ class ShiftProvider with ChangeNotifier {
           : null;
       _currentUsername = data['username'] as String?;
       _botStatsData = data['botStatsData'] as Map<String, dynamic>?;
+      _profile = data['profile'] as Map<String, dynamic>?;
+      _hasLoadedProfile = data['hasLoadedProfile'] as bool? ?? false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
@@ -141,11 +143,12 @@ class ShiftProvider with ChangeNotifier {
   String? get currentUsername => _currentUsername;
   bool get hasLoadedShifts => _hasLoadedShifts;
   bool get hasLoadedProfile => _hasLoadedProfile;
+  bool get isLoadingProfile => _isLoadingProfile;
   Map<String, dynamic>? get profile => _profile;
 
   String get formattedWorkTime {
     if (_activeShift?.startTime == null) return '0ч 0мин 0с';
-    final now = DateTime.now().toLocal(); // ← Локальное время
+    final now = DateTime.now().toLocal();
     final duration = now.difference(_activeShift!.startTime!);
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
@@ -156,17 +159,11 @@ class ShiftProvider with ChangeNotifier {
   Future<void> setToken(String token) async {
     _token = token;
     await _storage.write(key: 'jwt_token', value: token);
-    await _initializeShiftProvider();
   }
 
   Future<void> _initializeShiftProvider() async {
     if (_token == null) {
       _token = await _storage.read(key: 'jwt_token');
-    }
-    if (_token != null && !_isTokenValid(_token!)) {
-      debugPrint('🔐 Токен просрочен. Выполняем выход...');
-      await logout();
-      return;
     }
     await loadFromCache();
     if (_isOnline && _token != null && !_hasLoadedShifts) {
@@ -188,13 +185,9 @@ class ShiftProvider with ChangeNotifier {
     }
     try {
       _isLoadingActiveShift = true;
-      final response =
-          await _retryApiCall(() => _apiService.getActiveShift(_token!));
+      final response = await _apiService.getActiveShift(_token!);
 
-      if (response == null ||
-          response.toString() == 'null' ||
-          response.toString() == '[]' ||
-          response.toString() == '{}') {
+      if (response == null) {
         _activeShift = null;
       } else {
         _activeShift = response;
@@ -210,6 +203,12 @@ class ShiftProvider with ChangeNotifier {
       return _activeShift;
     } catch (e) {
       debugPrint('❌ Ошибка получения активной смены: $e');
+      final storedToken = await _storage.read(key: 'jwt_token');
+      if (storedToken == null) {
+        debugPrint('Token was cleared during getActiveShift.');
+        await logout();
+        return null;
+      }
       _activeShift = null;
       return _activeShift;
     } finally {
@@ -218,23 +217,6 @@ class ShiftProvider with ChangeNotifier {
         notifyListeners();
       });
     }
-  }
-
-  Future<T> _retryApiCall<T>(Future<T> Function() apiCall) async {
-    const maxRetries = 3;
-    const retryDelay = Duration(seconds: 2);
-    for (var i = 0; i < maxRetries; i++) {
-      try {
-        return await apiCall();
-      } catch (e) {
-        if (e.toString().contains('502') && i < maxRetries - 1) {
-          await Future.delayed(retryDelay);
-          continue;
-        }
-        rethrow;
-      }
-    }
-    throw Exception('API call failed after $maxRetries retries');
   }
 
   Future<void> loadShifts() async {
@@ -250,22 +232,10 @@ class ShiftProvider with ChangeNotifier {
       });
       return;
     }
-    if (!_isTokenValid(_token!)) {
-      debugPrint('🔐 Токен истёк. Выход...');
-      await logout();
-      return;
-    }
     try {
-      final dynamic shiftsData =
-          await _retryApiCall(() => _apiService.getShifts(_token!));
-      if (shiftsData is List) {
-        _shiftHistory = shiftsData
-            .whereType<Map<String, dynamic>>()
-            .map((json) => ShiftData.fromJson(json))
-            .toList();
-      } else {
-        _shiftHistory = [];
-      }
+      final shiftsData = await _apiService.getShifts(_token!);
+      _shiftHistory = shiftsData;
+
       await getActiveShift();
       await _saveToCache();
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -273,6 +243,12 @@ class ShiftProvider with ChangeNotifier {
       });
     } catch (e) {
       debugPrint('ShiftProvider.loadShifts error: $e');
+      final storedToken = await _storage.read(key: 'jwt_token');
+      if (storedToken == null) {
+        debugPrint('Token was cleared during loadShifts.');
+        await logout();
+        return;
+      }
       if (isFirstLoad && !_isOnline) {
         await loadFromCache();
       } else {
@@ -287,8 +263,7 @@ class ShiftProvider with ChangeNotifier {
   }
 
   void selectDate(DateTime date) {
-    _selectedDate =
-        DateTime(date.year, date.month, date.day).toLocal(); // ← Локальная дата
+    _selectedDate = DateTime(date.year, date.month, date.day).toLocal();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
     });
@@ -307,17 +282,24 @@ class ShiftProvider with ChangeNotifier {
       notifyListeners();
     });
     try {
-      await _retryApiCall(() => _apiService.startSlot(
-            token: _token!,
-            slotTimeRange: slotTimeRange,
-            position: position,
-            zone: zone,
-            selfieImage: imageFile,
-          ));
+      await _apiService.startSlot(
+        token: _token!,
+        slotTimeRange: slotTimeRange,
+        position: position,
+        zone: zone,
+        selfieImage: imageFile,
+      );
       debugPrint('✅ Смена начата');
       await loadShifts();
+
+      await syncGeoTrackingWithShiftState();
     } catch (e) {
       debugPrint('❌ Ошибка старта смены: $e');
+      final storedToken = await _storage.read(key: 'jwt_token');
+      if (storedToken == null) {
+        debugPrint('Token was cleared during startSlot.');
+        await logout();
+      }
       rethrow;
     } finally {
       _isStartingSlot = false;
@@ -334,14 +316,21 @@ class ShiftProvider with ChangeNotifier {
       notifyListeners();
     });
     try {
-      await _retryApiCall(() => _apiService.endSlot(_token!));
+      await _apiService.endSlot(_token!);
       debugPrint('✅ Смена завершена');
       _lastActiveShiftFetchTime = null;
       _activeShift = null;
       _currentUsername = null;
       await loadShifts();
+
+      await syncGeoTrackingWithShiftState();
     } catch (e) {
       debugPrint('❌ Ошибка завершения смены: $e');
+      final storedToken = await _storage.read(key: 'jwt_token');
+      if (storedToken == null) {
+        debugPrint('Token was cleared during endSlot.');
+        await logout();
+      }
       await loadShifts();
       rethrow;
     } finally {
@@ -384,14 +373,18 @@ class ShiftProvider with ChangeNotifier {
     });
     try {
       debugPrint('ShiftProvider: Fetching bot stats...');
-      final stats = await _retryApiCall(
-          () => _apiService.getScooterStatsForShift(_token!));
+      final stats = await _apiService.getScooterStatsForShift(_token!);
       _botStatsData = stats;
       _lastBotStatsFetchTime = DateTime.now();
       debugPrint('✅ Bot stats fetched successfully.');
       await _saveToCache();
     } catch (e) {
       debugPrint('❌ ShiftProvider.fetchBotStats error: $e');
+      final storedToken = await _storage.read(key: 'jwt_token');
+      if (storedToken == null) {
+        debugPrint('Token was cleared during fetchBotStats.');
+        await logout();
+      }
     } finally {
       _isLoadingBotStats = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -400,14 +393,47 @@ class ShiftProvider with ChangeNotifier {
     }
   }
 
+  Future<void> syncGeoTrackingWithShiftState() async {
+    try {
+      await getActiveShift();
+
+      final bool isTrackingRunning = await isBackgroundTrackingRunning();
+      final bool hasActiveShift =
+          _activeShift != null && _activeShift!.id != null;
+
+      if (hasActiveShift && !isTrackingRunning) {
+        debugPrint(
+            'SyncGeoTracking: Запуск трекинга для активной смены ${_activeShift!.id}');
+        await _prefs.setInt('active_shift_id_for_bg_service', _activeShift!.id);
+        await startBackgroundTracking(shiftId: _activeShift!.id);
+      } else if (!hasActiveShift && isTrackingRunning) {
+        debugPrint(
+            'SyncGeoTracking: Остановка трекинга, так как нет активной смены.');
+        await stopBackgroundTracking();
+        await _prefs.remove('active_shift_id_for_bg_service');
+      } else {
+        debugPrint(
+            'SyncGeoTracking: Состояние трекинга и смены согласовано. Трекинг запущен: $isTrackingRunning, Активная смена: $hasActiveShift');
+      }
+    } catch (e) {
+      debugPrint('Ошибка синхронизации геотрекинга: $e');
+    }
+  }
+
   Future<void> logout() async {
     _token = null;
     _activeShift = null;
     _currentUsername = null;
     _botStatsData = null;
+    _profile = null;
+    _hasLoadedProfile = false;
     _hasLoadedShifts = false;
+    _isLoadingProfile = false;
     await _storage.delete(key: 'jwt_token');
+    await _storage.delete(key: 'refresh_token');
     await _prefs.remove(_shiftsCacheKey);
+    await syncGeoTrackingWithShiftState();
+    await _prefs.remove('active_shift_id_for_bg_service');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
     });
@@ -420,26 +446,60 @@ class ShiftProvider with ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> loadProfile({bool force = false}) async {
-    if (_token == null) return null;
+    if (_isLoadingProfile) {
+      debugPrint('🔄 LoadProfile already in progress. Skipping.');
+      return _profile;
+    }
+
+    if (_token == null) {
+      debugPrint('❌ Нет токена для загрузки профиля.');
+      return null;
+    }
 
     if (!force &&
         _lastProfileFetchTime != null &&
         DateTime.now().difference(_lastProfileFetchTime!) <
             const Duration(minutes: 10)) {
+      debugPrint('ShiftProvider: Загрузка профиля пропущена (кеширование).');
+      _hasLoadedProfile = true;
       return _profile;
     }
 
+    _isLoadingProfile = true;
+    notifyListeners();
+
     try {
+      debugPrint('🔄 Загружаем профиль с сервера...');
       final profile = await _apiService.getUserProfile(_token!);
-      _profile = profile;
-      _lastProfileFetchTime = DateTime.now();
-      _hasLoadedProfile = true;
-      await _saveToCache();
-      notifyListeners();
-      return profile;
+      if (profile != null) {
+        _profile = profile;
+        _lastProfileFetchTime = DateTime.now();
+        _hasLoadedProfile = true;
+        await _saveToCache();
+        notifyListeners();
+        debugPrint('✅ Профиль успешно загружен.');
+        return profile;
+      } else {
+        debugPrint(
+            '❌ Не удалось загрузить профиль. Токен мог быть недействителен и не обновлен.');
+        final storedToken = await _storage.read(key: 'jwt_token');
+        if (storedToken == null) {
+          debugPrint('Token was cleared during loadProfile.');
+          await logout();
+        }
+        return null;
+      }
     } catch (e) {
-      debugPrint('Ошибка загрузки профиля: $e');
+      debugPrint('❌ Ошибка загрузки профиля: $e');
+      final storedToken = await _storage.read(key: 'jwt_token');
+      if (storedToken == null) {
+        debugPrint('Token was cleared during loadProfile.');
+        await logout();
+      }
       return null;
+    } finally {
+      _isLoadingProfile = false;
+      notifyListeners();
     }
   }
 
@@ -448,6 +508,15 @@ class ShiftProvider with ChangeNotifier {
       _currentUsername = username;
       _saveToCache();
       notifyListeners();
+    }
+  }
+
+  Future<void> syncBufferedData() async {
+    try {
+      // TODO: реализовать синхронизацию буфера
+      debugPrint('syncBufferedData() called — but not implemented');
+    } catch (e) {
+      debugPrint('Ошибка syncBufferedData: $e');
     }
   }
 }

@@ -1,43 +1,28 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart' show debugPrint;
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/models/active_shift.dart' as active_shift;
 import '../models/shift_data.dart' as shift_data;
 import '../config/app_config.dart';
+import 'dart:async';
 
 class ApiService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  Future<http.Response> _authorizedRequest(
-    Future<http.Response> Function(String token) requestFunction,
-    String originalToken,
-  ) async {
-    http.Response response = await requestFunction(originalToken);
+  bool _isRefreshing = false;
+  Completer<String?>? _refreshCompleter;
 
-    if (response.statusCode == 401) {
-      debugPrint('Access token expired (401). Attempting to refresh...');
-      final newToken = await refreshToken();
-      if (newToken != null) {
-        debugPrint('Token refreshed successfully. Retrying request...');
-        response = await requestFunction(newToken);
-      } else {
-        debugPrint('Failed to refresh token. User needs to log in again.');
-      }
-    }
-    return response;
-  }
-
-  Future<String?> refreshToken() async {
+  Future<String?> _performTokenRefresh() async {
     try {
       final refreshToken = await _storage.read(key: 'refresh_token');
       if (refreshToken == null || refreshToken.isEmpty) {
-        debugPrint('No refresh token found in storage.');
+        debugPrint('❌ No refresh token found in storage.');
         return null;
       }
 
-      debugPrint('Attempting to refresh token with stored refresh token.');
+      debugPrint('🔄 Attempting to refresh token with stored refresh token.');
 
       final response = await http.post(
         Uri.parse(AppConfig.refreshTokenUrl),
@@ -45,7 +30,7 @@ class ApiService {
         body: jsonEncode({'refresh_token': refreshToken}),
       );
 
-      debugPrint('Refresh token response status: ${response.statusCode}');
+      debugPrint('🔄 Refresh token response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>?;
@@ -57,25 +42,74 @@ class ApiService {
           await _storage.write(key: 'jwt_token', value: newAccessToken);
           if (newRefreshToken != null) {
             await _storage.write(key: 'refresh_token', value: newRefreshToken);
-            debugPrint('New access and refresh tokens saved.');
+            debugPrint('✅ New access and refresh tokens saved.');
           } else {
-            debugPrint('Warning: New refresh token not received from server.');
+            debugPrint(
+                '⚠️ Warning: New refresh token not received from server.');
           }
           return newAccessToken;
         } else {
-          debugPrint('Refresh response missing access token.');
+          debugPrint('❌ Refresh response missing access token.');
         }
       } else {
         debugPrint(
-            'Refresh token request failed: ${response.statusCode}. Clearing tokens.');
+            '❌ Refresh token request failed: ${response.statusCode}. Clearing tokens.');
         await _storage.delete(key: 'jwt_token');
         await _storage.delete(key: 'refresh_token');
       }
     } catch (e, stackTrace) {
       debugPrint(
-          'Exception during token refresh: $e\nStack trace: $stackTrace');
+          '❌ Exception during token refresh: $e\nStack trace: $stackTrace');
     }
     return null;
+  }
+
+  Future<String?> refreshToken() async {
+    if (_isRefreshing) {
+      debugPrint('🔄 Refresh already in progress, waiting...');
+      return await _refreshCompleter!.future;
+    }
+
+    _isRefreshing = true;
+    _refreshCompleter = Completer<String?>();
+
+    try {
+      final newToken = await _performTokenRefresh();
+      _refreshCompleter!.complete(newToken);
+      return newToken;
+    } catch (e) {
+      debugPrint('❌ Error in refresh process: $e');
+      _refreshCompleter!.completeError(e);
+      return null;
+    } finally {
+      _isRefreshing = false;
+      _refreshCompleter = null;
+    }
+  }
+
+  Future<http.Response> _authorizedRequest(
+    Future<http.Response> Function(String token) requestFunction,
+    String originalToken,
+  ) async {
+    http.Response response = await requestFunction(originalToken);
+
+    if (response.statusCode == 401) {
+      debugPrint('🔐 Access token expired (401). Attempting to refresh...');
+      final newToken = await refreshToken();
+      if (newToken != null) {
+        debugPrint('✅ Token refreshed successfully. Retrying request...');
+        response = await requestFunction(newToken);
+        if (response.statusCode == 401) {
+          debugPrint(
+              '❌ Retry with new token also failed (401). Clearing tokens.');
+          await _storage.delete(key: 'jwt_token');
+          await _storage.delete(key: 'refresh_token');
+        }
+      } else {
+        debugPrint('❌ Failed to refresh token. User needs to log in again.');
+      }
+    }
+    return response;
   }
 
   Future<Map<String, dynamic>> login(String username, String password) async {
@@ -97,15 +131,15 @@ class ApiService {
       if (accessToken != null && refreshToken != null) {
         await _storage.write(key: 'jwt_token', value: accessToken);
         await _storage.write(key: 'refresh_token', value: refreshToken);
-        debugPrint('Login successful. Tokens saved.');
+        debugPrint('✅ Login successful. Tokens saved.');
         return body!;
       } else {
-        debugPrint('Login response missing tokens.');
+        debugPrint('❌ Login response missing tokens.');
         throw Exception(
             'Ошибка авторизации: Неполный ответ от сервера (отсутствуют токены)');
       }
     } else {
-      debugPrint('Login failed: ${response.statusCode} - ${response.body}');
+      debugPrint('❌ Login failed: ${response.statusCode} - ${response.body}');
       String errorMessage = 'Ошибка авторизации: ${response.statusCode}';
       try {
         final errorBody = jsonDecode(response.body) as Map<String, dynamic>?;
@@ -113,7 +147,7 @@ class ApiService {
             errorBody?['message']?.toString() ??
             errorMessage;
       } catch (e) {
-        debugPrint('Error parsing login error response: $e');
+        debugPrint('⚠️ Error parsing login error response: $e');
       }
       throw Exception(errorMessage);
     }
@@ -129,14 +163,14 @@ class ApiService {
         },
       );
       if (response.statusCode != 200) {
-        debugPrint('Logout endpoint returned status ${response.statusCode}');
+        debugPrint('⚠️ Logout endpoint returned status ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('Error calling logout endpoint (not critical): $e');
+      debugPrint('⚠️ Error calling logout endpoint (not critical): $e');
     } finally {
       await _storage.delete(key: 'jwt_token');
       await _storage.delete(key: 'refresh_token');
-      debugPrint('Tokens cleared on logout.');
+      debugPrint('🔑 Tokens cleared on logout.');
     }
   }
 
@@ -234,7 +268,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки updateUserRole: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки updateUserRole: $e');
       }
       throw Exception(errorMessage);
     }
@@ -260,7 +294,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки updateUserStatus: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки updateUserStatus: $e');
       }
       throw Exception(errorMessage);
     }
@@ -295,7 +329,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки createUser: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки createUser: $e');
       }
       throw Exception(errorMessage);
     }
@@ -320,7 +354,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки deleteUser: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки deleteUser: $e');
       }
       throw Exception(errorMessage);
     }
@@ -372,7 +406,7 @@ class ApiService {
             errorMessage = errorBody['message']?.toString() ?? errorMessage;
           }
         } catch (e) {
-          debugPrint('Ошибка парсинга тела ошибки getShifts: $e');
+          debugPrint('⚠️ Ошибка парсинга тела ошибки getShifts: $e');
         }
         throw Exception(errorMessage);
       }
@@ -389,18 +423,9 @@ class ApiService {
     required File selfieImage,
   }) async {
     try {
-      String effectiveToken = token;
-      if (await _isTokenAboutToExpire(token)) {
-        final newToken = await refreshToken();
-        if (newToken != null) {
-          effectiveToken = newToken;
-        } else {
-          throw Exception('Token expired and refresh failed');
-        }
-      }
       final request =
           http.MultipartRequest('POST', Uri.parse(AppConfig.startSlotUrl));
-      request.headers['Authorization'] = 'Bearer $effectiveToken';
+      request.headers['Authorization'] = 'Bearer $token';
       request.fields['slot_time_range'] = slotTimeRange;
       request.fields['position'] = position;
       request.fields['zone'] = zone;
@@ -410,23 +435,82 @@ class ApiService {
       } else {
         throw Exception('Selfie file does not exist');
       }
-      final response = await request.send();
-      final resp = await http.Response.fromStream(response);
-      if (resp.statusCode != 200 && resp.statusCode != 201) {
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 401) {
+        debugPrint(
+            '🔐 startSlot: Access token expired (401). Attempting to refresh...');
+        final newToken = await refreshToken();
+        if (newToken != null) {
+          debugPrint('✅ Token refreshed. Retrying startSlot...');
+          final retryRequest =
+              http.MultipartRequest('POST', Uri.parse(AppConfig.startSlotUrl));
+          retryRequest.headers['Authorization'] = 'Bearer $newToken';
+          retryRequest.fields['slot_time_range'] = slotTimeRange;
+          retryRequest.fields['position'] = position;
+          retryRequest.fields['zone'] = zone;
+          if (await selfieImage.exists()) {
+            retryRequest.files.add(
+                await http.MultipartFile.fromPath('selfie', selfieImage.path));
+          } else {
+            throw Exception('Selfie file does not exist for retry');
+          }
+          final retryStreamedResponse = await retryRequest.send();
+          final retryResponse =
+              await http.Response.fromStream(retryStreamedResponse);
+
+          if (retryResponse.statusCode != 200 &&
+              retryResponse.statusCode != 201) {
+            String errorMessage = 'Failed to start slot after token refresh';
+            try {
+              final errorBody =
+                  jsonDecode(utf8.decode(retryResponse.bodyBytes));
+              errorMessage = errorBody['error']?.toString() ?? errorMessage;
+              if (errorMessage == 'Failed to start slot after token refresh') {
+                errorMessage = errorBody['message']?.toString() ?? errorMessage;
+              }
+            } catch (e) {
+              debugPrint(
+                  '⚠️ Ошибка парсинга тела ошибки startSlot (retry): $e');
+            }
+            throw Exception(errorMessage);
+          }
+          debugPrint('✅ Slot started successfully after token refresh.');
+          return;
+        } else {
+          debugPrint('❌ Failed to refresh token for startSlot.');
+          String errorMessage = 'Token refresh failed during startSlot';
+          try {
+            final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+            errorMessage = errorBody['error']?.toString() ?? errorMessage;
+            if (errorMessage == 'Token refresh failed during startSlot') {
+              errorMessage = errorBody['message']?.toString() ?? errorMessage;
+            }
+          } catch (e) {
+            debugPrint(
+                '⚠️ Ошибка парсинга тела ошибки startSlot (initial 401): $e');
+          }
+          throw Exception(errorMessage);
+        }
+      }
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
         String errorMessage = 'Failed to start slot';
         try {
-          final errorBody = jsonDecode(utf8.decode(resp.bodyBytes));
+          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
           errorMessage = errorBody['error']?.toString() ?? errorMessage;
           if (errorMessage == 'Failed to start slot') {
             errorMessage = errorBody['message']?.toString() ?? errorMessage;
           }
         } catch (e) {
-          debugPrint('Ошибка парсинга тела ошибки startSlot: $e');
+          debugPrint('⚠️ Ошибка парсинга тела ошибки startSlot: $e');
         }
         throw Exception(errorMessage);
       }
     } catch (e) {
-      debugPrint('Error in startSlot: $e');
+      debugPrint('❌ Error in startSlot: $e');
       rethrow;
     }
   }
@@ -451,12 +535,12 @@ class ApiService {
             errorMessage = errorBody['message']?.toString() ?? errorMessage;
           }
         } catch (e) {
-          debugPrint('Ошибка парсинга тела ошибки endSlot: $e');
+          debugPrint('⚠️ Ошибка парсинга тела ошибки endSlot: $e');
         }
         throw Exception(errorMessage);
       }
     } catch (e) {
-      debugPrint('Error in endSlot: $e');
+      debugPrint('❌ Error in endSlot: $e');
       rethrow;
     }
   }
@@ -499,7 +583,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки getActiveShift: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки getActiveShift: $e');
       }
       debugPrint(errorMessage);
       return null;
@@ -541,7 +625,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки getActiveShifts: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки getActiveShifts: $e');
       }
       throw Exception(errorMessage);
     }
@@ -575,7 +659,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки getEndedShifts: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки getEndedShifts: $e');
       }
       throw Exception(errorMessage);
     }
@@ -606,7 +690,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки getAvailablePositions: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки getAvailablePositions: $e');
       }
       throw Exception(errorMessage);
     }
@@ -637,7 +721,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки getAvailableTimeSlots: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки getAvailableTimeSlots: $e');
       }
       throw Exception(errorMessage);
     }
@@ -678,7 +762,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки getAvailableZones: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки getAvailableZones: $e');
       }
       throw Exception(errorMessage);
     }
@@ -709,7 +793,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки getAvailableZonesRaw: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки getAvailableZonesRaw: $e');
       }
       throw Exception(errorMessage);
     }
@@ -735,7 +819,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки createZone: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки createZone: $e');
       }
       throw Exception(errorMessage);
     }
@@ -761,7 +845,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки updateZone: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки updateZone: $e');
       }
       throw Exception(errorMessage);
     }
@@ -786,7 +870,7 @@ class ApiService {
           errorMessage = errorBody['message']?.toString() ?? errorMessage;
         }
       } catch (e) {
-        debugPrint('Ошибка парсинга тела ошибки deleteZone: $e');
+        debugPrint('⚠️ Ошибка парсинга тела ошибки deleteZone: $e');
       }
       throw Exception(errorMessage);
     }
@@ -816,7 +900,7 @@ class ApiService {
             errorMessage = errorBody['message']?.toString() ?? errorMessage;
           }
         } catch (e) {
-          debugPrint('Ошибка парсинга тела ошибки getUploadedMaps: $e');
+          debugPrint('⚠️ Ошибка парсинга тела ошибки getUploadedMaps: $e');
         }
         throw Exception(errorMessage);
       }
@@ -832,18 +916,9 @@ class ApiService {
     required File geoJsonFile,
   }) async {
     try {
-      String effectiveToken = token;
-      if (await _isTokenAboutToExpire(token)) {
-        final newToken = await refreshToken();
-        if (newToken != null) {
-          effectiveToken = newToken;
-        } else {
-          throw Exception('Token expired and refresh failed');
-        }
-      }
       final request =
           http.MultipartRequest('POST', Uri.parse(AppConfig.uploadMapUrl));
-      request.headers['Authorization'] = 'Bearer $effectiveToken';
+      request.headers['Authorization'] = 'Bearer $token';
       request.fields['city'] = city;
       request.fields['description'] = description;
       if (await geoJsonFile.exists()) {
@@ -856,18 +931,80 @@ class ApiService {
       } else {
         throw Exception('GeoJSON file does not exist');
       }
-      final response = await request.send();
-      final resp = await http.Response.fromStream(response);
-      if (resp.statusCode != 200 && resp.statusCode != 201) {
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 401) {
+        debugPrint(
+            '🔐 uploadMap: Access token expired (401). Attempting to refresh...');
+        final newToken = await refreshToken();
+        if (newToken != null) {
+          debugPrint('✅ Token refreshed. Retrying uploadMap...');
+          final retryRequest =
+              http.MultipartRequest('POST', Uri.parse(AppConfig.uploadMapUrl));
+          retryRequest.headers['Authorization'] = 'Bearer $newToken';
+          retryRequest.fields['city'] = city;
+          retryRequest.fields['description'] = description;
+          if (await geoJsonFile.exists()) {
+            final retryFile = await http.MultipartFile.fromPath(
+              'geojson_file',
+              geoJsonFile.path,
+              filename: geoJsonFile.path.split('/').last,
+            );
+            retryRequest.files.add(retryFile);
+          } else {
+            throw Exception('GeoJSON file does not exist for retry');
+          }
+          final retryStreamedResponse = await retryRequest.send();
+          final retryResponse =
+              await http.Response.fromStream(retryStreamedResponse);
+
+          if (retryResponse.statusCode != 200 &&
+              retryResponse.statusCode != 201) {
+            String errorMessage = 'Failed to upload map after token refresh';
+            try {
+              final errorBody =
+                  jsonDecode(utf8.decode(retryResponse.bodyBytes));
+              errorMessage = errorBody['error']?.toString() ?? errorMessage;
+              if (errorMessage == 'Failed to upload map after token refresh') {
+                errorMessage = errorBody['message']?.toString() ?? errorMessage;
+              }
+            } catch (e) {
+              debugPrint(
+                  '⚠️ Ошибка парсинга тела ошибки uploadMap (retry): $e');
+            }
+            throw Exception(errorMessage);
+          }
+          debugPrint('✅ Map uploaded successfully after token refresh.');
+          return;
+        } else {
+          debugPrint('❌ Failed to refresh token for uploadMap.');
+          String errorMessage = 'Token refresh failed during uploadMap';
+          try {
+            final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+            errorMessage = errorBody['error']?.toString() ?? errorMessage;
+            if (errorMessage == 'Token refresh failed during uploadMap') {
+              errorMessage = errorBody['message']?.toString() ?? errorMessage;
+            }
+          } catch (e) {
+            debugPrint(
+                '⚠️ Ошибка парсинга тела ошибки uploadMap (initial 401): $e');
+          }
+          throw Exception(errorMessage);
+        }
+      }
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
         String errorMessage = 'Failed to upload map';
         try {
-          final errorBody = jsonDecode(utf8.decode(resp.bodyBytes));
+          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
           errorMessage = errorBody['error']?.toString() ?? errorMessage;
           if (errorMessage == 'Failed to upload map') {
             errorMessage = errorBody['message']?.toString() ?? errorMessage;
           }
         } catch (e) {
-          debugPrint('Ошибка парсинга тела ошибки uploadMap: $e');
+          debugPrint('⚠️ Ошибка парсинга тела ошибки uploadMap: $e');
         }
         throw Exception(errorMessage);
       }
@@ -899,7 +1036,7 @@ class ApiService {
             errorMessage = errorBody['message']?.toString() ?? errorMessage;
           }
         } catch (e) {
-          debugPrint('Ошибка парсинга тела ошибки deleteMap: $e');
+          debugPrint('⚠️ Ошибка парсинга тела ошибки deleteMap: $e');
         }
         throw Exception(errorMessage);
       }
@@ -933,7 +1070,7 @@ class ApiService {
             errorMessage = errorBody['message']?.toString() ?? errorMessage;
           }
         } catch (e) {
-          debugPrint('Ошибка парсинга тела ошибки getMapById: $e');
+          debugPrint('⚠️ Ошибка парсинга тела ошибки getMapById: $e');
         }
         throw Exception(errorMessage);
       }
@@ -1045,7 +1182,7 @@ class ApiService {
         }
       } catch (e) {
         debugPrint(
-            'Ошибка парсинга тела ошибки getAvailableTimeSlotsForStart: $e');
+            '⚠️ Ошибка парсинга тела ошибки getAvailableTimeSlotsForStart: $e');
       }
       throw Exception(errorMessage);
     }
@@ -1080,6 +1217,27 @@ class ApiService {
 
     if (response.statusCode != 200) {
       throw Exception('Не удалось получить промокод');
+    }
+  }
+
+  Future<Map<String, dynamic>?> sendGeoBatch(
+      String token, List<dynamic> batchData) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.post(
+        Uri.parse(AppConfig.geoTrackUrl), // Убедитесь, что этот URL существует
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'data': batchData}),
+      );
+    }, token);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>?;
+    } else {
+      throw Exception(
+          'Failed to send geo batch: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
     }
   }
 }
