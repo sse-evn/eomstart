@@ -24,7 +24,6 @@ Timer? _backgroundTimer;
 int? _activeShiftId;
 final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-/// ГЛОБАЛЬНЫЙ флаг, чтобы сервис НЕ запускался дважды
 bool _serviceIsActuallyRunning = false;
 
 @pragma('vm:entry-point')
@@ -32,17 +31,16 @@ FutureOr<bool> onStart(ServiceInstance service) async {
   _log("onStart вызван");
 
   if (_serviceIsActuallyRunning) {
-    _log("onStart: сервис уже поднят — повторный вызов игнорируем.");
+    _log("Сервис уже поднят — игнорируем.");
     return true;
   }
 
   _serviceIsActuallyRunning = true;
-
   final prefs = await SharedPreferences.getInstance();
   final shiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
 
   if (shiftId == null) {
-    _log("onStart: нет active_shift_id — останавливаем.");
+    _log("Нет active_shift_id — останавливаем.");
     service.stopSelf();
     _serviceIsActuallyRunning = false;
     return false;
@@ -67,8 +65,6 @@ FutureOr<bool> onStart(ServiceInstance service) async {
 
   return true;
 }
-
-/// --- ОСТАЛЬНАЯ ЛОГИКА НЕ ИЗМЕНЯЛАСЬ ---
 
 Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
   _log("Сбор геоданных...");
@@ -119,7 +115,8 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
       batteryLevel = 0;
     }
 
-    if (position.latitude == 0 && position.longitude == 0) {
+    // 🔥 Фильтр нулевых координат
+    if (position.latitude == 0.0 || position.longitude == 0.0) {
       _log("Получена 0,0 позиция — пропуск");
       return;
     }
@@ -174,22 +171,15 @@ Future<void> _sendSingleGeoDataToServer(String geoDataJson) async {
 
 Future<void> _bufferFailedData(String geoDataJson, int? shiftId) async {
   if (shiftId == null) return;
-
   final prefs = await SharedPreferences.getInstance();
   final key = 'geo_buffer_$shiftId';
   final current = prefs.getStringList(key) ?? [];
-
   current.add(geoDataJson);
   if (current.length > 1000) {
     current.removeRange(0, current.length - 1000);
   }
-
   await prefs.setStringList(key, current);
 }
-
-/// ---------------------
-/// ГЛАВНАЯ ЧАСТЬ
-/// ---------------------
 
 Future<void> startBackgroundTracking({required int shiftId}) async {
   _log("startBackgroundTracking($shiftId)");
@@ -200,21 +190,10 @@ Future<void> startBackgroundTracking({required int shiftId}) async {
 
   _log("isRunning=$isRunning, currentShift=$currentShift");
 
-  /// === ЕСЛИ УЖЕ ЗАПУЩЕНА ЭТА ЖЕ СМЕНА → НИЧЕГО НЕ ДЕЛАЕМ
-  if (isRunning && currentShift == shiftId) {
-    _log("Сервис уже запущен для этой смены — пропускаем.");
-    return;
-  }
+  if (isRunning && currentShift == shiftId) return;
+  if (isRunning && currentShift != shiftId) await stopBackgroundTracking();
 
-  /// === Если сервис запущен, но смена ДРУГАЯ → перезапуск
-  if (isRunning && currentShift != shiftId) {
-    _log("Смена поменялась → перезапуск сервиса.");
-    await stopBackgroundTracking();
-  }
-
-  /// === СТАРТ новой смены
   final service = FlutterBackgroundService();
-
   await prefs.setInt(_SHARED_PREFS_SHIFT_ID_KEY, shiftId);
 
   if (!_serviceIsActuallyRunning) {

@@ -2,5 +2,6 @@
     "jdk.advanced.disable.nbjavac": false,
     "cSpell.words": [
         "buildscript"
-    ]
+    ],
+    "cmake.sourceDirectory": "/home/evn/eomstart/linux"
 }

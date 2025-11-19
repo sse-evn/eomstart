@@ -59,9 +59,15 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   Future<DateTimeRange?> _showDateRangePicker(BuildContext context) async {
     final now = DateTime.now();
     final firstDate = DateTime(now.year - 1);
+
+    // Безопасно задаём end: не больше сегодняшнего дня
+    final initialStart = DateTime(now.year, now.month, now.day);
+    final initialEnd = initialStart.add(const Duration(days: 1));
+    final safeInitialEnd = initialEnd.isAfter(now) ? now : initialEnd;
+
     final initialDateRange = DateTimeRange(
-      start: DateTime(now.year, now.month, now.day),
-      end: DateTime(now.year, now.month, now.day + 1),
+      start: initialStart,
+      end: safeInitialEnd,
     );
 
     return await showDateRangePicker(

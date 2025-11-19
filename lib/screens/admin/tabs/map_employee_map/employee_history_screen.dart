@@ -32,7 +32,7 @@ class EmployeeHistoryScreen extends StatelessWidget {
                     leading: CircleAvatar(
                       backgroundColor: Colors.blue[100],
                       child: Text('${index + 1}'),
-                    ),
+                    ), 
                     title: Text(
                       '${entry.timestamp.toLocal().hour.toString().padLeft(2, '0')}:'
                       '${entry.timestamp.toLocal().minute.toString().padLeft(2, '0')}',
