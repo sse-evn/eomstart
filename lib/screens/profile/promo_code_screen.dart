@@ -1,7 +1,4 @@
-// ====== PromoCodeScreen.dart ======
-
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/services/promo_api_service.dart';
 import 'package:micro_mobility_app/services/api_service.dart';
@@ -19,15 +16,19 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
   final ApiService _apiService = ApiService();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  // Для хранения состояния активного бренда
   String? _activeBrand;
-  // Для хранения состояния смены
   bool? _isShiftActive;
-  // Для хранения полученных промокодов (будут сохранены в storage)
-  final Map<String, List<String>> _claimed = {};
-
+  // Для хранения полученных промокодов *сегодня* (для отображения)
+  final Map<String, List<String>> _claimedToday = {};
   // Для отслеживания загрузки каждого бренда
   final Map<String, bool> _isLoading = {
+    'JET': false,
+    'YANDEX': false,
+    'WHOOSH': false,
+    'BOLT': false,
+  };
+  // Для отслеживания, получил ли пользователь сегодня (состояние UI)
+  final Map<String, bool> _hasClaimedToday = {
     'JET': false,
     'YANDEX': false,
     'WHOOSH': false,
@@ -41,24 +42,37 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
   }
 
   Future<void> _loadData() async {
-    await _loadClaimedPromos(); // Загружаем сохраненные промокоды
-    await _checkShiftStatus(); // Проверяем смену
-    await _loadActiveBrand(); // Загружаем активный бренд
+    await _loadClaimedPromosToday(); // Загружаем промокоды, полученные сегодня (из локального хранилища для отображения)
+    await _checkShiftStatus();
+    await _loadActiveBrand();
   }
 
-  Future<void> _loadClaimedPromos() async {
+  // Загружаем промокоды, полученные сегодня, из локального хранилища (для отображения на экране)
+  Future<void> _loadClaimedPromosToday() async {
     try {
-      // Читаем из хранилища
-      final savedClaimed = await _storage.read(key: 'claimed_promos');
-      if (savedClaimed != null) {
+      final savedClaimedToday =
+          await _storage.read(key: 'claimed_promos_today');
+      if (savedClaimedToday != null) {
+        final decoded = jsonDecode(savedClaimedToday) as Map<String, dynamic>;
+        final map = <String, List<String>>{};
+        decoded.forEach((key, value) {
+          if (value is List) {
+            map[key] = value.cast<String>();
+          }
+        });
         setState(() {
-          _claimed.addAll(
-            jsonDecode(savedClaimed) as Map<String, List<String>>,
-          );
+          _claimedToday.addAll(map);
+          // Обновляем _hasClaimedToday на основе загруженных данных
+          for (final entry in _claimedToday.entries) {
+            if (entry.value.isNotEmpty) {
+              _hasClaimedToday[entry.key] = true;
+            }
+          }
         });
       }
     } catch (e) {
       // Игнорируем ошибку, просто не загрузим старые данные
+      print('Ошибка загрузки промокодов за сегодня: $e');
     }
   }
 
@@ -69,7 +83,6 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
         if (mounted) setState(() => _isShiftActive = false);
         return;
       }
-
       final activeShift = await _apiService.getActiveShift(token);
       if (mounted) {
         setState(() {
@@ -105,6 +118,18 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   Future<void> _claimPromo(String brand) async {
     if (_isShiftActive != true) return;
+    if (_hasClaimedToday[brand] == true) {
+      // Дополнительная проверка на UI уровне
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Вы уже получали промокод этого бренда сегодня'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
 
     setState(() {
       _isLoading[brand] = true;
@@ -113,30 +138,40 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     try {
       final response = await _promoService.claimPromoByBrand(brand);
       final codes = (response['promo_codes'] as List).cast<String>();
-      final alreadyClaimed = response['already_claimed'] ?? false;
+      // 'already_claimed' теперь означает "уже получил сегодня"
+      final alreadyClaimedToday = response['already_claimed'] ?? false;
 
       if (mounted) {
-        // Обновляем состояние
         setState(() {
-          _claimed[brand] = codes;
+          if (alreadyClaimedToday) {
+            // Сервер вернул true, значит, пользователь уже получил сегодня
+            _hasClaimedToday[brand] = true;
+            // Не обновляем _claimedToday, если сервер не вернул коды (хотя в новой логике должен)
+            // В идеале, если уже получил, сервер не должен возвращать коды снова в этом вызове.
+            // Но если вернул (например, последние полученные за сегодня), обновим.
+            // Однако, если сервер возвращает 409, мы сюда не попадем.
+            // Пока оставим обновление на всякий случай.
+            _claimedToday[brand] = codes;
+          } else {
+            // Успешно получен новый код
+            _hasClaimedToday[brand] = true;
+            _claimedToday[brand] = codes;
+          }
         });
 
-        // Сохраняем в хранилище
+        // Сохраняем полученные сегодня коды в локальное хранилище
         await _storage.write(
-          key: 'claimed_promos',
-          value: jsonEncode(_claimed),
+          key: 'claimed_promos_today',
+          value: jsonEncode(_claimedToday),
         );
 
-        // Показываем сообщение
         final codeText = codes.length == 1 ? codes[0] : codes.join(', ');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              alreadyClaimed
-                  ? 'У вас уже есть промокод: $codeText'
-                  : 'Получено: $codeText',
-            ),
-            backgroundColor: alreadyClaimed ? Colors.blue : Colors.green,
+            content: Text(alreadyClaimedToday
+                ? 'Вы уже получали промокод для $brand сегодня: $codeText'
+                : 'Получено: $codeText'),
+            backgroundColor: alreadyClaimedToday ? Colors.orange : Colors.green,
           ),
         );
       }
@@ -144,6 +179,22 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
       if (mounted) {
         if (e.statusCode == 401) {
           _handleUnauthorized();
+        } else if (e.statusCode == 409) {
+          // <-- Новый статус для "уже получил сегодня"
+          setState(() {
+            _hasClaimedToday[brand] = true;
+            // Попробуем обновить _claimedToday, если сервер вернул коды в теле ошибки (не обязательно)
+            // Обычно в 409 просто сообщение.
+            // Но если мы уже знаем, что получил, можно обновить UI.
+            // Для надежности, можно вызвать _loadClaimedPromosToday() повторно, но это лишний вызов.
+            // Лучше обновить UI напрямую.
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Вы уже получали промокод для $brand сегодня'),
+              backgroundColor: Colors.orange,
+            ),
+          );
         } else if (e.statusCode == 400 && e.message.contains('недоступны')) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -203,7 +254,6 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Выводим информацию об активном бренде
             if (_activeBrand != null)
               Container(
                 padding: const EdgeInsets.all(12),
@@ -238,24 +288,20 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                   ),
                 ),
               ),
-            // Список брендов
             ...[
               'JET',
-              'YANDEX',
+              'YANDEX', // Обратите внимание, YANDEX теперь будет отображаться как один элемент
               'WHOOSH',
               'BOLT',
             ].map((brand) {
-              // Проверяем, нужно ли показывать этот бренд
               if (_activeBrand != null && brand != _activeBrand) {
-                // Не показываем, если активен другой бренд
                 return const SizedBox.shrink();
               }
 
-              final isClaimed = _claimed.containsKey(brand) &&
-                  (_claimed[brand]?.isNotEmpty ?? false);
+              final isClaimedToday = _hasClaimedToday[brand] ?? false;
               final isLoading = _isLoading[brand] ?? false;
               final canClaim =
-                  _isShiftActive == true && !isClaimed && !isLoading;
+                  _isShiftActive == true && !isClaimedToday && !isLoading;
 
               String subtitleText;
               Color? subtitleColor;
@@ -268,8 +314,10 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
               } else if (!_isShiftActive!) {
                 subtitleText = 'Недоступно: смена не начата';
                 subtitleColor = Colors.red;
-              } else if (isClaimed) {
-                subtitleText = 'Получено: ${_claimed[brand]!.join(", ")}';
+              } else if (isClaimedToday) {
+                final codes = _claimedToday[brand];
+                subtitleText =
+                    'Получено сегодня: ${codes != null && codes.isNotEmpty ? codes.join(", ") : "Коды"}';
                 subtitleColor = Colors.green;
                 trailingIcon = Icons.check_circle;
                 trailingColor = Colors.green;
@@ -311,13 +359,12 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     );
   }
 
-  // Вспомогательная функция для иконок брендов
   IconData _getBrandIcon(String brand) {
     switch (brand) {
       case 'JET':
         return Icons.electric_scooter;
       case 'YANDEX':
-        return Icons.map;
+        return Icons.map; // Иконка для YANDEX
       case 'WHOOSH':
         return Icons.directions_bike;
       case 'BOLT':

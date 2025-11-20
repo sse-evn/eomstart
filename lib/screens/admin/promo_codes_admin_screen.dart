@@ -1,5 +1,3 @@
-// ====== AdminPromoScreen.dart (ОБНОВЛЕНО С КНОПКОЙ И ПОИСКОМ ДЛЯ АУДИТА) ======
-
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -102,7 +100,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   Future<void> _uploadExcel() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['xlsx', 'xls'],
+      allowedExtensions: ['xlsx', 'xls', 'csv'], // Разрешаем CSV
     );
     if (result == null) return;
 
@@ -132,7 +130,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('Ошибка: ${e.message}'),
+                content: Text('Ошибка загрузки файла: ${e.message}'),
                 backgroundColor: Colors.red),
           );
         }
@@ -181,7 +179,8 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content: Text('Промокоды загружены и обработаны!'),
+                        content: Text(
+                            'Промокоды из Google Таблицы загружены и обработаны!'),
                         backgroundColor: Colors.green),
                   );
                   _loadAllData();
@@ -384,14 +383,19 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Загрузка промокодов (с уточнением)
+                  // --- ОБНОВЛЁННАЯ СЕКЦИЯ ЗАГРУЗКИ ---
                   const Text('Загрузить промокоды:',
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   const Text(
                     'Загрузите Excel/CSV файл с одной колонкой "Промокод".\n'
-                    'Бренд будет определен автоматически по формату кода.',
+                    'Бренд будет определен автоматически по формату кода.\n'
+                    'Форматы:\n'
+                    '  - JET: GT9-XXXXXX\n'
+                    '  - YANDEX: ocf/ocm + цифры\n'
+                    '  - WHOOSH: WSH_XXXXXX\n'
+                    '  - BOLT: BOLTXXXXXX',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey,
@@ -402,7 +406,16 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                   FilledButton.icon(
                     onPressed: _uploadExcel,
                     icon: const Icon(Icons.file_upload),
-                    label: const Text('Загрузить Excel'),
+                    label: const Text('Загрузить Excel/CSV'),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Или загрузите промокоды из Google Таблицы в том же формате:',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   FilledButton.icon(

@@ -69,17 +69,6 @@ void main() async {
       child: const MyApp(),
     ),
   );
-
-  // ❌ УБРАНО: Слушаем смену подключения и синхронизируем данные
-  // Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
-  //   final ConnectivityResult result =
-  //       results.isNotEmpty ? results.last : ConnectivityResult.none;
-  //   if (result != ConnectivityResult.none) {
-  //     // Интернет появился — синхронизируем
-  //     // GeoTrackingService.syncBufferedData(); // вызов из вашего сервиса
-  //     // Или вызов через Provider, если нужно
-  //   }
-  // });
 }
 
 /// 🔒 Запрос всех нужных разрешений
