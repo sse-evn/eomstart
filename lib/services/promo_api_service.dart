@@ -21,7 +21,11 @@ class PromoApiService {
     return await _storage.read(key: 'jwt_token');
   }
 
-  Future<void> uploadPromoFile(List<int> fileBytes) async {
+  Future<void> uploadPromoFile(
+    List<int> fileBytes, {
+    required String brand,
+    required String validUntil,
+  }) async {
     final token = await _getToken();
     if (token == null) {
       throw PromoApiServiceException('Не авторизован', statusCode: 401);
@@ -29,33 +33,44 @@ class PromoApiService {
 
     final uri = Uri.parse('${AppConfig.apiBaseUrl}/promo/upload');
     final request = http.MultipartRequest('POST', uri);
+
     request.headers['Authorization'] = 'Bearer $token';
+
     request.files.add(
       http.MultipartFile.fromBytes(
         'file',
         fileBytes,
         filename: 'promos.xlsx',
-        contentType: MediaType('application',
-            'vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+        contentType: MediaType(
+          'application',
+          'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ),
       ),
     );
 
-    final response = await request.send();
-    final responseBody = await response.stream.bytesToString();
+    request.fields['brand'] = brand;
+    request.fields['valid_until'] = validUntil;
 
-    if (response.statusCode == 200) {
-      return;
-    } else if (response.statusCode == 401) {
+    final response = await request.send();
+    final body = await response.stream.bytesToString();
+
+    if (response.statusCode == 200) return;
+
+    if (response.statusCode == 401) {
       throw PromoApiServiceException('Сессия истекла', statusCode: 401);
-    } else if (response.statusCode == 403) {
-      throw PromoApiServiceException(
-          'Доступ запрещён: нужны права администратора',
-          statusCode: 403);
-    } else {
-      final error = _tryParseJson(responseBody)?['error'] ?? responseBody;
-      throw PromoApiServiceException('Ошибка загрузки: $error',
-          statusCode: response.statusCode);
     }
+    if (response.statusCode == 403) {
+      throw PromoApiServiceException(
+        'Доступ запрещён: нужны права администратора',
+        statusCode: 403,
+      );
+    }
+
+    final error = _tryParseJson(body)?['error'] ?? body;
+    throw PromoApiServiceException(
+      'Ошибка загрузки: $error',
+      statusCode: response.statusCode,
+    );
   }
 
   Future<void> uploadPromoFromGoogleSheet(String sheetUrl) async {

@@ -25,11 +25,15 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   final PromoApiService _service = PromoApiService();
   bool _isLoading = false;
   Map<String, dynamic>? _stats;
-  List<dynamic>?
-      _claimedPromos; // Будет содержать {user: ..., promo_codes: {...}, created_at: ...}
+  List<dynamic>? _claimedPromos;
   Map<String, dynamic>? _activeBrand;
   String? _selectedBrand;
   DateTime? _endDate;
+  DateTime? _selectedValidUntil; // Дата окончания, выбранная для загрузки файла
+
+
+  // --- НОВАЯ ПЕРЕМЕННАЯ ---
+  String? _selectedBrandForUpload; // Бренд, выбранный для загрузки файла
 
   // --- НОВЫЕ ПЕРЕМЕННЫЕ ---
   bool _showClaimedPromos = false; // Управляет видимостью списка
@@ -43,7 +47,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
 
   Future<void> _loadAllData() async {
     await _loadStats();
-    await _loadClaimedPromos(); // Теперь загружает и даты
+    await _loadClaimedPromos();
     await _loadActiveBrand();
   }
 
@@ -97,58 +101,132 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     } catch (e) {}
   }
 
-  Future<void> _uploadExcel() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx', 'xls', 'csv'], // Разрешаем CSV
+
+Future<void> _uploadExcel() async {
+  final result = await FilePicker.platform.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: ['xlsx', 'xls', 'csv'],
+  );
+  if (result == null) return;
+
+  // Диалог должен вернуть Map<String, String>
+  final selectedData = await showDialog<Map<String, String>>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Выберите бренд и дату'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DropdownButtonFormField<String>(
+            value: _selectedBrandForUpload,
+            items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
+                .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedBrandForUpload = v),
+            decoration: const InputDecoration(labelText: 'Бренд промокодов'),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            readOnly: true,
+            onTap: () async {
+              final pickedDate = await showDatePicker(
+                context: context,
+                initialDate: DateTime.now().add(const Duration(days: 7)),
+                firstDate: DateTime.now(),
+                lastDate: DateTime(2030),
+              );
+              if (pickedDate != null) {
+                setState(() {
+                  _selectedValidUntil = pickedDate;
+                });
+              }
+            },
+            decoration: InputDecoration(
+              labelText: 'Дата окончания действия',
+              hintText: _selectedValidUntil == null
+                  ? 'Выберите дату'
+                  : _selectedValidUntil!.toLocal().toString().split(' ')[0],
+              suffixIcon: const Icon(Icons.calendar_today),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Отмена'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (_selectedBrandForUpload != null &&
+                _selectedValidUntil != null) {
+              Navigator.pop(ctx, {
+                'brand': _selectedBrandForUpload!,
+                'validUntil': _selectedValidUntil!
+                    .toIso8601String()
+                    .split('T')[0], // YYYY-MM-DD
+              });
+            }
+          },
+          child: const Text('Подтвердить'),
+        ),
+      ],
+    ),
+  );
+
+  if (selectedData == null) return;
+
+  final file = File(result.files.single.path!);
+  final bytes = await file.readAsBytes();
+
+  setState(() => _isLoading = true);
+
+  try {
+    await _service.uploadPromoFile(
+      bytes,
+      brand: selectedData['brand']!,
+      validUntil: selectedData['validUntil']!,
     );
-    if (result == null) return;
 
-    final file = File(result.files.single.path!);
-    final bytes = await file.readAsBytes();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Промокоды загружены и обработаны!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _loadAllData();
+    }
+  } on PromoApiServiceException catch (e) {
+    if (!mounted) return;
 
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      await _service.uploadPromoFile(bytes);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Промокоды загружены и обработаны!'),
-              backgroundColor: Colors.green),
-        );
-        _loadAllData();
-      }
-    } on PromoApiServiceException catch (e) {
-      if (mounted) {
-        if (e.statusCode == 401) {
-          _handleUnauthorized();
-        } else if (e.statusCode == 403) {
-          _handleForbidden();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('Ошибка загрузки файла: ${e.message}'),
-                backgroundColor: Colors.red),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+    if (e.statusCode == 401) {
+      _handleUnauthorized();
+    } else if (e.statusCode == 403) {
+      _handleForbidden();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка загрузки файла: ${e.message}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
+}
 
   Future<void> _uploadFromGoogleSheet() async {
     final controller = TextEditingController();
@@ -169,11 +247,9 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
               final url = controller.text.trim();
               if (url.isEmpty) return;
               Navigator.of(ctx).pop();
-
               setState(() {
                 _isLoading = true;
               });
-
               try {
                 await _service.uploadPromoFromGoogleSheet(url);
                 if (mounted) {
@@ -216,15 +292,12 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
 
   Future<void> _activateBrand() async {
     if (_selectedBrand == null || _endDate == null) return;
-
     final now = DateTime.now();
     final difference = _endDate!.difference(now).inDays;
     final daysToSet = difference > 0 ? difference : 1;
-
     setState(() {
       _isLoading = true;
     });
-
     try {
       await _service.setActivePromoBrand(_selectedBrand!, days: daysToSet);
       await _loadActiveBrand();
@@ -389,13 +462,8 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                           TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   const Text(
-                    'Загрузите Excel/CSV файл с одной колонкой "Промокод".\n'
-                    'Бренд будет определен автоматически по формату кода.\n'
-                    'Форматы:\n'
-                    '  - JET: GT9-XXXXXX\n'
-                    '  - YANDEX: ocf/ocm + цифры\n'
-                    '  - WHOOSH: WSH_XXXXXX\n'
-                    '  - BOLT: BOLTXXXXXX',
+                    'Загрузите Excel/CSV файл с одной колонкой "Промокод" и датой окончания.\n'
+                    'Бренд будет выбран вами вручную перед загрузкой файла.',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey,
@@ -437,7 +505,6 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                   const SizedBox(height: 24),
 
                   // --- НОВЫЙ БЛОК: КНОПКА И СПИСОК ВЫДАННЫХ ПРОМОКОДОВ ---
-
                   // Кнопка для показа/скрытия списка
                   Row(
                     children: [
@@ -461,7 +528,6 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                     ],
                   ),
                   const SizedBox(height: 12),
-
                   // Поле поиска (видимо только если список открыт)
                   if (_showClaimedPromos) ...[
                     TextField(
@@ -477,7 +543,6 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                     ),
                     const SizedBox(height: 12),
                   ],
-
                   // Список выданных промокодов (видимый только при _showClaimedPromos == true)
                   if (_showClaimedPromos) ...[
                     const Text('Выданные промокоды:',
@@ -491,7 +556,6 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                     else
                       _buildClaimedPromosListByDate(), // Новый метод
                   ],
-
                   const SizedBox(height: 24),
                 ],
               ),
@@ -504,7 +568,6 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     final summary = summaryRaw is Map
         ? Map<String, int>.from(summaryRaw)
         : {'JET': 0, 'YANDEX': 0, 'WHOOSH': 0, 'BOLT': 0};
-
     final byDateRaw = _stats?['by_date'];
     final byDate =
         byDateRaw is List ? byDateRaw.cast<Map<String, dynamic>>() : [];
@@ -611,7 +674,6 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   Widget _buildClaimedPromosListByDate() {
     // Фильтруем пользователей по поисковому запросу
     final filteredUsers = <Map<String, dynamic>>[];
-
     for (final item in _claimedPromos!) {
       if (item is Map<String, dynamic> &&
           item['promo_codes'] != null &&
@@ -619,7 +681,6 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
         // Получаем имя пользователя
         final username = (item['username'] as String?)?.toLowerCase() ?? '';
         final firstName = (item['first_name'] as String?)?.toLowerCase() ?? '';
-
         // Проверяем, соответствует ли пользователь поисковому запросу
         if (_searchQuery.isEmpty ||
             username.contains(_searchQuery) ||
@@ -641,14 +702,12 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
 
     // Группируем отфильтрованных пользователей по дате выдачи
     final groupedByDate = <String, List<Map<String, dynamic>>>{};
-
     for (final item in filteredUsers) {
       // Получаем дату выдачи
       final createdAtStr = item['created_at'] as String?;
       if (createdAtStr != null) {
         final date = DateTime.parse(createdAtStr).toLocal();
         final dateKey = date.toIso8601String().split('T')[0];
-
         if (!groupedByDate.containsKey(dateKey)) {
           groupedByDate[dateKey] = [];
         }
@@ -658,7 +717,6 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
 
     // Создаем список карточек по датам
     final dateWidgets = <Widget>[];
-
     // Сортируем ключи (даты) по убыванию (новые сверху)
     final sortedDates = groupedByDate.keys.toList()
       ..sort((a, b) => b.compareTo(a));
