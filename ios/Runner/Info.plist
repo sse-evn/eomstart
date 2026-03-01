@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+	<!-- ================= ОСНОВНЫЕ МЕТАДАННЫЕ ================= -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+
+	<key>CFBundleDisplayName</key>
+	<string>EOM START</string>
+
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+
+	<key>CFBundleName</key>
+	<string>EOM START</string>
+
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<!-- ================= СЕТЬ И БЕЗОПАСНОСТЬ ================= -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
+
+	<!-- ================= РАЗРЕШЕНИЯ ================= -->
+
+	<!-- Камера (CAMERA + FLASHLIGHT) -->
+	<key>NSCameraUsageDescription</key>
+	<string>Приложению нужен доступ к камере для сканирования QR-кодов.</string>
+
+	<!-- Фото (WRITE_EXTERNAL_STORAGE) -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Приложению нужен доступ для сохранения изображений в галерею.</string>
+
+	<!-- Геолокация (FINE / COARSE / BACKGROUND) -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Геолокация используется для работы функций приложения.</string>
+
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Геолокация используется даже в фоновом режиме для корректной работы приложения.</string>
+
+	<!-- Bluetooth (BLUETOOTH / SCAN / CONNECT / ADVERTISE) -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth используется для подключения и взаимодействия с устройствами.</string>
+
+	<!-- Уведомления (POST_NOTIFICATIONS) -->
+	<key>NSUserNotificationUsageDescription</key>
+	<string>Уведомления используются для информирования пользователя о событиях.</string>
+
+	<!-- ================= UI / ОРИЕНТАЦИИ ================= -->
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- ================= СОВРЕМЕННЫЕ НАСТРОЙКИ ================= -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+
+</dict>
+</plist>
