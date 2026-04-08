@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -91,7 +90,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
               backgroundColor: Colors.orange),
         );
       }
-    } catch (e) {}
+    }
   }
 
   Future<void> _loadActiveBrand() async {
@@ -118,7 +117,7 @@ Future<void> _uploadExcel() async {
         mainAxisSize: MainAxisSize.min,
         children: [
           DropdownButtonFormField<String>(
-            value: _selectedBrandForUpload,
+            initialValue: _selectedBrandForUpload,
             items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
                 .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                 .toList(),
@@ -403,7 +402,7 @@ Future<void> _uploadExcel() async {
                           TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _selectedBrand,
+                    initialValue: _selectedBrand,
                     items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
                         .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                         .toList(),

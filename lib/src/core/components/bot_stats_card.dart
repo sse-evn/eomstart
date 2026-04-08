@@ -236,7 +236,7 @@ class BotStatsCard extends StatelessWidget {
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
                   ],
                 ),
               ),

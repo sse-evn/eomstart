@@ -90,7 +90,7 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
       final yesterday = DateTime(now.year, now.month, now.day - 1);
       if (shiftDate.isAtSameMomentAs(today)) return 'Сегодня';
       if (shiftDate.isAtSameMomentAs(yesterday)) return 'Вчера';
-      return '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.${year}';
+      return '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.$year';
     } catch (e) {
       return dateKey;
     }
@@ -382,7 +382,7 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
                 const SizedBox(height: 8),
                 ...groupedShifts.entries
                     .map((entry) => _buildDateHeader(entry.key, entry.value))
-                    .toList(),
+                    ,
               ],
             ),
           );

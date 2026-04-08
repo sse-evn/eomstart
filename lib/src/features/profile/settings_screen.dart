@@ -33,13 +33,13 @@ class SettingsScreen extends StatelessWidget {
         ).headlineSmall,
       ),
       body: Container(
-        color: Theme.of(context).colorScheme.background,
+        color: Theme.of(context).colorScheme.surface,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
           children: [
             // Заголовок секции
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
                 'Основные настройки',
                 style: TextStyle(
@@ -58,12 +58,12 @@ class SettingsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: SwitchListTile(
-                activeColor: primaryColor,
+                activeThumbColor: primaryColor,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                 title: const Text('Тёмная тема'),
                 subtitle: Text(
                   isDarkMode ? 'Темная тема включена' : 'Светлая тема',
-                  style: TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: 12),
                 ),
                 value: isDarkMode,
                 onChanged: (value) {

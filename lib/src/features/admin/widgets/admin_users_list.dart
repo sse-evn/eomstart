@@ -1,13 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:win32/win32.dart';
 import '../../../core/services/api_service.dart';
-import '../../../core/config/app_config.dart';
 
 class AdminUsersList extends StatefulWidget {
-  const AdminUsersList({Key? key}) : super(key: key);
+  const AdminUsersList({super.key});
 
   @override
   State<AdminUsersList> createState() => _AdminUsersListState();
@@ -505,11 +502,11 @@ class _AdminUsersListState extends State<AdminUsersList> {
                       TextField(
                         controller: _searchController,
                         onChanged: _filterUsers,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: 'Поиск по логину или имени',
-                          prefixIcon: const Icon(Icons.search),
-                          border: const OutlineInputBorder(),
-                          contentPadding: const EdgeInsets.symmetric(
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
                             vertical: 12,
                             horizontal: 16,
                           ),
@@ -520,7 +517,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              value: _filterRole,
+                              initialValue: _filterRole,
                               items: [
                                 const DropdownMenuItem(
                                   value: 'all',
@@ -543,7 +540,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
                           const SizedBox(width: 16),
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              value: _filterStatus,
+                              initialValue: _filterStatus,
                               items: const [
                                 DropdownMenuItem(
                                   value: 'all',

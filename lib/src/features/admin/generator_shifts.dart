@@ -162,8 +162,12 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
           scoutIds, _eveningCount, date, 'evening', workingBusy);
       final dateStr =
           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-      for (var id in morning) workingBusy.add('$id-$dateStr-morning');
-      for (var id in evening) workingBusy.add('$id-$dateStr-evening');
+      for (var id in morning) {
+        workingBusy.add('$id-$dateStr-morning');
+      }
+      for (var id in evening) {
+        workingBusy.add('$id-$dateStr-evening');
+      }
       result.add({
         'date': date,
         'morning': morning,

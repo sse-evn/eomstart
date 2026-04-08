@@ -8,10 +8,10 @@ final ThemeData lightMode = ThemeData(
   brightness: Brightness.light,
 
   primaryColor: primaryColor,
-  colorScheme: ColorScheme.light(
+  colorScheme: const ColorScheme.light(
     primary: primaryColor,
     secondary: Colors.white,
-    shadow: const Color.fromARGB(255, 201, 201, 201),
+    shadow: Color.fromARGB(255, 201, 201, 201),
   ),
 
   elevatedButtonTheme: ElevatedButtonThemeData(
@@ -33,11 +33,11 @@ final ThemeData lightMode = ThemeData(
   inputDecorationTheme: InputDecorationTheme(
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: primaryColor),
+      borderSide: const BorderSide(color: primaryColor),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: primaryColor),
+      borderSide: const BorderSide(color: primaryColor),
     ),
   ),
   visualDensity: VisualDensity.adaptivePlatformDensity,
@@ -48,10 +48,10 @@ final ThemeData darkMode = ThemeData(
   brightness: Brightness.dark,
 
   primaryColor: primaryColor,
-  colorScheme: ColorScheme.dark(
+  colorScheme: const ColorScheme.dark(
     primary: primaryColor,
-    secondary: const Color.fromARGB(255, 59, 59, 59),
-    shadow: const Color.fromARGB(255, 32, 32, 32),
+    secondary: Color.fromARGB(255, 59, 59, 59),
+    shadow: Color.fromARGB(255, 32, 32, 32),
   ),
 
 );

@@ -201,11 +201,11 @@ class _DashboardHomeState extends State<DashboardHome> {
                 );
               }
             } else {
-              return SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16.0),
+              return const SingleChildScrollView(
+                physics: AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.all(16.0),
                 child: Column(
-                  children: const [
+                  children: [
                     SlotCard(),
                     SizedBox(height: 10),
                     // ReportCard(),

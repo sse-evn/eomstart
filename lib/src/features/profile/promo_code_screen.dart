@@ -264,7 +264,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.star, color: Colors.amber),
+                    const Icon(Icons.star, color: Colors.amber),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -352,7 +352,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                   enabled: canClaim,
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),

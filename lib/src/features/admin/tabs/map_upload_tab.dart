@@ -7,8 +7,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 import 'package:micro_mobility_app/src/core/config/app_config.dart';
-import 'package:micro_mobility_app/src/core/utils/map_app_constants.dart'
-    show AppConstants;
 
 class MapUploadTab extends StatefulWidget {
   const MapUploadTab({super.key});

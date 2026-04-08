@@ -1,15 +1,12 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/src/core/config/app_config.dart';
 import 'package:micro_mobility_app/src/features/admin/promo_codes_admin_screen.dart'
     show AdminPromoCodesScreen, AdminPromoScreen;
 import 'package:micro_mobility_app/src/features/admin/shift_history_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/shift_monitoring_screen.dart';
-import 'package:micro_mobility_app/src/features/admin/tasks_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/admin_map_screens.dart';
 import 'package:micro_mobility_app/src/features/admin/generator_shifts.dart';
 import 'package:micro_mobility_app/src/features/admin/widgets/admin_users_list.dart';
-import 'package:micro_mobility_app/src/features/map_screen/map_screens.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});

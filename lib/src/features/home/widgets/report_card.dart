@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
 import '../../../core/components/calendar_widget.dart';
 import '../../../core/components/info_row.dart';
-import '../../../core/components/period_card.dart';
 import '../../../core/components/bot_stats_card.dart';
 import '../../../core/providers/shift_provider.dart';
 import '../../app/models/shift_data.dart';
@@ -47,7 +45,7 @@ class _ReportCardState extends State<ReportCard> {
             color: Colors.grey.withOpacity(0.15),
             spreadRadius: 1,
             blurRadius: 12,
-            offset: Offset(0, 6),
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -276,7 +274,7 @@ class _ReportCardState extends State<ReportCard> {
           BoxShadow(
             color: Colors.grey.withOpacity(0.1),
             blurRadius: 8,
-            offset: Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),

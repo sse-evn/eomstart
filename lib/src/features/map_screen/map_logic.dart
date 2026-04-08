@@ -13,7 +13,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 
-import '../../core/utils/map_app_constants.dart';
 
 class MapLogic {
   final BuildContext context;
@@ -36,7 +35,7 @@ class MapLogic {
   FMTCTileProvider? tileProvider;
 
   // Для отслеживания, были ли тайлы предзагружены
-  bool _tilesPrefetched = false;
+  final bool _tilesPrefetched = false;
 
   String? currentUserAvatarUrl;
 
@@ -67,7 +66,7 @@ class MapLogic {
 
   Future<void> _initCaching() async {
     const storeName = 'mapStore';
-    final store = FMTCStore(storeName);
+    final store = const FMTCStore(storeName);
     if (!(await store.manage.ready)) {
       await store.manage.create();
     }
@@ -410,7 +409,7 @@ class MapLogic {
                     subtitle: 'Зеленые и желтые зоны (ограничение скорости)',
                     value: showSpeedLimitZones,
                     gradient:
-                        LinearGradient(colors: [Colors.green, Colors.yellow]),
+                        const LinearGradient(colors: [Colors.green, Colors.yellow]),
                     onChanged: (v) => setState(() => showSpeedLimitZones = v),
                   ),
                   _buildSwitchTile(

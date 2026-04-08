@@ -16,7 +16,7 @@ class _MapAndZoneScreenState extends State<MapAndZoneScreen> {
     return const DefaultTabController(
       length: 3,
       child: Column(
-        children: const [
+        children: [
           TabBar(
             tabs: [
               Tab(icon: Icon(Icons.map), text: 'Карты'),

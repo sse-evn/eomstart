@@ -241,14 +241,17 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     String locationStr = 'Гео: недоступно';
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) locationStr = 'Гео: сервис отключён';
-      else {
+      if (!serviceEnabled) {
+        locationStr = 'Гео: сервис отключён';
+      } else {
         LocationPermission permission = await Geolocator.checkPermission();
         if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
           final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium, timeLimit: const Duration(seconds: 8));
           locationStr = 'Гео: ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
-        } else locationStr = 'Гео: доступ запрещён';
+        } else {
+          locationStr = 'Гео: доступ запрещён';
+        }
       }
     } catch (_) { locationStr = 'Гео: ошибка'; }
 
@@ -278,7 +281,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('Внимание!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red[800])),
           const SizedBox(height: 8),
-          Text('У вас уже есть активная смена.'),
+          const Text('У вас уже есть активная смена.'),
           if (_activeShift['slot_time_range'] != null) Text('Время: ${_activeShift['slot_time_range']}'),
           if (_activeShift['zone'] != null) Text('Зона: ${_activeShift['zone']}'),
           if (_activeShift['position'] != null) Text('Должность: ${_activeShift['position']}'),
@@ -296,7 +299,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           decoration: BoxDecoration(color: isDarkMode ? Colors.grey[850] : Colors.grey[100], borderRadius: BorderRadius.circular(12)),
           child: Column(
             children: [
-              Row(children: [Icon(Icons.camera_alt, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 8), Text('Селфи', style: TextStyle(fontWeight: FontWeight.w500))]),
+              Row(children: [Icon(Icons.camera_alt, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 8), const Text('Селфи', style: TextStyle(fontWeight: FontWeight.w500))]),
               const SizedBox(height: 12),
               _selfie != null ? _buildSelfiePreview() : _buildSelfiePlaceholder(isDarkMode),
               const SizedBox(height: 12),
@@ -316,7 +319,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [Icon(Icons.location_on, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 6), Text('Зона', style: TextStyle(fontWeight: FontWeight.w500))]),
+                    Row(children: [Icon(Icons.location_on, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 6), const Text('Зона', style: TextStyle(fontWeight: FontWeight.w500))]),
                     const SizedBox(height: 6),
                     _buildZoneDropdown(isDarkMode),
                   ],
@@ -327,7 +330,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [Icon(Icons.work, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 6), Text('Должность', style: TextStyle(fontWeight: FontWeight.w500))]),
+                    Row(children: [Icon(Icons.work, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 6), const Text('Должность', style: TextStyle(fontWeight: FontWeight.w500))]),
                     const SizedBox(height: 6),
                     TextFormField(
                       initialValue: _position ?? 'Не указана',
@@ -353,12 +356,12 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   Widget _buildNoTimeSlotsWarning() => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: Colors.orange[100], borderRadius: BorderRadius.circular(12)),
-        child: Column(
+        child: const Column(
           children: [
             Icon(Icons.access_time, color: Colors.orange, size: 32),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text('Сейчас не время начала смены', textAlign: TextAlign.center, style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text('Доступные слоты:\n• 06:40–15:00\n• 14:40–23:00', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
           ],
         ),
@@ -370,7 +373,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [Icon(Icons.schedule, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 8), Text('Время смены', style: TextStyle(fontWeight: FontWeight.w500))]),
+            Row(children: [Icon(Icons.schedule, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 8), const Text('Время смены', style: TextStyle(fontWeight: FontWeight.w500))]),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8.0,
@@ -431,7 +434,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   Widget _buildZoneDropdown(bool isDarkMode) {
     final validZone = _zones.contains(_zone) ? _zone : (_zones.isNotEmpty ? _zones.first : null);
     return DropdownButtonFormField<String>(
-      value: validZone,
+      initialValue: validZone,
       items: _zones.map((item) => DropdownMenuItem(value: item, child: Text(item, style: TextStyle(color: isDarkMode ? Colors.white : Colors.black)))).toList(),
       onChanged: _isLoading ? null : (String? value) { if (mounted && value != null) setState(() => _zone = value); },
       decoration: InputDecoration(

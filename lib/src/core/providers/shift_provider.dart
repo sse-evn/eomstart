@@ -3,7 +3,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:math' show e;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -12,7 +11,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:micro_mobility_app/src/features/app/models/active_shift.dart' as model;
 import '../../features/app/models/shift_data.dart';
 import '../services/api_service.dart';
-import '../config/app_config.dart';
 import '../services/geo_tracking_service.dart'
     show
         startBackgroundTracking,
@@ -153,7 +151,7 @@ class ShiftProvider with ChangeNotifier {
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
     final seconds = duration.inSeconds % 60;
-    return '${hours}ч ${minutes}мин ${seconds}с';
+    return '$hoursч $minutesмин $secondsс';
   }
 
   Future<void> setToken(String token) async {
@@ -162,9 +160,7 @@ class ShiftProvider with ChangeNotifier {
   }
 
   Future<void> _initializeShiftProvider() async {
-    if (_token == null) {
-      _token = await _storage.read(key: 'jwt_token');
-    }
+    _token ??= await _storage.read(key: 'jwt_token');
     await loadFromCache();
     if (_isOnline && _token != null && !_hasLoadedShifts) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -399,7 +395,7 @@ class ShiftProvider with ChangeNotifier {
 
       final bool isTrackingRunning = await isBackgroundTrackingRunning();
       final bool hasActiveShift =
-          _activeShift != null && _activeShift!.id != null;
+          _activeShift != null;
 
       if (hasActiveShift && !isTrackingRunning) {
         debugPrint(
@@ -471,25 +467,14 @@ class ShiftProvider with ChangeNotifier {
     try {
       debugPrint('🔄 Загружаем профиль с сервера...');
       final profile = await _apiService.getUserProfile(_token!);
-      if (profile != null) {
-        _profile = profile;
-        _lastProfileFetchTime = DateTime.now();
-        _hasLoadedProfile = true;
-        await _saveToCache();
-        notifyListeners();
-        debugPrint('✅ Профиль успешно загружен.');
-        return profile;
-      } else {
-        debugPrint(
-            '❌ Не удалось загрузить профиль. Токен мог быть недействителен и не обновлен.');
-        final storedToken = await _storage.read(key: 'jwt_token');
-        if (storedToken == null) {
-          debugPrint('Token was cleared during loadProfile.');
-          await logout();
-        }
-        return null;
-      }
-    } catch (e) {
+      _profile = profile;
+      _lastProfileFetchTime = DateTime.now();
+      _hasLoadedProfile = true;
+      await _saveToCache();
+      notifyListeners();
+      debugPrint('✅ Профиль успешно загружен.');
+      return profile;
+        } catch (e) {
       debugPrint('❌ Ошибка загрузки профиля: $e');
       final storedToken = await _storage.read(key: 'jwt_token');
       if (storedToken == null) {

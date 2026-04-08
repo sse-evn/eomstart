@@ -19,7 +19,7 @@ class GoogleSheetsConfig {
 
   // ✅ Удобный геттер: когда следующая выгрузка?
   static TimeOfDay get autoExportTimeOfDay =>
-      TimeOfDay(hour: autoExportHour, minute: autoExportMinute);
+      const TimeOfDay(hour: autoExportHour, minute: autoExportMinute);
 
   // ✅ Проверка: совпадает ли текущее время с временем выгрузки?
   static bool isTimeForExport(DateTime now) {

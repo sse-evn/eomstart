@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart' show MapController;
 import 'package:latlong2/latlong.dart';
@@ -22,7 +21,7 @@ class EmployeeMapLogic {
   String? currentUserAvatarUrl;
 
   // История
-  Map<String, List<EmployeeLocation>> _cachedHistories = {};
+  final Map<String, List<EmployeeLocation>> _cachedHistories = {};
   List<LatLng> selectedEmployeeHistory = [];
   String? selectedEmployeeId;
   String? selectedEmployeeName;

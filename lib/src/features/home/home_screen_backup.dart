@@ -7,7 +7,7 @@ import 'package:micro_mobility_app/src/core/providers/shift_provider.dart';
 import 'package:provider/provider.dart';
 
 class DashboardHome extends StatefulWidget {
-  const DashboardHome();
+  const DashboardHome({super.key});
 
   @override
   State<DashboardHome> createState() => _DashboardHomeState();
@@ -88,15 +88,15 @@ class _DashboardHomeState extends State<DashboardHome> {
               }
             } else {
               return SingleChildScrollView(
-                physics: AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.all(16.0),
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    SlotCard(),
-                    SizedBox(height: 10),
+                    const SlotCard(),
+                    const SizedBox(height: 10),
 
 
-                    Row(
+                    const Row(
                       children: [
                         Text(
                           'Статистика',
@@ -105,7 +105,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                             
                           ),
                         ),
-                        const SizedBox(width: 10,),
+                        SizedBox(width: 10,),
                         Icon(
                           Icons.stacked_line_chart_rounded
                         )
@@ -127,12 +127,12 @@ class _DashboardHomeState extends State<DashboardHome> {
                             color: Colors.grey.withOpacity(0.15),
                             spreadRadius: 1,
                             blurRadius: 12,
-                            offset: Offset(0, 6),
+                            offset: const Offset(0, 6),
                           ),
                         ],
                       ),
 
-                      child: Column(
+                      child: const Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Row(
@@ -143,7 +143,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                                   fontSize: 20
                                 ),
                               ),
-                              const Spacer(),
+                              Spacer(),
                               Text(
                                 '100',
                                 style: TextStyle(
@@ -153,7 +153,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                             ],
                           ),
                       
-                          const Divider(
+                          Divider(
                             color: Colors.grey,
                           ),
                       
@@ -165,7 +165,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                                   fontSize: 16
                                 ),
                               ),
-                              const Spacer(),
+                              Spacer(),
                               Text(
                                 '100',
                                 style: TextStyle(
@@ -182,7 +182,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                                   fontSize: 16
                                 ),
                               ),
-                              const Spacer(),
+                              Spacer(),
                               Text(
                                 '100',
                                 style: TextStyle(
@@ -199,7 +199,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                                   fontSize: 16
                                 ),
                               ),
-                              const Spacer(),
+                              Spacer(),
                               Text(
                                 '100',
                                 style: TextStyle(
@@ -216,7 +216,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                                   fontSize: 16
                                 ),
                               ),
-                              const Spacer(),
+                              Spacer(),
                               Text(
                                 '100',
                                 style: TextStyle(
@@ -232,9 +232,9 @@ class _DashboardHomeState extends State<DashboardHome> {
                       ),
                     ),
 
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
                   
-                    ReportCard(),
+                    const ReportCard(),
                   ],
                 ),
               );

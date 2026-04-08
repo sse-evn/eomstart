@@ -487,7 +487,7 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                                   icon: Icons.card_giftcard,
                                   title: 'Промокод',
                                   route: '/promo',
-                                  color: const Color(0xFFAA81AA),
+                                  color: Color(0xFFAA81AA),
                                 ),
                                 const SizedBox(height: 10),
                                 _SettingsItem(

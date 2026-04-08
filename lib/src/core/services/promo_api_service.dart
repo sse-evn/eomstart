@@ -209,10 +209,12 @@ class PromoApiService {
       body: jsonEncode({'brand': brand, 'days': days}),
     );
 
-    if (response.statusCode == 401)
+    if (response.statusCode == 401) {
       throw PromoApiServiceException('Сессия истекла', statusCode: 401);
-    if (response.statusCode == 403)
+    }
+    if (response.statusCode == 403) {
       throw PromoApiServiceException('Доступ запрещён', statusCode: 403);
+    }
     if (response.statusCode != 200) {
       final error = _tryParseJson(utf8.decode(response.bodyBytes))?['error'];
       throw PromoApiServiceException(error ?? 'Неизвестная ошибка',
@@ -231,10 +233,12 @@ class PromoApiService {
       headers: {'Authorization': 'Bearer $token'},
     );
 
-    if (response.statusCode == 401)
+    if (response.statusCode == 401) {
       throw PromoApiServiceException('Сессия истекла', statusCode: 401);
-    if (response.statusCode == 403)
+    }
+    if (response.statusCode == 403) {
       throw PromoApiServiceException('Доступ запрещён', statusCode: 403);
+    }
     if (response.statusCode != 200) {
       throw PromoApiServiceException('Ошибка при сбросе',
           statusCode: response.statusCode);

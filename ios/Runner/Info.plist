@@ -2,98 +2,95 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CADisableMinimumFrameDurationOnPhone</key>
+    <true/>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <key>CFBundleDisplayName</key>
+    <string>EOM START</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>EOM START</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(FLUTTER_BUILD_NAME)</string>
+    <key>CFBundleVersion</key>
+    <string>$(FLUTTER_BUILD_NUMBER)</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
 
-	<!-- ================= ОСНОВНЫЕ МЕТАДАННЫЕ ================= -->
-	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoadsInWebContent</key>
+        <true/>
+    </dict>
 
-	<key>CFBundleDisplayName</key>
-	<string>EOM START</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Bluetooth используется для подключения и взаимодействия с устройствами.</string>
 
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Приложению нужен доступ к камере для сканирования QR-кодов и создания фото.</string>
 
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Геолокация используется даже в фоновом режиме для корректной работы приложения.</string>
 
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Геолокация используется для работы функций приложения.</string>
 
-	<key>CFBundleName</key>
-	<string>EOM START</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Приложению нужен доступ к фото, чтобы пользователь мог выбрать изображение для загрузки.</string>
 
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Приложению нужен доступ для сохранения изображений в галерею.</string>
 
-	<key>CFBundleShortVersionString</key>
-	<string>$(FLUTTER_BUILD_NAME)</string>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UIWindowSceneSessionRoleApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneClassName</key>
+                    <string>UIWindowScene</string>
+                    <key>UISceneConfigurationName</key>
+                    <string>flutter</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>FlutterSceneDelegate</string>
+                    <key>UISceneStoryboardFile</key>
+                    <string>Main</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
 
-	<key>CFBundleVersion</key>
-	<string>$(FLUTTER_BUILD_NUMBER)</string>
+    <key>UIApplicationSupportsIndirectInputEvents</key>
+    <true/>
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
+    <key>UIMainStoryboardFile</key>
+    <string>Main</string>
 
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
 
-	<!-- ================= СЕТЬ И БЕЗОПАСНОСТЬ ================= -->
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoadsInWebContent</key>
-		<true/>
-	</dict>
-
-	<!-- ================= РАЗРЕШЕНИЯ ================= -->
-
-	<!-- Камера (CAMERA + FLASHLIGHT) -->
-	<key>NSCameraUsageDescription</key>
-	<string>Приложению нужен доступ к камере для сканирования QR-кодов.</string>
-
-	<!-- Фото (WRITE_EXTERNAL_STORAGE) -->
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Приложению нужен доступ для сохранения изображений в галерею.</string>
-
-	<!-- Геолокация (FINE / COARSE / BACKGROUND) -->
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Геолокация используется для работы функций приложения.</string>
-
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Геолокация используется даже в фоновом режиме для корректной работы приложения.</string>
-
-	<!-- Bluetooth (BLUETOOTH / SCAN / CONNECT / ADVERTISE) -->
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Bluetooth используется для подключения и взаимодействия с устройствами.</string>
-
-	<!-- Уведомления (POST_NOTIFICATIONS) -->
-	<key>NSUserNotificationUsageDescription</key>
-	<string>Уведомления используются для информирования пользователя о событиях.</string>
-
-	<!-- ================= UI / ОРИЕНТАЦИИ ================= -->
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
-
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
-
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-
-	<!-- ================= СОВРЕМЕННЫЕ НАСТРОЙКИ ================= -->
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
-
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
 </dict>
 </plist>

@@ -13,7 +13,7 @@ import 'package:micro_mobility_app/src/core/config/google_sheets_config.dart';
 class ShiftDetailsScreen extends StatefulWidget {
   final ActiveShift shift;
 
-  const ShiftDetailsScreen({required this.shift, Key? key}) : super(key: key);
+  const ShiftDetailsScreen({required this.shift, super.key});
 
   @override
   State<ShiftDetailsScreen> createState() => _ShiftDetailsScreenState();
@@ -552,7 +552,7 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
       ),
       child: Column(
         children: [
-          Text(
+          const Text(
             '⚠️ Только для суперадмина',
             style: TextStyle(
               color: Colors.red,

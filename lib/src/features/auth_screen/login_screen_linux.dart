@@ -552,8 +552,9 @@ class _LoginScreenState extends State<LoginScreen> {
       enabled: !_isLoading,
       validator: (value) {
         if (value == null || value.isEmpty) return 'Поле не может быть пустым';
-        if (value.length < 6)
+        if (value.length < 6) {
           return 'Пароль должен содержать минимум 6 символов';
+        }
         return null;
       },
       decoration: InputDecoration(

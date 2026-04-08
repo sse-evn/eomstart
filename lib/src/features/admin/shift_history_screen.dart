@@ -86,7 +86,7 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
       final yesterday = DateTime(now.year, now.month, now.day - 1);
       if (shiftDate.isAtSameMomentAs(today)) return 'Сегодня';
       if (shiftDate.isAtSameMomentAs(yesterday)) return 'Вчера';
-      return '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.${year}';
+      return '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.$year';
     } catch (e) {
       return dateKey;
     }
@@ -301,8 +301,9 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
               return Center(child: Text('Ошибка: ${snapshot.error}'));
             }
             final shifts = snapshot.data ?? [];
-            if (shifts.isEmpty)
+            if (shifts.isEmpty) {
               return const Center(child: Text('Нет завершённых смен'));
+            }
             final grouped = _groupShiftsByDate(shifts);
             return ListView(
               children: [

@@ -50,7 +50,7 @@ class SlotCard extends StatelessWidget {
                 child: Column(
                   children: [
                     if (hasActiveShift)
-                      _buildActiveShiftUI(activeShift!, theme, isDarkMode)
+                      _buildActiveShiftUI(activeShift, theme, isDarkMode)
                     else
                       _buildInactiveShiftUI(context, theme, isDarkMode),
                     const SizedBox(height: 20),
@@ -94,7 +94,7 @@ class SlotCard extends StatelessWidget {
     final duration = Duration(seconds: activeShift.currentDurationSeconds ?? 0);
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
-    final durationStr = '${hours}ч ${minutes}м';
+    final durationStr = '$hoursч $minutesм';
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -158,13 +158,13 @@ class SlotCard extends StatelessWidget {
                 color: theme.colorScheme.secondary,
                 borderRadius: BorderRadius.circular(12)),
             padding: const EdgeInsets.all(10),
-            child: Row(
+            child: const Row(
               children: [
                 Icon(
                   Icons.fastfood,
                   size: 30,
                 ),
-                const SizedBox(
+                SizedBox(
                   width: 10,
                 ),
                 Expanded(

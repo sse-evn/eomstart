@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+  import 'package:flutter/material.dart';
 import 'package:loader_overlay/loader_overlay.dart';
 import 'package:micro_mobility_app/src/core/providers/shift_provider.dart'
     show ShiftProvider;
