@@ -19,9 +19,11 @@ void _log(String message, {Object? error, StackTrace? stackTrace}) {
 
 const String _SHARED_PREFS_SHIFT_ID_KEY = 'active_shift_id_for_bg_service';
 const String _SHARED_PREFS_BG_RUNNING_KEY = 'is_bg_geo_tracking_running';
+const String _SHARED_PREFS_TOKEN_KEY = 'bg_geo_auth_token';
 
 Timer? _backgroundTimer;
 int? _activeShiftId;
+String? _bgAuthToken;
 final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
 bool _serviceIsActuallyRunning = false;
@@ -47,7 +49,9 @@ FutureOr<bool> onStart(ServiceInstance service) async {
   }
 
   _activeShiftId = shiftId;
-  _log("Получен shiftId: $_activeShiftId");
+  _bgAuthToken = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
+
+  _log("Получен shiftId: $_activeShiftId, Token: ${_bgAuthToken != null ? 'OK' : 'MISSING'}");
 
   service.on('stopTracking').listen((event) {
     _log("Получен сигнал stopTracking");
@@ -136,8 +140,9 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
 
     try {
       await _sendSingleGeoDataToServer(geoDataJson);
+      _log("✅ Успешно отправлено");
     } catch (e) {
-      _log("Ошибка отправки, сохраняем в буфер...");
+      _log("❌ Ошибка отправки: $e, сохраняем в буфер...");
       await _bufferFailedData(geoDataJson, _activeShiftId);
     }
   } catch (e) {
@@ -146,8 +151,11 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
 }
 
 Future<void> _sendSingleGeoDataToServer(String geoDataJson) async {
-  final token = await _storage.read(key: 'jwt_token');
-  if (token == null) throw Exception('JWT missing');
+  final token = _bgAuthToken;
+  if (token == null) {
+     _log("Ошибка: Токен отсутствует в фоновом режиме.");
+     throw Exception('JWT missing in background');
+  }
 
   final res = await http.post(
     Uri.parse(AppConfig.geoTrackUrl),
@@ -196,9 +204,15 @@ Future<void> startBackgroundTracking({required int shiftId}) async {
   final service = FlutterBackgroundService();
   
   
-  // Сохраняем shiftId и сразу помечаем, что трекинг включён
+  final token = await _storage.read(key: 'jwt_token');
+
+  // Сохраняем shiftId, токен и помечаем, что трекинг включён
   await prefs.setInt(_SHARED_PREFS_SHIFT_ID_KEY, shiftId);
-  await prefs.setBool(_SHARED_PREFS_BG_RUNNING_KEY, true);   // <-- Добавить эту строку
+  await prefs.setBool(_SHARED_PREFS_BG_RUNNING_KEY, true);
+  if (token != null) {
+    await prefs.setString(_SHARED_PREFS_TOKEN_KEY, token);
+    _bgAuthToken = token;
+  }
 
   if (!_serviceIsActuallyRunning) {
     await service.configure(
@@ -231,6 +245,8 @@ Future<void> stopBackgroundTracking() async {
 
   await prefs.remove(_SHARED_PREFS_SHIFT_ID_KEY);
   await prefs.remove(_SHARED_PREFS_BG_RUNNING_KEY);
+  await prefs.remove(_SHARED_PREFS_TOKEN_KEY);
+  _bgAuthToken = null;
 
   _log("Фоновый сервис остановлен.");
 }

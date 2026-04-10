@@ -94,17 +94,18 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDarkMode = theme.brightness == Brightness.dark;
     final bool isEnded = widget.shift.endTimeString != null;
-    final primaryColor = Theme.of(context).primaryColor;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('Детали смены', style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
         backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black,
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
+        centerTitle: true,
       ),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator())
@@ -113,18 +114,18 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildUserHeader(primaryColor, isEnded),
+                _buildUserHeader(theme, isEnded),
                 const SizedBox(height: 24),
-                _buildSectionTitle('Временные метки'),
+                _buildSectionTitle('Временные метки', theme),
                 const SizedBox(height: 12),
-                _buildTimeCard(primaryColor, isEnded),
+                _buildTimeCard(theme, isEnded),
                 const SizedBox(height: 24),
-                _buildSectionTitle('Фото-подтверждение'),
+                _buildSectionTitle('Фото-подтверждение', theme),
                 const SizedBox(height: 12),
-                _buildSelfieCard(),
+                _buildSelfieCard(theme),
                 const SizedBox(height: 32),
                 if ((_currentUserRole == 'superadmin' || _currentUserRole == 'admin') && !isEnded) ...[
-                  _buildAdminActions(),
+                  _buildAdminActions(theme),
                   const SizedBox(height: 40),
                 ],
               ],
@@ -133,25 +134,36 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.blueGrey));
+  Widget _buildSectionTitle(String title, ThemeData theme) {
+    return Text(title,
+        style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            color: theme.colorScheme.onSurface.withOpacity(0.6),
+            letterSpacing: 1.2));
   }
 
-  Widget _buildUserHeader(Color primaryColor, bool isEnded) {
+  Widget _buildUserHeader(ThemeData theme, bool isEnded) {
+    final colorScheme = theme.colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: theme.brightness == Brightness.dark ? Colors.black26 : Colors.black.withOpacity(0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 4))
+        ],
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 30,
-            backgroundColor: primaryColor.withOpacity(0.1),
+            backgroundColor: colorScheme.primary.withOpacity(0.1),
             child: Text(widget.shift.username.substring(0, 1).toUpperCase(), 
-              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 24)),
+              style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 24)),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -180,19 +192,24 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     );
   }
 
-  Widget _buildTimeCard(Color primaryColor, bool isEnded) {
+  Widget _buildTimeCard(ThemeData theme, bool isEnded) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: theme.brightness == Brightness.dark ? Colors.black26 : Colors.black.withOpacity(0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 4))
+        ],
       ),
       child: Column(
         children: [
           _buildTimeRow(Icons.play_circle_outline, 'Начало', 
               extractTimeFromIsoString(widget.shift.startTimeString), 
-              extractDateFromIsoString(widget.shift.startTimeString), Colors.blue),
+              extractDateFromIsoString(widget.shift.startTimeString), theme.colorScheme.primary),
           const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider()),
           _buildTimeRow(Icons.stop_circle, 'Конец', 
               isEnded ? extractTimeFromIsoString(widget.shift.endTimeString) : '— : —', 
@@ -230,15 +247,20 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     );
   }
 
-  Widget _buildSelfieCard() {
+  Widget _buildSelfieCard(ThemeData theme) {
     final photoUrl = '${AppConfig.mediaBaseUrl}${widget.shift.selfie}';
     return Container(
       height: 300,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: theme.brightness == Brightness.dark ? Colors.black26 : Colors.black.withOpacity(0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 4))
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
@@ -257,11 +279,11 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     );
   }
 
-  Widget _buildAdminActions() {
+  Widget _buildAdminActions(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('Управление'),
+        _buildSectionTitle('Управление', theme),
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
@@ -269,12 +291,15 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
           child: ElevatedButton.icon(
             onPressed: _forceEndShift,
             icon: const Icon(Icons.highlight_off),
-            label: const Text('Принудительно завершить', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            label: const Text('Принудительно завершить',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red[50],
-              foregroundColor: Colors.red,
+              backgroundColor: theme.colorScheme.errorContainer.withOpacity(0.5),
+              foregroundColor: theme.colorScheme.error,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.red[100]!)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: theme.colorScheme.error.withOpacity(0.3))),
             ),
           ),
         ),

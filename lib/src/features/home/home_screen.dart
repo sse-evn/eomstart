@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/src/features/home/widgets/slot_card.dart';
+import 'package:micro_mobility_app/src/features/home/widgets/dashboard_stats.dart';
 import 'package:micro_mobility_app/src/core/providers/shift_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
@@ -201,20 +202,74 @@ class _DashboardHomeState extends State<DashboardHome> {
                 );
               }
             } else {
-              return const SingleChildScrollView(
-                physics: AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    SlotCard(),
-                    SizedBox(height: 10),
-                    // ReportCard(),
-                  ],
-                ),
+              return Consumer<ShiftProvider>(
+                builder: (context, provider, child) {
+                  final activeShift = provider.activeShift;
+                  final hasActiveShift = activeShift != null;
+
+                  return SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 8.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (hasActiveShift) ...[
+                          _buildActiveShiftBanner(context),
+                          const SizedBox(height: 16),
+                        ],
+                        const SlotCard(),
+                        const SizedBox(height: 24),
+                        const DashboardInterestingThings(),
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  );
+                },
               );
             }
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildActiveShiftBanner(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.green.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: const BoxDecoration(
+              color: Colors.green,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: Colors.green, blurRadius: 4, spreadRadius: 1)
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'СМЕНА ОТКРЫТА',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: Colors.green,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          Icon(Icons.timer_outlined,
+              color: Colors.green.withOpacity(0.7), size: 16),
+        ],
       ),
     );
   }
