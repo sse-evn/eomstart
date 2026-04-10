@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:micro_mobility_app/src/core/utils/map_app_constants.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart';
 import 'map_logic.dart';
 
 class MapScreen extends StatefulWidget {
@@ -211,6 +213,30 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ],
+              ),
+            // + Слой с другими пользователями
+            if (logic.otherScoutsLocations.isNotEmpty)
+              MarkerLayer(
+                markers: logic.otherScoutsLocations.map((loc) {
+                  final lat = double.tryParse(loc['latitude']?.toString() ?? '0') ?? 0;
+                  final lon = double.tryParse(loc['longitude']?.toString() ?? '0') ?? 0;
+                  // final username = loc['username'] ?? 'User';
+                  
+                  return Marker(
+                    point: LatLng(lat, lon),
+                    width: 32,
+                    height: 32,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.orange[800],
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                      ),
+                      child: const Icon(Icons.person_outline, size: 18, color: Colors.white),
+                    ),
+                  );
+                }).toList(),
               ),
           ],
         ),

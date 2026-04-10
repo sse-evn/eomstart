@@ -73,7 +73,8 @@ class PromoApiService {
     );
   }
 
-  Future<void> uploadPromoFromGoogleSheet(String sheetUrl) async {
+  Future<void> uploadPromoFromGoogleSheet(String sheetUrl,
+      {required String brand, required String validUntil}) async {
     final token = await _getToken();
     if (token == null) {
       throw PromoApiServiceException('Не авторизован', statusCode: 401);
@@ -85,7 +86,11 @@ class PromoApiService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json; charset=utf-8',
       },
-      body: jsonEncode({'google_sheet_url': sheetUrl}),
+      body: jsonEncode({
+        'google_sheet_url': sheetUrl,
+        'brand': brand,
+        'valid_until': validUntil,
+      }),
     );
 
     if (response.statusCode == 200) {

@@ -77,9 +77,15 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       initialDateRange: initialDateRange,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
             primary: Colors.green,
             onPrimary: Colors.white,
+            surface: Theme.of(context).cardColor,
+            onSurface: Theme.of(context).textTheme.bodyLarge?.color,
+          ),
+          appBarTheme: Theme.of(context).appBarTheme.copyWith(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
           ),
         ),
         child: child!,
@@ -153,7 +159,51 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                     urlTemplate: AppConstants.cartoDbPositronUrl,
                     userAgentPackageName: AppConstants.userAgentPackageName,
                     retinaMode: RetinaMode.isHighDensity(context),
+                    tileProvider: _logic.tileProvider,
                   ),
+                  if (_logic.geoJsonParser.polygons.isNotEmpty && _logic.showRestrictedZones)
+                    PolygonLayer(
+                      polygons: _logic.geoJsonParser.polygons.map((polygon) {
+                        return Polygon(
+                          points: polygon.points,
+                          borderColor: Colors.red,
+                          color: Colors.red.withOpacity(0.15),
+                          borderStrokeWidth: 2.0,
+                        );
+                      }).toList(),
+                    ),
+                  if (_logic.geoJsonParser.polylines.isNotEmpty && _logic.showBoundaries)
+                    PolylineLayer(
+                      polylines: _logic.geoJsonParser.polylines.map((polyline) {
+                        return Polyline(
+                          points: polyline.points,
+                          color: Colors.blue.withOpacity(0.7),
+                          strokeWidth: 3,
+                        );
+                      }).toList(),
+                    ),
+                  if (_logic.geoJsonParser.polygons.isNotEmpty && _logic.showParkingZones)
+                    PolygonLayer(
+                      polygons: _logic.geoJsonParser.polygons.map((polygon) {
+                        return Polygon(
+                          points: polygon.points,
+                          borderColor: Colors.pink,
+                          color: Colors.pink.withOpacity(0.15),
+                          borderStrokeWidth: 2.0,
+                        );
+                      }).toList(),
+                    ),
+                  if (_logic.geoJsonParser.polygons.isNotEmpty && _logic.showSpeedLimitZones)
+                    PolygonLayer(
+                      polygons: _logic.geoJsonParser.polygons.map((polygon) {
+                        return Polygon(
+                          points: polygon.points,
+                          borderColor: Colors.green,
+                          color: Colors.green.withOpacity(0.15),
+                          borderStrokeWidth: 2.0,
+                        );
+                      }).toList(),
+                    ),
                   if (_logic.selectedEmployeeHistory.isNotEmpty)
                     PolylineLayer(
                       polylines: [

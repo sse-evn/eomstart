@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'package:micro_mobility_app/src/core/providers/shift_provider.dart';
 
 import 'report_photos_screen.dart';
 
@@ -224,9 +226,16 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       return;
     }
 
-    final employeeName = 'Пользователь';
-    final String? employeeUsername = null;
-    final int? employeeTelegramId = null;
+    final shiftProvider = context.read<ShiftProvider>();
+    final profile = shiftProvider.profile ?? {};
+
+    final firstName = profile['firstName'] ?? profile['first_name'];
+    final username = profile['username'];
+    final telegramId = profile['telegram_id'];
+
+    final employeeName = firstName?.toString() ?? username?.toString() ?? 'Пользователь';
+    final String? employeeUsername = username?.toString();
+    final int? employeeTelegramId = (telegramId is int) ? telegramId : int.tryParse(telegramId?.toString() ?? '');
 
     Navigator.push(
       context,

@@ -22,19 +22,19 @@ class ApiService {
         return null;
       }
 
-      debugPrint('🔄 Attempting to refresh token with stored refresh token.');
+      debugPrint('🔄 Attempting to refresh token...');
 
+      // Добавим таймаут для запроса обновления
       final response = await http.post(
         Uri.parse(AppConfig.refreshTokenUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh_token': refreshToken}),
-      );
+      ).timeout(const Duration(seconds: 15));
 
       debugPrint('🔄 Refresh token response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>?;
-
         final newAccessToken = body?['token'] as String?;
         final newRefreshToken = body?['refresh_token'] as String?;
 
@@ -42,24 +42,21 @@ class ApiService {
           await _storage.write(key: 'jwt_token', value: newAccessToken);
           if (newRefreshToken != null) {
             await _storage.write(key: 'refresh_token', value: newRefreshToken);
-            debugPrint('✅ New access and refresh tokens saved.');
-          } else {
-            debugPrint(
-                '⚠️ Warning: New refresh token not received from server.');
+            debugPrint('✅ New tokens saved successfully.');
           }
           return newAccessToken;
-        } else {
-          debugPrint('❌ Refresh response missing access token.');
         }
-      } else {
-        debugPrint(
-            '❌ Refresh token request failed: ${response.statusCode}. Clearing tokens.');
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        // Только если сервер явно сказал, что токен невалиден
+        debugPrint('❌ Refresh token invalid (401/403). Clearing tokens.');
         await _storage.delete(key: 'jwt_token');
         await _storage.delete(key: 'refresh_token');
+      } else {
+        // 500 или другие ошибки — не удаляем токены, просто возвращаем null для ретрая позже
+        debugPrint('⚠️ Refresh failed with status ${response.statusCode}. Keeping tokens.');
       }
-    } catch (e, stackTrace) {
-      debugPrint(
-          '❌ Exception during token refresh: $e\nStack trace: $stackTrace');
+    } catch (e) {
+      debugPrint('⚠️ Exception during token refresh: $e. Access token not cleared.');
     }
     return null;
   }
@@ -107,6 +104,27 @@ class ApiService {
         }
       } else {
         debugPrint('❌ Failed to refresh token. User needs to log in again.');
+      }
+    }
+    return response;
+  }
+
+  Future<http.Response> _authorizedMultipartRequest(
+    Future<http.MultipartRequest> Function(String token) requestBuilder,
+    String originalToken,
+  ) async {
+    final request = await requestBuilder(originalToken);
+    final streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode == 401) {
+      debugPrint('🔐 Multipart request: Access token expired (401). Attempting to refresh...');
+      final newToken = await refreshToken();
+      if (newToken != null) {
+        debugPrint('✅ Token refreshed. Retrying multipart request...');
+        final retryRequest = await requestBuilder(newToken);
+        final retryStreamedResponse = await retryRequest.send();
+        response = await http.Response.fromStream(retryStreamedResponse);
       }
     }
     return response;
@@ -423,87 +441,29 @@ class ApiService {
     required File selfieImage,
   }) async {
     try {
-      final request =
-          http.MultipartRequest('POST', Uri.parse(AppConfig.startSlotUrl));
-      request.headers['Authorization'] = 'Bearer $token';
-      request.fields['slot_time_range'] = slotTimeRange;
-      request.fields['position'] = position;
-      request.fields['zone'] = zone;
-      if (await selfieImage.exists()) {
-        request.files
-            .add(await http.MultipartFile.fromPath('selfie', selfieImage.path));
-      } else {
-        throw Exception('Selfie file does not exist');
-      }
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 401) {
-        debugPrint(
-            '🔐 startSlot: Access token expired (401). Attempting to refresh...');
-        final newToken = await refreshToken();
-        if (newToken != null) {
-          debugPrint('✅ Token refreshed. Retrying startSlot...');
-          final retryRequest =
-              http.MultipartRequest('POST', Uri.parse(AppConfig.startSlotUrl));
-          retryRequest.headers['Authorization'] = 'Bearer $newToken';
-          retryRequest.fields['slot_time_range'] = slotTimeRange;
-          retryRequest.fields['position'] = position;
-          retryRequest.fields['zone'] = zone;
-          if (await selfieImage.exists()) {
-            retryRequest.files.add(
-                await http.MultipartFile.fromPath('selfie', selfieImage.path));
-          } else {
-            throw Exception('Selfie file does not exist for retry');
-          }
-          final retryStreamedResponse = await retryRequest.send();
-          final retryResponse =
-              await http.Response.fromStream(retryStreamedResponse);
-
-          if (retryResponse.statusCode != 200 &&
-              retryResponse.statusCode != 201) {
-            String errorMessage = 'Failed to start slot after token refresh';
-            try {
-              final errorBody =
-                  jsonDecode(utf8.decode(retryResponse.bodyBytes));
-              errorMessage = errorBody['error']?.toString() ?? errorMessage;
-              if (errorMessage == 'Failed to start slot after token refresh') {
-                errorMessage = errorBody['message']?.toString() ?? errorMessage;
-              }
-            } catch (e) {
-              debugPrint(
-                  '⚠️ Ошибка парсинга тела ошибки startSlot (retry): $e');
-            }
-            throw Exception(errorMessage);
-          }
-          debugPrint('✅ Slot started successfully after token refresh.');
-          return;
+      final response = await _authorizedMultipartRequest((token) async {
+        final request =
+            http.MultipartRequest('POST', Uri.parse(AppConfig.startSlotUrl));
+        request.headers['Authorization'] = 'Bearer $token';
+        request.fields['slot_time_range'] = slotTimeRange;
+        request.fields['position'] = position;
+        request.fields['zone'] = zone;
+        if (await selfieImage.exists()) {
+          request.files.add(
+              await http.MultipartFile.fromPath('selfie', selfieImage.path));
         } else {
-          debugPrint('❌ Failed to refresh token for startSlot.');
-          String errorMessage = 'Token refresh failed during startSlot';
-          try {
-            final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
-            errorMessage = errorBody['error']?.toString() ?? errorMessage;
-            if (errorMessage == 'Token refresh failed during startSlot') {
-              errorMessage = errorBody['message']?.toString() ?? errorMessage;
-            }
-          } catch (e) {
-            debugPrint(
-                '⚠️ Ошибка парсинга тела ошибки startSlot (initial 401): $e');
-          }
-          throw Exception(errorMessage);
+          throw Exception('Selfie file does not exist');
         }
-      }
+        return request;
+      }, token);
 
       if (response.statusCode != 200 && response.statusCode != 201) {
         String errorMessage = 'Failed to start slot';
         try {
           final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
-          errorMessage = errorBody['error']?.toString() ?? errorMessage;
-          if (errorMessage == 'Failed to start slot') {
-            errorMessage = errorBody['message']?.toString() ?? errorMessage;
-          }
+          errorMessage = errorBody['error']?.toString() ??
+              errorBody['message']?.toString() ??
+              errorMessage;
         } catch (e) {
           debugPrint('⚠️ Ошибка парсинга тела ошибки startSlot: $e');
         }
@@ -1105,19 +1065,15 @@ class ApiService {
     required DateTime date,
     required int morningCount,
     required int eveningCount,
+    required int fullCount,
     required List<int> selectedScoutIds,
   }) async {
-    if (morningCount == 0 && eveningCount == 0) {
-      throw Exception('Укажите хотя бы одну смену');
-    }
-    if (selectedScoutIds.isEmpty) {
-      throw Exception('Не выбрано ни одного скаута');
-    }
     final body = {
       'date':
           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
       'morning_count': morningCount,
       'evening_count': eveningCount,
+      'full_count': fullCount,
       'scout_ids': selectedScoutIds,
     };
     final response = await _authorizedRequest((token) async {
@@ -1224,7 +1180,7 @@ class ApiService {
       String token, List<dynamic> batchData) async {
     final response = await _authorizedRequest((token) async {
       return await http.post(
-        Uri.parse(AppConfig.geoTrackUrl), // Убедитесь, что этот URL существует
+        Uri.parse(AppConfig.geoTrackUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -1239,5 +1195,46 @@ class ApiService {
       throw Exception(
           'Failed to send geo batch: ${response.statusCode} - ${utf8.decode(response.bodyBytes)}');
     }
+  }
+
+  Future<List<dynamic>> getLastLocations(String token) async {
+    try {
+      final response = await _authorizedRequest(
+        (t) => http.get(
+          Uri.parse(AppConfig.lastLocationsUrl),
+          headers: {'Authorization': 'Bearer $t', 'Content-Type': 'application/json'},
+        ),
+        token,
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        return body is List ? body : [];
+      }
+    } catch (e) {
+      debugPrint('Ошибка getLastLocations: $e');
+    }
+    return [];
+  }
+
+  Future<List<dynamic>> getLocationHistory(String token, String userId, String from, String to) async {
+    try {
+      final url = '${AppConfig.locationHistoryUrl}?user_id=$userId&from=${Uri.encodeComponent(from)}&to=${Uri.encodeComponent(to)}';
+      final response = await _authorizedRequest(
+        (t) => http.get(
+          Uri.parse(url),
+          headers: {'Authorization': 'Bearer $t', 'Content-Type': 'application/json'},
+        ),
+        token,
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic> && body['points'] is List) {
+          return body['points'] as List;
+        }
+      }
+    } catch (e) {
+      debugPrint('Ошибка getLocationHistory: $e');
+    }
+    return [];
   }
 }

@@ -1,36 +1,38 @@
-// lib/utils/time_utils.dart
-String extractTimeFromIsoString(String? isoString) {
-  if (isoString == null || isoString.isEmpty) return '—:—';
+// lib/src/core/utils/time_utils.dart
+import 'package:intl/intl.dart';
 
-  final RegExp timeRegex = RegExp(r'T(\d{2}:\d{2}(?::\d{2})?)');
-  final Match? match = timeRegex.firstMatch(isoString);
-  if (match != null) return match.group(1)!;
-
-  try {
-    final timePart = isoString.split('T').last.split(RegExp(r'[.\+Z]')).first;
-    final parts = timePart.split(':');
-    if (parts.length >= 2) {
-      return '${parts[0]}:${parts[1]}';
+class TimeUtils {
+  static String formatTime(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '--:--';
+    try {
+      final dateTime = DateTime.parse(isoString).toLocal();
+      return DateFormat('HH:mm').format(dateTime);
+    } catch (e) {
+      return '--:--';
     }
-  } catch (e) {
-    // ничего не делаем
   }
 
-  return '—:—';
-}
-
-String extractDateFromIsoString(String? isoString) {
-  if (isoString == null || isoString.isEmpty) return '—';
-
-  try {
-    final datePart = isoString.split('T').first;
-    final parts = datePart.split('-');
-    if (parts.length == 3) {
-      return '${parts[2]}.${parts[1]}.${int.parse(parts[0]) % 100}'; // ДД.ММ.ГГ
+  static String formatDate(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '--.--.--';
+    try {
+      final dateTime = DateTime.parse(isoString).toLocal();
+      return DateFormat('dd.MM.yy').format(dateTime);
+    } catch (e) {
+      return '--.--.--';
     }
-  } catch (e) {
-    // ничего не делаем
   }
 
-  return '—';
+  static String formatFullDate(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '--.--.----';
+    try {
+      final dateTime = DateTime.parse(isoString).toLocal();
+      return DateFormat('dd.MM.yyyy').format(dateTime);
+    } catch (e) {
+      return '--.--.----';
+    }
+  }
 }
+
+// Keep old functions for compatibility
+String extractTimeFromIsoString(String? isoString) => TimeUtils.formatTime(isoString);
+String extractDateFromIsoString(String? isoString) => TimeUtils.formatDate(isoString);

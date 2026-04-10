@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'dart:ui' as ui;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
@@ -171,68 +172,89 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
 
   Widget _infoCard() {
     final username = widget.employeeUsername?.trim() ?? '';
-    final telegramId = widget.employeeTelegramId?.toString() ?? '';
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: _colors.primaryContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: Stack(
         children: [
-          Row(
-            children: [
-              Icon(Icons.assignment_rounded, color: _colors.onPrimaryContainer),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Новый отчёт',
-                  style: _theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: _colors.onPrimaryContainer,
+          // Glass effect background
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: _colors.primaryContainer.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: _colors.primary.withOpacity(0.2),
+                    width: 1.5,
                   ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Кто отправляет: ${widget.employeeName}',
-            style: _theme.textTheme.bodyLarge?.copyWith(
-              color: _colors.onPrimaryContainer,
-              fontWeight: FontWeight.w700,
             ),
           ),
-          if (username.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Логин: @$username',
-              style: _theme.textTheme.bodyMedium?.copyWith(
-                color: _colors.onPrimaryContainer,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-          if (telegramId.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Telegram ID: $telegramId',
-              style: _theme.textTheme.bodyMedium?.copyWith(
-                color: _colors.onPrimaryContainer,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-          const SizedBox(height: 10),
-          Text(
-            widget.scooterNumbers.isEmpty
-                ? 'Самокаты не выбраны'
-                : 'Самокаты: ${widget.scooterNumbers.join(', ')}',
-            style: _theme.textTheme.bodyLarge?.copyWith(
-              color: _colors.onPrimaryContainer,
-              fontWeight: FontWeight.w600,
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _colors.primary.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.person_outline_rounded,
+                          color: _colors.onPrimaryContainer, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.employeeName,
+                            style: _theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: _colors.onPrimaryContainer,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          if (username.isNotEmpty)
+                            Text(
+                              '@$username',
+                              style: _theme.textTheme.bodyMedium?.copyWith(
+                                color: _colors.onPrimaryContainer.withOpacity(0.7),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 32, thickness: 0.5),
+                Row(
+                  children: [
+                    Icon(Icons.electric_scooter,
+                        color: _colors.onPrimaryContainer.withOpacity(0.6), size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.scooterNumbers.isEmpty
+                            ? 'Самокаты не выбраны'
+                            : 'Самокаты: ${widget.scooterNumbers.join(', ')}',
+                        style: _theme.textTheme.bodyMedium?.copyWith(
+                          color: _colors.onPrimaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -249,34 +271,49 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
 
     return Expanded(
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         onTap: _sending ? null : () => setState(() => _reportType = value),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 20),
           decoration: BoxDecoration(
-            color: selected
-                ? _colors.primaryContainer
-                : _colors.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(18),
+            gradient: selected
+                ? LinearGradient(
+                    colors: [Colors.green[700]!, Colors.green[500]!],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: selected ? null : _colors.surfaceContainerHighest.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: Colors.green.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ]
+                : null,
             border: Border.all(
-              color: selected ? _colors.primary : _colors.outlineVariant,
-              width: selected ? 2 : 1,
+              color: selected ? Colors.transparent : _colors.outlineVariant,
+              width: 1.5,
             ),
           ),
           child: Column(
             children: [
               Icon(
                 icon,
-                size: 30,
-                color: selected ? _colors.primary : _colors.onSurfaceVariant,
+                size: 28,
+                color: selected ? Colors.white : _colors.onSurfaceVariant,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
                 title,
                 style: _theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: selected ? _colors.primary : _colors.onSurface,
+                  fontWeight: FontWeight.w900,
+                  color: selected ? Colors.white : _colors.onSurface,
                 ),
               ),
             ],
@@ -290,58 +327,55 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
     final reportTitle = _reportType == 'before' ? 'Фото ДО' : 'Фото ПОСЛЕ';
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _colors.outlineVariant),
+        color: _colors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _colors.outlineVariant.withOpacity(0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: _colors.shadow.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.collections_rounded, color: _colors.primary),
-              const SizedBox(width: 10),
+              Icon(Icons.photo_library_rounded, color: Colors.green[700]),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   '$reportTitle (${_photos.length}/10)',
                   style: _theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
                     color: _colors.onSurface,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
-                child: FilledButton.icon(
+                child: _actionButton(
                   onPressed: _sending ? null : _takePhoto,
-                  icon: const Icon(Icons.camera_alt_rounded),
-                  label: const Text('Камера'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(54),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
+                  icon: Icons.camera_alt_rounded,
+                  label: 'Камера',
+                  isPrimary: true,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
-                child: OutlinedButton.icon(
+                child: _actionButton(
                   onPressed: _sending ? null : _pickImages,
-                  icon: const Icon(Icons.photo_library_rounded),
-                  label: const Text('Галерея'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(54),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
+                  icon: Icons.image_rounded,
+                  label: 'Галерея',
+                  isPrimary: false,
                 ),
               ),
             ],
@@ -397,53 +431,101 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
     return Stack(
       children: [
         Positioned.fill(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Image.file(
-              _photos[index],
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-        Positioned(
-          left: 8,
-          bottom: 8,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
             decoration: BoxDecoration(
-              color: _colors.scrim.withOpacity(0.72),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: Text(
-              '${index + 1}',
-              style: _theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Image.file(
+                _photos[index],
+                fit: BoxFit.cover,
               ),
             ),
           ),
         ),
         Positioned(
-          top: 6,
-          right: 6,
-          child: Material(
-            color: _colors.scrim.withOpacity(0.72),
-            borderRadius: BorderRadius.circular(30),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(30),
-              onTap: _sending ? null : () => _removePhoto(index),
-              child: const Padding(
-                padding: EdgeInsets.all(7),
-                child: Icon(
-                  Icons.close,
-                  color: Colors.white,
-                  size: 18,
-                ),
+          top: 8,
+          right: 8,
+          child: GestureDetector(
+            onTap: _sending ? null : () => _removePhoto(index),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.9),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 16),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 8,
+          left: 8,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${index + 1}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _actionButton({
+    required VoidCallback? onPressed,
+    required IconData icon,
+    required String label,
+    required bool isPrimary,
+  }) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 54,
+        decoration: BoxDecoration(
+          color: isPrimary ? Colors.green[700] : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          border: isPrimary ? null : Border.all(color: _colors.outlineVariant),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: isPrimary ? Colors.white : _colors.onSurface, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: isPrimary ? Colors.white : _colors.onSurface,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -520,24 +602,49 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
             SafeArea(
               top: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _sending ? null : _sendReport,
-                    icon: _sending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send_rounded),
-                    label: Text(_sending ? 'Отправка...' : 'Отправить отчёт'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(58),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                child: InkWell(
+                  onTap: _sending ? null : _sendReport,
+                  borderRadius: BorderRadius.circular(22),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    height: 64,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: _sending
+                          ? LinearGradient(colors: [Colors.grey[700]!, Colors.grey[600]!])
+                          : LinearGradient(
+                              colors: [Colors.green[700]!, Colors.green[500]!],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (_sending ? Colors.grey : Colors.green).withOpacity(0.3),
+                          blurRadius: 15,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: _sending
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.send_rounded, color: Colors.white),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Отправить отчёт',
+                                  style: _theme.textTheme.titleMedium?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
                     ),
                   ),
                 ),

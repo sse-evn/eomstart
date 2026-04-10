@@ -6,6 +6,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/src/core/config/app_config.dart' as AppConfig;
 import 'package:micro_mobility_app/src/core/config/google_sheets_config.dart';
 import 'package:micro_mobility_app/src/features/app/models/active_shift.dart';
+import 'package:micro_mobility_app/src/core/services/api_service.dart';
+import 'package:micro_mobility_app/src/core/utils/time_utils.dart';
 import 'package:micro_mobility_app/src/features/admin/shifts_list/shift_details_screen.dart';
 
 class ShiftHistoryScreen extends StatefulWidget {
@@ -17,6 +19,7 @@ class ShiftHistoryScreen extends StatefulWidget {
 
 class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final ApiService _apiService = ApiService();
   late Future<List<ActiveShift>> _shiftsFuture;
   bool _isExporting = false;
   Timer? _autoExportTimer;
@@ -37,19 +40,8 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
   Future<List<ActiveShift>> _fetchEndedShifts() async {
     final token = await _storage.read(key: 'jwt_token');
     if (token == null) throw Exception('Токен не найден');
-    final url =
-        Uri.parse('${AppConfig.AppConfig.apiBaseUrl}/admin/ended-shifts');
-    final response = await http.get(url, headers: {
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-    });
-    if (response.statusCode == 200) {
-      final dynamic jsonResponse = jsonDecode(utf8.decode(response.bodyBytes));
-      final List<dynamic> jsonList = jsonResponse is List ? jsonResponse : [];
-      return jsonList.map((json) => ActiveShift.fromJson(json)).toList();
-    } else {
-      throw Exception('Ошибка загрузки: ${response.statusCode}');
-    }
+    
+    return await _apiService.getEndedShifts(token);
   }
 
   Future<void> refresh() async {
@@ -111,18 +103,12 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
   }
 
   String _formatLocalTime(String isoString) {
-    try {
-      final utcTime = DateTime.parse(isoString);
-      final localTime = utcTime.toLocal();
-      return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return '--:--';
-    }
+    return TimeUtils.formatTime(isoString);
   }
 
   Widget _buildShiftCard(ActiveShift shift) {
-    final duration = _calculateDuration(shift);
-    final payment = _calculatePayment(shift);
+    if (shift.startTimeString == null || shift.endTimeString == null) return const SizedBox();
+    
     return Card(
       color: Theme.of(context).colorScheme.secondary,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -181,30 +167,13 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.timer, size: 16, color: Colors.blue),
-                        const SizedBox(width: 4),
-                        Text(_formatDuration(duration),
-                            style: const TextStyle(fontSize: 14)),
-                      ],
-                    ),
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    '${payment.toStringAsFixed(0)} ${GoogleSheetsConfig.currency}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.green),
-                  ),
-                  const SizedBox(height: 8),
-                  const Icon(Icons.chevron_right, color: Colors.grey),
+                  Icon(Icons.chevron_right, color: Colors.grey),
                 ],
               ),
             ],
@@ -230,15 +199,10 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
           'Начало',
           'Конец',
           'Длительность',
-          'Оплата (₸)'
         ]
       ];
       for (final shift in shifts) {
         final duration = _calculateDuration(shift);
-        final hours =
-            duration.inHours + duration.inMinutes.remainder(60) / 60.0;
-        final payment =
-            (hours * GoogleSheetsConfig.hourlyRate).toStringAsFixed(0);
         final startLocal = DateTime.parse(shift.startTimeString!).toLocal();
         final startDate =
             '${startLocal.day.toString().padLeft(2, '0')}.${startLocal.month.toString().padLeft(2, '0')}.${startLocal.year}';
@@ -249,7 +213,6 @@ class _ShiftHistoryScreenState extends State<ShiftHistoryScreen> {
           '$startDate ${_formatLocalTime(shift.startTimeString!)}',
           _formatLocalTime(shift.endTimeString!),
           _formatDuration(duration),
-          payment,
         ]);
       }
       final response = await http.post(

@@ -229,57 +229,68 @@ Future<void> _uploadExcel() async {
 
   Future<void> _uploadFromGoogleSheet() async {
     final controller = TextEditingController();
-    await showDialog(
+
+    final urlData = await showDialog<Map<String, String>>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Ссылка на Google Таблицу'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-              hintText: 'https://docs.google.com/spreadsheets/d/...'),
+        title: const Text('Загрузка из Google Таблицы'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Ссылка на таблицу',
+                  hintText: 'https://docs.google.com/spreadsheets/d/...',
+                ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedBrandForUpload,
+                items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
+                    .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                    .toList(),
+                onChanged: (v) => setState(() => _selectedBrandForUpload = v),
+                decoration: const InputDecoration(labelText: 'Бренд'),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                readOnly: true,
+                onTap: () async {
+                  final pickedDate = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now().add(const Duration(days: 7)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2030),
+                  );
+                  if (pickedDate != null) {
+                    setState(() => _selectedValidUntil = pickedDate);
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Дата окончания',
+                  hintText: _selectedValidUntil == null
+                      ? 'Выберите дату'
+                      : _selectedValidUntil!.toLocal().toString().split(' ')[0],
+                  suffixIcon: const Icon(Icons.calendar_today),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
-          TextButton(
-              onPressed: Navigator.of(ctx).pop, child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
           ElevatedButton(
-            onPressed: () async {
-              final url = controller.text.trim();
-              if (url.isEmpty) return;
-              Navigator.of(ctx).pop();
-              setState(() {
-                _isLoading = true;
-              });
-              try {
-                await _service.uploadPromoFromGoogleSheet(url);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text(
-                            'Промокоды из Google Таблицы загружены и обработаны!'),
-                        backgroundColor: Colors.green),
-                  );
-                  _loadAllData();
-                }
-              } on PromoApiServiceException catch (e) {
-                if (mounted) {
-                  if (e.statusCode == 401) {
-                    _handleUnauthorized();
-                  } else if (e.statusCode == 403) {
-                    _handleForbidden();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text('Ошибка: ${e.message}'),
-                          backgroundColor: Colors.red),
-                    );
-                  }
-                }
-              } finally {
-                if (mounted) {
-                  setState(() {
-                    _isLoading = false;
-                  });
-                }
+            onPressed: () {
+              if (controller.text.isNotEmpty &&
+                  _selectedBrandForUpload != null &&
+                  _selectedValidUntil != null) {
+                Navigator.pop(ctx, {
+                  'url': controller.text.trim(),
+                  'brand': _selectedBrandForUpload!,
+                  'validUntil': _selectedValidUntil!.toIso8601String().split('T')[0],
+                });
               }
             },
             child: const Text('Загрузить'),
@@ -287,6 +298,40 @@ Future<void> _uploadExcel() async {
         ],
       ),
     );
+
+    if (urlData == null) return;
+
+    setState(() => _isLoading = true);
+    try {
+      await _service.uploadPromoFromGoogleSheet(
+        urlData['url']!,
+        brand: urlData['brand']!,
+        validUntil: urlData['validUntil']!,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Промокоды из Google Таблицы загружены!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadAllData();
+      }
+    } on PromoApiServiceException catch (e) {
+      if (mounted) {
+        if (e.statusCode == 401) {
+          _handleUnauthorized();
+        } else if (e.statusCode == 403) {
+          _handleForbidden();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка: ${e.message}'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _activateBrand() async {

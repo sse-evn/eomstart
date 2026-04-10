@@ -12,6 +12,7 @@ import 'package:flutter_map_geojson/flutter_map_geojson.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
+import '../../core/services/api_service.dart';
 
 
 class MapLogic {
@@ -28,6 +29,9 @@ class MapLogic {
   bool showSpeedLimitZones = true;
   bool showBoundaries = true;
   bool isMapLoadedOffline = false;
+  List<dynamic> otherScoutsLocations = [];
+  Timer? _trackingTimer;
+  final ApiService _apiService = ApiService();
   bool _disposed = false;
   void Function()? onStateChanged;
 
@@ -41,6 +45,7 @@ class MapLogic {
 
   static const String _MAPS_CACHE_KEY = 'cached_maps_list';
   static const String _MAPS_CACHE_TIMESTAMP_KEY = 'cached_maps_list_timestamp';
+  static const String _SELECTED_MAP_ID_KEY = 'selected_map_id_cache';
   static const Duration _CACHE_TTL = Duration(minutes: 10);
 
   MapLogic(this.context, {String? initialAvatarUrl})
@@ -60,7 +65,10 @@ class MapLogic {
     await _initCaching(); // Теперь дожидаемся завершения
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_disposed) _initMap();
+      if (!_disposed) {
+        _initMap();
+        _startTrackingTimer();
+      }
     });
   }
 
@@ -75,7 +83,7 @@ class MapLogic {
       stores: const {
         storeName: BrowseStoreStrategy.readUpdateCreate,
       },
-      loadingStrategy: BrowseLoadingStrategy.onlineFirst,
+      loadingStrategy: BrowseLoadingStrategy.cacheFirst,
     );
 
     _notify(); // Важно: уведомить UI, что tileProvider готов
@@ -83,6 +91,7 @@ class MapLogic {
 
   void dispose() {
     _disposed = true;
+    _trackingTimer?.cancel();
     mapController.dispose();
   }
 
@@ -97,6 +106,7 @@ class MapLogic {
         // await _prefetchTilesIfNeeded();
       }
 
+      await _loadSavedMapId(); // Загружаем последний выбранный ID
       await _loadAvailableMaps();
       await _loadAndParseGeoJson();
     } catch (e) {
@@ -129,6 +139,32 @@ class MapLogic {
   //     // Не показываем ошибку пользователю — это фоновая операция
   //   }
   // }
+
+  Future<void> _startTrackingTimer() async {
+    _trackingTimer?.cancel();
+    _trackingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (!_disposed) fetchOtherScoutsLocations();
+    });
+    // Первый запуск сразу
+    fetchOtherScoutsLocations();
+  }
+
+  Future<void> fetchOtherScoutsLocations() async {
+    if (_disposed) return;
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) return;
+
+      final locations = await _apiService.getLastLocations(token);
+      
+      // Исключаем себя из списка "других", если хотим (но на бэкенде это обычно все активные)
+      // Для простоты оставим всех, в UI отфильтруем или покажем как есть
+      otherScoutsLocations = locations;
+      _notify();
+    } catch (e) {
+      debugPrint('Ошибка получения локаций команды: $e');
+    }
+  }
 
   Future<void> fetchCurrentLocation() async {
     if (_disposed) return;
@@ -220,6 +256,17 @@ class MapLogic {
     return (now - timestamp) < _CACHE_TTL.inMilliseconds;
   }
 
+  Future<void> _loadSavedMapId() async {
+    try {
+      final savedId = await storage.read(key: _SELECTED_MAP_ID_KEY);
+      if (savedId != null) {
+        selectedMapId = int.tryParse(savedId) ?? -1;
+      }
+    } catch (e) {
+      debugPrint('Ошибка загрузки сохраненного ID карты: $e');
+    }
+  }
+
   void _applyFirstMapIfNoneSelected() {
     if (selectedMapId == -1 && availableMaps.isNotEmpty) {
       final firstMap = availableMaps.first;
@@ -250,7 +297,8 @@ class MapLogic {
       geoJsonParser.parseGeoJsonAsString(geoJsonString);
       _notify();
     } catch (e) {
-      _showErrorSnackBar('Ошибка загрузки GeoJSON: $e');
+      debugPrint('Ошибка парсинга GeoJSON: $e');
+      _showErrorSnackBar('Не удалось загрузить зоны для этой карты. Попробуйте обновить.');
     }
   }
 
@@ -258,10 +306,13 @@ class MapLogic {
     final localFile = await _getLocalMapFile(mapId);
     if (await localFile.exists()) {
       final content = await localFile.readAsString();
-      if (content.isNotEmpty) {
+      if (content.isNotEmpty && content.trim().startsWith('{')) {
         debugPrint('✅ Загружено из офлайн-кеша: ${localFile.path}');
         isMapLoadedOffline = true;
         return content;
+      } else {
+        debugPrint('⚠️ Кэшированный файл пуст или не в формате JSON. Удаление.');
+        await localFile.delete();
       }
     }
 
@@ -318,6 +369,7 @@ class MapLogic {
     if (_disposed || newMapId == selectedMapId) return;
 
     selectedMapId = newMapId;
+    await storage.write(key: _SELECTED_MAP_ID_KEY, value: newMapId.toString());
     isLoading = true;
     isMapLoadedOffline = false;
     _notify();

@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:micro_mobility_app/src/core/config/app_config.dart';
 import 'package:micro_mobility_app/src/features/app/models/active_shift.dart';
+import 'package:micro_mobility_app/src/core/services/api_service.dart';
+import 'package:micro_mobility_app/src/core/utils/time_utils.dart';
 import 'package:micro_mobility_app/src/features/admin/shifts_list/shift_details_screen.dart';
 
 class ShiftMonitoringScreen extends StatefulWidget {
@@ -15,6 +17,7 @@ class ShiftMonitoringScreen extends StatefulWidget {
 
 class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final ApiService _apiService = ApiService();
   late Future<List<ActiveShift>> _shiftsFuture;
 
   @override
@@ -27,27 +30,7 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
     final token = await _storage.read(key: 'jwt_token');
     if (token == null) throw Exception('Токен не найден');
 
-    final url = Uri.parse('${AppConfig.apiBaseUrl}/admin/active-shifts');
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final dynamic jsonResponse = jsonDecode(utf8.decode(response.bodyBytes));
-      final List<dynamic> jsonList = jsonResponse is List ? jsonResponse : [];
-      return jsonList.map((json) => ActiveShift.fromJson(json)).toList();
-    } else {
-      String errorMessage = 'Ошибка загрузки';
-      try {
-        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
-        errorMessage = errorBody['error'] ?? errorMessage;
-      } catch (e) {}
-      throw Exception('$errorMessage: ${response.statusCode}');
-    }
+    return await _apiService.getActiveShifts(token);
   }
 
   Future<void> refresh() async {
@@ -257,13 +240,7 @@ class ShiftMonitoringScreenState extends State<ShiftMonitoringScreen> {
   }
 
   String _formatLocalTime(String isoString) {
-    try {
-      final utcTime = DateTime.parse(isoString);
-      final localTime = utcTime.toLocal();
-      return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return '--:--';
-    }
+    return TimeUtils.formatTime(isoString);
   }
 
   Widget _buildShiftCard(ActiveShift shift) {

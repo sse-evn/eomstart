@@ -8,6 +8,11 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:micro_mobility_app/src/core/config/app_config.dart' show AppConfig;
 import 'package:micro_mobility_app/src/features/app/models/location.dart';
+import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
+import 'package:micro_mobility_app/src/core/services/api_service.dart';
+import 'package:flutter_map_geojson/flutter_map_geojson.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 class EmployeeMapLogic {
   LatLng? currentLocation;
@@ -17,6 +22,7 @@ class EmployeeMapLogic {
   void Function()? onStateChanged;
 
   final FlutterSecureStorage storage = const FlutterSecureStorage();
+  final ApiService _apiService = ApiService();
   List<EmployeeLocation> employeeLocations = [];
   String? currentUserAvatarUrl;
 
@@ -27,7 +33,15 @@ class EmployeeMapLogic {
   String? selectedEmployeeName;
   DateTimeRange? selectedHistoryRange;
 
+  FMTCTileProvider? tileProvider;
   Timer? _liveTrackingTimer;
+
+  final GeoJsonParser geoJsonParser = GeoJsonParser();
+  bool showRestrictedZones = true;
+  bool showBoundaries = true;
+  bool showParkingZones = true;
+  bool showSpeedLimitZones = true;
+  Map<String, String> _userNameCache = {};
   String _formatDateWithTimezone(DateTime dt) {
     final local = dt.toLocal(); // Убедиться что локальная TZ применена
     final offset = local.timeZoneOffset;
@@ -91,18 +105,82 @@ class EmployeeMapLogic {
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token != null) {
-        final response = await http.get(
-          Uri.parse(AppConfig.profileUrl),
-          headers: {'Authorization': 'Bearer $token'},
-        );
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body) as Map<String, dynamic>;
-          currentUserAvatarUrl = data['avatarUrl'] as String?;
-          _notify();
-        }
+        final profile = await _apiService.getUserProfile(token);
+        currentUserAvatarUrl = profile['avatarUrl'] as String?;
+        _notify();
       }
     } catch (e) {
       debugPrint('Ошибка загрузки профиля: $e');
+    }
+  }
+
+  Future<void> _loadUserNameCache() async {
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) return;
+      final users = await _apiService.getAdminUsers(token);
+      final Map<String, String> cache = {};
+      for (var u in users) {
+        if (u is Map) {
+          final id = u['id']?.toString();
+          final firstName = u['first_name']?.toString();
+          final username = u['username']?.toString();
+          if (id != null) {
+            cache[id] = (firstName != null && firstName.isNotEmpty) ? firstName : (username ?? 'ID $id');
+          }
+        }
+      }
+      _userNameCache = cache;
+    } catch (e) {
+      debugPrint('Ошибка загрузки кэша имен: $e');
+    }
+  }
+
+  Future<void> _loadAndParseGeoJson() async {
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) return;
+
+      // Пытаемся взять последнюю выбранную карту из MapLogic (если сохранена в storage)
+      final savedId = await storage.read(key: 'selected_map_id_cache');
+      final mapId = int.tryParse(savedId ?? '') ?? -1;
+
+      if (mapId == -1) return;
+
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/map_$mapId.geojson');
+
+      String content = '';
+      if (await file.exists()) {
+        content = await file.readAsString();
+      }
+
+      if (content.isEmpty) {
+        // Если нет локальной, пробуем скачать (минимум логики из MapLogic)
+        final metaResponse = await http.get(
+          Uri.parse(AppConfig.getMapByIdUrl(mapId)),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (metaResponse.statusCode == 200) {
+          final meta = jsonDecode(metaResponse.body);
+          final fileUrl = AppConfig.getMapFileUrl(meta['file_name']);
+          final fileRes = await http.get(
+            Uri.parse(fileUrl),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+          if (fileRes.statusCode == 200) {
+            content = fileRes.body;
+            await file.writeAsString(content);
+          }
+        }
+      }
+
+      if (content.isNotEmpty) {
+        geoJsonParser.parseGeoJsonAsString(content);
+        _notify();
+      }
+    } catch (e) {
+      debugPrint('Ошибка загрузки зон на админ-карте: $e');
     }
   }
 
@@ -112,39 +190,36 @@ class EmployeeMapLogic {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) return;
 
-      final response = await http.get(
-        Uri.parse(AppConfig.lastLocationsUrl),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final decoded = await _apiService.getLastLocations(token);
+      
+      employeeLocations = decoded
+          .map((item) {
+            if (item is! Map<String, dynamic>) return null;
+            final id = item['user_id']?.toString() ?? 'unknown';
+            final lat = (item['lat'] as num?)?.toDouble();
+            final lon = (item['lon'] as num?)?.toDouble();
+            if (lat == null || lon == null) return null;
 
-      if (response.statusCode == 200) {
-        final dynamic decoded = jsonDecode(response.body);
-        if (decoded is List) {
-          employeeLocations = decoded
-              .map((item) {
-                if (item is! Map<String, dynamic>) return null;
-                final lat = (item['lat'] as num?)?.toDouble();
-                final lon = (item['lon'] as num?)?.toDouble();
-                if (lat == null || lon == null) return null;
-                return EmployeeLocation(
-                  userId: item['user_id']?.toString() ?? 'unknown',
-                  name: item['name']?.toString(),
-                  position: LatLng(lat, lon),
-                  battery: item['battery'] is num
-                      ? (item['battery'] as num).toDouble()
-                      : null,
-                  timestamp: DateTime.tryParse(item['ts']?.toString() ?? '') ??
-                      DateTime.now(),
-                  avatarUrl: item['avatarUrl']?.toString(),
-                );
-              })
-              .whereType<EmployeeLocation>()
-              .toList();
-        } else {
-          employeeLocations = [];
-        }
-        _notify();
-      }
+            String? name = item['name']?.toString();
+            if (name == null || name.isEmpty || name.contains('Сотрудник')) {
+              name = _userNameCache[id];
+            }
+
+            return EmployeeLocation(
+              userId: id,
+              name: name,
+              position: LatLng(lat, lon),
+              battery: item['battery'] is num
+                  ? (item['battery'] as num).toDouble()
+                  : null,
+              timestamp: DateTime.tryParse(item['ts']?.toString() ?? '') ??
+                  DateTime.now(),
+              avatarUrl: item['avatarUrl']?.toString(),
+            );
+          })
+          .whereType<EmployeeLocation>()
+          .toList();
+      _notify();
     } catch (e) {
       debugPrint('Ошибка загрузки позиций сотрудников: $e');
       employeeLocations = [];
@@ -155,7 +230,7 @@ class EmployeeMapLogic {
   void startLiveTracking() {
     stopLiveTracking();
     _liveTrackingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (!_disposed) return;
+      if (_disposed) return;
       fetchEmployeeLocations();
     });
   }
@@ -191,56 +266,40 @@ class EmployeeMapLogic {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) return;
 
-      final url = '${AppConfig.locationHistoryUrl}?user_id=$userId'
-          '&from=${Uri.encodeComponent(fromStr)}'
-          '&to=${Uri.encodeComponent(toStr)}';
+      final points = await _apiService.getLocationHistory(token, userId, fromStr, toStr);
 
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      if (points.isNotEmpty) {
+        final gpsPoints = points
+            .map((item) {
+              if (item is! Map<String, dynamic>) return null;
+              final lat = (item['lat'] as num?)?.toDouble();
+              final lon = (item['lon'] as num?)?.toDouble();
+              if (lat == null || lon == null) return null;
+              return LatLng(lat, lon);
+            })
+            .whereType<LatLng>()
+            .toList();
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
+        _cachedHistories[cacheKey] = points
+            .map((item) {
+              final map = item as Map<String, dynamic>;
+              final lat = (map['lat'] as num?)?.toDouble() ?? 0.0;
+              final lon = (map['lon'] as num?)?.toDouble() ?? 0.0;
+              return EmployeeLocation(
+                userId: userId,
+                name: map['name']?.toString(),
+                position: LatLng(lat, lon),
+                battery: (map['battery'] as num?)?.toDouble(),
+                timestamp:
+                    DateTime.tryParse(map['timestamp']?.toString() ?? '') ??
+                        DateTime.now(),
+                avatarUrl: map['avatarUrl']?.toString(),
+              );
+            })
+            .whereType<EmployeeLocation>()
+            .toList();
 
-        if (decoded is Map<String, dynamic> && decoded['points'] is List) {
-          final points = decoded['points'] as List<dynamic>;
-
-          final gpsPoints = points
-              .map((item) {
-                if (item is! Map<String, dynamic>) return null;
-                final lat = (item['lat'] as num?)?.toDouble();
-                final lon = (item['lon'] as num?)?.toDouble();
-                if (lat == null || lon == null) return null;
-                return LatLng(lat, lon);
-              })
-              .whereType<LatLng>()
-              .toList();
-
-          _cachedHistories[cacheKey] = points
-              .map((item) {
-                final map = item as Map<String, dynamic>;
-                final lat = (map['lat'] as num?)?.toDouble() ?? 0.0;
-                final lon = (map['lon'] as num?)?.toDouble() ?? 0.0;
-                return EmployeeLocation(
-                  userId: userId,
-                  name: map['name']?.toString(),
-                  position: LatLng(lat, lon),
-                  battery: (map['battery'] as num?)?.toDouble(),
-                  timestamp:
-                      DateTime.tryParse(map['timestamp']?.toString() ?? '') ??
-                          DateTime.now(),
-                  avatarUrl: map['avatarUrl']?.toString(),
-                );
-              })
-              .whereType<EmployeeLocation>()
-              .toList();
-
-          selectedEmployeeHistory = _smoothPolyline(gpsPoints);
-        }
-      } else {
-        debugPrint(
-            'Ошибка загрузки истории: ${response.statusCode} ${response.body}');
+        selectedEmployeeHistory = _smoothPolyline(gpsPoints);
       }
     } catch (e) {
       debugPrint('Ошибка загрузки истории: $e');
@@ -283,8 +342,22 @@ class EmployeeMapLogic {
     if (_disposed) return;
     isLoading = true;
     _notify();
+
+    // FMTC Store Initialization
+    const storeName = 'mapStore';
+    final store = const FMTCStore(storeName);
+    if (!(await store.manage.ready)) {
+      await store.manage.create();
+    }
+    tileProvider = FMTCTileProvider(
+      stores: const {storeName: BrowseStoreStrategy.readUpdateCreate},
+      loadingStrategy: BrowseLoadingStrategy.cacheFirst,
+    );
+
     await _fetchCurrentLocation();
     await _loadUserProfile();
+    await _loadUserNameCache();
+    await _loadAndParseGeoJson();
     await fetchEmployeeLocations();
     if (!_disposed) {
       isLoading = false;
