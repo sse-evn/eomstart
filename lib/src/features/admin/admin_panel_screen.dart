@@ -107,20 +107,23 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
+        extendBodyBehindAppBar: false,
         appBar: AppBar(
+          elevation: 0,
+          backgroundColor: theme.scaffoldBackgroundColor,
+          surfaceTintColor: Colors.transparent,
+          centerTitle: false,
           title: Text(
             _titles[_currentIndex],
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: -0.5),
           ),
           actions: [
-            // 🔄 Кнопка просто вызывает setState — и всё обновится
-            // IconButton(
-            //   icon: const Icon(Icons.refresh),
-            //   onPressed: _refreshShifts,
-            //   tooltip: 'Обновить',
-            // ),
             PopupMenuButton(
-              icon: const Icon(Icons.info_outline, size: 18, color: Colors.grey),
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.grey.withOpacity(0.1), shape: BoxShape.circle),
+                child: const Icon(Icons.info_outline, size: 18, color: Colors.grey),
+              ),
               tooltip: 'Информация о среде',
               onSelected: (value) {
                 if (value == 'env') {
@@ -133,9 +136,20 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 const PopupMenuItem(value: 'env', child: Text('Показать среду')),
               ],
             ),
+            const SizedBox(width: 8),
           ],
         ),
         body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                theme.scaffoldBackgroundColor,
+                theme.scaffoldBackgroundColor.withOpacity(0.8),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
           child: currentBody,
         ),
         bottomNavigationBar: Theme(

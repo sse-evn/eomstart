@@ -406,450 +406,457 @@ Future<void> _uploadExcel() async {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      // appBar: AppBar(title: const Text('Управление промокодами')),
+      backgroundColor: Colors.transparent,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _loadAllData,
+              displacement: 20,
+              color: Colors.green,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                physics: const BouncingScrollPhysics(),
                 children: [
-                  // Активный бренд
-                  const Text('Активный бренд:',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  if (_activeBrand != null)
-                    Card(
-                      child: ListTile(
-                        leading: Icon(_getBrandIcon(_activeBrand!['brand'])),
-                        title: Text('Только ${_activeBrand!['brand']}'),
-                        subtitle: Text('До ${_activeBrand!['expires_at']}'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.clear, color: Colors.red),
-                          onPressed: _clearActiveBrand,
-                        ),
-                      ),
-                    )
-                  else
-                    const Card(
-                      child: ListTile(
-                        leading: Icon(Icons.check_circle_outline),
-                        title: Text('Все бренды доступны'),
-                      ),
-                    ),
+                  _buildSectionHeader('Текущее состояние', Icons.dashboard_customize_outlined),
+                  _buildActiveBrandCard(isDarkMode),
+                  
                   const SizedBox(height: 24),
-
-                  // Форма активации
-                  const Text('Активировать бренд:',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedBrand,
-                    items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
-                        .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                        .toList(),
-                    onChanged: (v) => setState(() => _selectedBrand = v),
-                    decoration:
-                        const InputDecoration(labelText: 'Выберите бренд'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    readOnly: true,
-                    onTap: () async {
-                      final pickedDate = await showDatePicker(
-                        context: context,
-                        initialDate:
-                            DateTime.now().add(const Duration(days: 7)),
-                        firstDate:
-                            DateTime.now().subtract(const Duration(days: 1)),
-                        lastDate: DateTime(2030),
-                      );
-                      if (pickedDate != null) {
-                        setState(() {
-                          _endDate = pickedDate;
-                        });
-                      }
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Дата окончания активности',
-                      hintText: _endDate == null
-                          ? 'Выберите дату'
-                          : _endDate!.toLocal().toString().split(' ')[0],
-                      suffixIcon: const Icon(Icons.calendar_today),
-                    ),
-                  ),
-                  if (_endDate != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Будет активно примерно ${_endDate!.difference(DateTime.now()).inDays.abs()} дней.',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _selectedBrand != null && _endDate != null
-                        ? _activateBrand
-                        : null,
-                    child: const Text('Активировать бренд'),
-                  ),
+                  _buildSectionHeader('Активация ограничений', Icons.bolt_outlined),
+                  _buildActivationForm(isDarkMode),
+                  
                   const SizedBox(height: 24),
-
-                  // --- ОБНОВЛЁННАЯ СЕКЦИЯ ЗАГРУЗКИ ---
-                  const Text('Загрузить промокоды:',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Загрузите Excel/CSV файл с одной колонкой "Промокод" и датой окончания.\n'
-                    'Бренд будет выбран вами вручную перед загрузкой файла.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: _uploadExcel,
-                    icon: const Icon(Icons.file_upload),
-                    label: const Text('Загрузить Excel/CSV'),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Или загрузите промокоды из Google Таблицы в том же формате:',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: _uploadFromGoogleSheet,
-                    icon: const Icon(Icons.link),
-                    label: const Text('Из Google Таблицы'),
-                  ),
+                  _buildSectionHeader('Пополнение базы', Icons.cloud_upload_outlined),
+                  _buildUploadActions(isDarkMode),
+                  
                   const SizedBox(height: 24),
-
-                  // Статистика (Свободные промокоды)
-                  const Text('Свободные промокоды:',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
+                  _buildSectionHeader('Статистика остатков', Icons.analytics_outlined),
                   if (_stats == null)
-                    const Center(child: Text('Загрузка...'))
+                    const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
                   else
-                    _buildDetailedStats(),
+                    _buildDetailedStats(isDarkMode),
+                  
                   const SizedBox(height: 24),
-
-                  // --- НОВЫЙ БЛОК: КНОПКА И СПИСОК ВЫДАННЫХ ПРОМОКОДОВ ---
-                  // Кнопка для показа/скрытия списка
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _showClaimedPromos = !_showClaimedPromos;
-                            });
-                          },
-                          icon: Icon(_showClaimedPromos
-                              ? Icons.arrow_drop_up
-                              : Icons.arrow_drop_down),
-                          label: Text(
-                            _showClaimedPromos
-                                ? 'Скрыть выданные промокоды'
-                                : 'Показать выданные промокоды',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Поле поиска (видимо только если список открыт)
-                  if (_showClaimedPromos) ...[
-                    TextField(
-                      decoration: const InputDecoration(
-                        labelText: 'Поиск по имени пользователя',
-                        prefixIcon: Icon(Icons.search),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _searchQuery = value.toLowerCase();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  // Список выданных промокодов (видимый только при _showClaimedPromos == true)
-                  if (_showClaimedPromos) ...[
-                    const Text('Выданные промокоды:',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    if (_claimedPromos == null)
-                      const Center(child: Text('Загрузка...'))
-                    else if (_claimedPromos!.isEmpty)
-                      const Center(child: Text('Нет выданных промокодов'))
-                    else
-                      _buildClaimedPromosListByDate(), // Новый метод
-                  ],
-                  const SizedBox(height: 24),
+                  _buildSectionHeader('История выдачи', Icons.history_edu_outlined),
+                  _buildClaimedPromosSection(isDarkMode),
+                  
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildDetailedStats() {
-    final summaryRaw = _stats?['summary'];
-    final summary = summaryRaw is Map
-        ? Map<String, int>.from(summaryRaw)
-        : {'JET': 0, 'YANDEX': 0, 'WHOOSH': 0, 'BOLT': 0};
-    final byDateRaw = _stats?['by_date'];
-    final byDate =
-        byDateRaw is List ? byDateRaw.cast<Map<String, dynamic>>() : [];
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.green),
+          const SizedBox(width: 10),
+          Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.5, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
 
-    return Column(
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Всего свободно:',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 12),
-                DataTable(
-                  columnSpacing: 16,
-                  columns: const [
-                    DataColumn(label: Text('Бренд')),
-                    DataColumn(label: Text('Свободно')),
-                    DataColumn(label: Text('Формат кода')),
-                  ],
-                  rows: [
-                    _buildBrandRow('JET', summary['JET'] ?? 0, 'GT9-XXXXXX'),
-                    _buildBrandRow(
-                        'YANDEX', summary['YANDEX'] ?? 0, 'ocf/ocm + цифры'),
-                    _buildBrandRow(
-                        'WHOOSH', summary['WHOOSH'] ?? 0, 'WSH_XXXXXX'),
-                    _buildBrandRow('BOLT', summary['BOLT'] ?? 0, 'BOLTXXXXXX'),
-                  ],
-                ),
-              ],
-            ),
-          ),
+  Widget _buildActiveBrandCard(bool isDarkMode) {
+    if (_activeBrand == null) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.green.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.green.withOpacity(0.2)),
         ),
-        const SizedBox(height: 16),
-        if (byDate.isNotEmpty) ...[
-          const Text('По датам окончания:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 8),
-          for (final item in byDate)
-            Card(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              child: Padding(
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.green, size: 28),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Все бренды доступны', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text('Ограничения по брендам сейчас не установлены', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final brand = _activeBrand!['brand'] as String;
+    final brandColor = _getBrandColor(brand);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [brandColor.withOpacity(0.15), brandColor.withOpacity(0.05)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: brandColor.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
                 padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: brandColor.withOpacity(0.2), shape: BoxShape.circle),
+                child: Icon(_getBrandIcon(brand), color: brandColor, size: 26),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Действительны до: ${item['valid_until']}',
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    if (item['counts'] is Map) ...[
-                      DataTable(
-                        columnSpacing: 16,
-                        columns: const [
-                          DataColumn(label: Text('Бренд')),
-                          DataColumn(label: Text('Количество')),
-                        ],
-                        rows: [
-                          for (final brand in [
-                            'JET',
-                            'YANDEX',
-                            'WHOOSH',
-                            'BOLT'
-                          ])
-                            if ((item['counts'] as Map).containsKey(brand))
-                              DataRow(
-                                cells: [
-                                  DataCell(Text(brand)),
-                                  DataCell(Text(
-                                      '${(item['counts'] as Map)[brand]}')),
-                                ],
-                              ),
-                        ],
-                      ),
-                    ],
+                    Text('Активен только $brand', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                    Text('Действует до ${_activeBrand!['expires_at']}', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
                   ],
                 ),
               ),
-            ),
+              IconButton(
+                onPressed: _clearActiveBrand,
+                icon: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  child: const Icon(Icons.close, color: Colors.white, size: 16),
+                ),
+              ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActivationForm(bool isDarkMode) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[200]!),
+      ),
+      child: Column(
+        children: [
+          DropdownButtonFormField<String>(
+            value: _selectedBrand,
+            items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT'].map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
+            onChanged: (v) => setState(() => _selectedBrand = v),
+            decoration: InputDecoration(
+              labelText: 'Выберите бренд',
+              prefixIcon: const Icon(Icons.branding_watermark_outlined),
+              filled: true,
+              fillColor: isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey[50],
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            readOnly: true,
+            onTap: () async {
+              final pickedDate = await showDatePicker(
+                context: context,
+                initialDate: DateTime.now().add(const Duration(days: 7)),
+                firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                lastDate: DateTime(2030),
+              );
+              if (pickedDate != null) setState(() => _endDate = pickedDate);
+            },
+            decoration: InputDecoration(
+              labelText: 'Дата окончания',
+              hintText: _endDate == null ? 'Выберите дату' : DateFormat('dd.MM.yyyy').format(_endDate!),
+              prefixIcon: const Icon(Icons.calendar_today_outlined),
+              filled: true,
+              fillColor: isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey[50],
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _selectedBrand != null && _endDate != null ? _activateBrand : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text('Установить ограничение', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUploadActions(bool isDarkMode) {
+    return Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: _uploadExcel,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: const Column(
+                children: [
+                  Icon(Icons.description_outlined, color: Colors.green, size: 32),
+                  SizedBox(height: 12),
+                  Text('Excel / CSV', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: InkWell(
+            onTap: _uploadFromGoogleSheet,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: const Column(
+                children: [
+                  Icon(Icons.grid_on_outlined, color: Colors.blue, size: 32),
+                  SizedBox(height: 12),
+                  Text('Google Sheets', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                ],
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  DataRow _buildBrandRow(String brand, int count, String format) {
-    return DataRow(
-      cells: [
-        DataCell(Row(
-          children: [
-            Icon(_getBrandIcon(brand), size: 18),
-            const SizedBox(width: 8),
-            Text(brand),
-          ],
-        )),
-        DataCell(Text('$count')),
-        DataCell(Text(format)),
+  Widget _buildClaimedPromosSection(bool isDarkMode) {
+    if (_claimedPromos == null) {
+      return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
+    }
+    
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Поиск по сотруднику...',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              border: InputBorder.none,
+              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 13),
+            ),
+            onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildClaimedPromosListByDate(),
+      ],
+    );
+  }
+
+  Widget _buildDetailedStats(bool isDarkMode) {
+    final summaryRaw = _stats?['summary'];
+    final summary = summaryRaw is Map ? Map<String, int>.from(summaryRaw) : {'JET': 0, 'YANDEX': 0, 'WHOOSH': 0, 'BOLT': 0};
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[200]!),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                _buildStatRow('JET', summary['JET'] ?? 0, 'GT9-XXXXXX', isDarkMode),
+                const Divider(height: 24),
+                _buildStatRow('YANDEX', summary['YANDEX'] ?? 0, 'ocf/ocm + цифры', isDarkMode),
+                const Divider(height: 24),
+                _buildStatRow('WHOOSH', summary['WHOOSH'] ?? 0, 'WSH_XXXXXX', isDarkMode),
+                const Divider(height: 24),
+                _buildStatRow('BOLT', summary['BOLT'] ?? 0, 'BOLTXXXXXX', isDarkMode),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatRow(String brand, int count, String format, bool isDarkMode) {
+    final color = _getBrandColor(brand);
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+          child: Icon(_getBrandIcon(brand), color: color, size: 20),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(brand, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+              Text(format, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: count > 0 ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text('$count', 
+            style: TextStyle(
+              color: count > 0 ? Colors.green : Colors.red, 
+              fontWeight: FontWeight.bold, 
+              fontSize: 14
+            )),
+        ),
       ],
     );
   }
 
   // --- НОВЫЙ МЕТОД: ГРУППИРОВКА ПО ДАТАМ С ПОИСКОМ ---
   Widget _buildClaimedPromosListByDate() {
-    // Фильтруем пользователей по поисковому запросу
     final filteredUsers = <Map<String, dynamic>>[];
-    for (final item in _claimedPromos!) {
-      if (item is Map<String, dynamic> &&
-          item['promo_codes'] != null &&
-          (item['promo_codes'] as Map).isNotEmpty) {
-        // Получаем имя пользователя
+    final promos = _claimedPromos ?? [];
+    for (final item in promos) {
+      if (item is Map<String, dynamic> && item['promo_codes'] != null && (item['promo_codes'] as Map).isNotEmpty) {
         final username = (item['username'] as String?)?.toLowerCase() ?? '';
         final firstName = (item['first_name'] as String?)?.toLowerCase() ?? '';
-        // Проверяем, соответствует ли пользователь поисковому запросу
-        if (_searchQuery.isEmpty ||
-            username.contains(_searchQuery) ||
-            firstName.contains(_searchQuery)) {
+        if (_searchQuery.isEmpty || username.contains(_searchQuery) || firstName.contains(_searchQuery)) {
           filteredUsers.add(item);
         }
       }
     }
 
-    // Если нет результатов поиска, показываем сообщение
     if (filteredUsers.isEmpty && _searchQuery.isNotEmpty) {
-      return const Center(
-        child: Text(
-          'Ничего не найдено',
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
+      return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text('Ничего не найдено', style: TextStyle(color: Colors.grey))));
     }
 
-    // Группируем отфильтрованных пользователей по дате выдачи
     final groupedByDate = <String, List<Map<String, dynamic>>>{};
     for (final item in filteredUsers) {
-      // Получаем дату выдачи
       final createdAtStr = item['created_at'] as String?;
       if (createdAtStr != null) {
-        final date = DateTime.parse(createdAtStr).toLocal();
-        final dateKey = date.toIso8601String().split('T')[0];
-        if (!groupedByDate.containsKey(dateKey)) {
-          groupedByDate[dateKey] = [];
-        }
+        final dateKey = createdAtStr.split('T')[0];
+        if (!groupedByDate.containsKey(dateKey)) groupedByDate[dateKey] = [];
         groupedByDate[dateKey]!.add(item);
       }
     }
 
-    // Создаем список карточек по датам
-    final dateWidgets = <Widget>[];
-    // Сортируем ключи (даты) по убыванию (новые сверху)
-    final sortedDates = groupedByDate.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
+    final sortedDates = groupedByDate.keys.toList()..sort((a, b) => b.compareTo(a));
 
-    for (final dateKey in sortedDates) {
-      final usersForDate = groupedByDate[dateKey]!;
-      // Форматируем дату для отображения
-      final displayDate =
-          DateFormat('dd.MM.yyyy').format(DateTime.parse(dateKey));
-      // Определяем название дня недели
-      final dayOfWeek =
-          DateFormat('EEEE', 'ru_RU').format(DateTime.parse(dateKey));
-      final headerText = '$displayDate ($dayOfWeek)';
-
-      dateWidgets.add(
-        Container(
-          margin: const EdgeInsets.only(top: 16, bottom: 8),
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            headerText,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+    return Column(
+      children: [
+        for (final dateKey in sortedDates) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text(DateFormat('dd MMMM yyyy', 'ru_RU').format(DateTime.parse(dateKey)), 
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.grey, letterSpacing: 0.5)),
+              ],
             ),
           ),
-        ),
-      );
-
-      for (final user in usersForDate) {
-        dateWidgets.add(
-          Card(
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                      '${user['username'] ?? 'Пользователь'} (${user['first_name'] ?? ''})',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 8),
-                  for (final entry
-                      in (user['promo_codes'] as Map<String, dynamic>).entries)
-                    if (entry.value is List && (entry.value as List).isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Row(
-                          children: [
-                            Icon(_getBrandIcon(entry.key), size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                '${entry.key}: ${(entry.value as List).join(", ")}',
-                                style: const TextStyle(fontFamily: 'monospace'),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }
-    }
-
-    return Column(children: dateWidgets);
+          for (final user in groupedByDate[dateKey]!)
+            _buildClaimedUserCard(user),
+        ],
+      ],
+    );
   }
 
-  // Вспомогательная функция для иконок брендов
+  Widget _buildClaimedUserCard(Map<String, dynamic> user) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDarkMode ? Colors.white.withOpacity(0.03) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.person_outline, size: 16, color: Colors.green),
+              const SizedBox(width: 8),
+              Text('${user['username'] ?? 'User'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              if (user['first_name'] != null) Text(' • ${user['first_name']}', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (final entry in (user['promo_codes'] as Map<String, dynamic>).entries)
+            if (entry.value is List && (entry.value as List).isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(_getBrandIcon(entry.key), size: 14, color: _getBrandColor(entry.key)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${(entry.value as List).join(", ")}',
+                        style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+
+  Color _getBrandColor(String brand) {
+    switch (brand.toUpperCase()) {
+      case 'JET': return Colors.yellow[700]!;
+      case 'YANDEX': return const Color(0xFFFFCC00);
+      case 'WHOOSH': return Colors.orange;
+      case 'BOLT': return Colors.green;
+      default: return Colors.blue;
+    }
+  }
+
   IconData _getBrandIcon(String brand) {
-    switch (brand) {
-      case 'JET':
-        return Icons.electric_scooter;
-      case 'YANDEX':
-        return Icons.map;
-      case 'WHOOSH':
-        return Icons.directions_bike;
-      case 'BOLT':
-        return Icons.bolt;
-      default:
-        return Icons.help;
+    switch (brand.toUpperCase()) {
+      case 'JET': return Icons.electric_scooter;
+      case 'YANDEX': return Icons.map;
+      case 'WHOOSH': return Icons.directions_bike;
+      case 'BOLT': return Icons.bolt;
+      default: return Icons.help_outline;
     }
   }
 }
