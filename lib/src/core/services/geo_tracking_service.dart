@@ -51,6 +51,14 @@ FutureOr<bool> onStart(ServiceInstance service) async {
   _activeShiftId = shiftId;
   _bgAuthToken = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
 
+  if (service is AndroidServiceInstance) {
+    service.setAsForegroundService();
+    service.setForegroundNotificationInfo(
+      title: "Микромобильность",
+      content: "Отслеживание геопозиции активно",
+    );
+  }
+
   _log("Получен shiftId: $_activeShiftId, Token: ${_bgAuthToken != null ? 'OK' : 'MISSING'}");
 
   service.on('stopTracking').listen((event) {
@@ -59,10 +67,20 @@ FutureOr<bool> onStart(ServiceInstance service) async {
     _backgroundTimer = null;
     _activeShiftId = null;
     _serviceIsActuallyRunning = false;
+    service.stopSelf();
   });
 
+  // Запускаем таймер сбора данных
   _backgroundTimer = Timer.periodic(
-      const Duration(seconds: 60), _collectAndAttemptToSendGeoData);
+      const Duration(seconds: 45), (timer) async {
+         await _collectAndAttemptToSendGeoData(timer);
+         if (service is AndroidServiceInstance) {
+           service.setForegroundNotificationInfo(
+             title: "Микромобильность",
+             content: "Геопозиция обновлена: ${DateTime.now().hour}:${DateTime.now().minute}",
+           );
+         }
+      });
 
   await prefs.setBool(_SHARED_PREFS_BG_RUNNING_KEY, true);
   _log("Сервис запущен для смены $_activeShiftId");
@@ -77,16 +95,18 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
     final prefs = await SharedPreferences.getInstance();
     final currentActiveShiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
 
-    if (currentActiveShiftId != _activeShiftId) {
-      _log("ShiftID изменился — останавливаем таймер.");
+    if (currentActiveShiftId == null || (currentActiveShiftId != _activeShiftId)) {
+      _log("ShiftID изменился или отсутствует ($currentActiveShiftId vs $_activeShiftId) — останавливаем таймер.");
       timer.cancel();
       _activeShiftId = null;
       return;
     }
 
-    LocationPermission permission = await Geolocator.checkPermission();
-    _log("Проверка разрешения: $permission");
+    // Обновляем токен из хранилища на случай, если он поменялся (refresh)
+    final freshToken = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
+    if (freshToken != null) _bgAuthToken = freshToken;
 
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       _log("Нет разрешения — прерываем.");
@@ -102,15 +122,22 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
     int batteryLevel;
 
     try {
+      // Пытаемся получить максимально точную позицию
       position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 10,
+          accuracy: LocationAccuracy.best,
+          distanceFilter: 0, // Собираем даже малые перемещения для "четкости"
+          timeLimit: Duration(seconds: 15),
         ),
       );
     } catch (e) {
-      _log("Ошибка получения позиции: $e");
-      return;
+      _log("Ошибка получения позиции: $e. Пробуем последнюю известную...");
+      final lastPos = await Geolocator.getLastKnownPosition();
+      if (lastPos != null) {
+        position = lastPos;
+      } else {
+        return;
+      }
     }
 
     try {
@@ -119,7 +146,6 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
       batteryLevel = 0;
     }
 
-    // 🔥 Фильтр нулевых координат
     if (position.latitude == 0.0 || position.longitude == 0.0) {
       _log("Получена 0,0 позиция — пропуск");
       return;
@@ -131,7 +157,7 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
       'speed': position.speed,
       'accuracy': position.accuracy,
       'battery': batteryLevel,
-      'timestamp': DateTime.now().toIso8601String(),
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
       'event': 'tracking',
       'shift_id': _activeShiftId,
     });
@@ -140,13 +166,12 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
 
     try {
       await _sendSingleGeoDataToServer(geoDataJson);
-      _log("✅ Успешно отправлено");
     } catch (e) {
       _log("❌ Ошибка отправки: $e, сохраняем в буфер...");
       await _bufferFailedData(geoDataJson, _activeShiftId);
     }
   } catch (e) {
-    _log("Ошибка в сборе данных: $e");
+    _log("Критическая ошибка в сборе данных: $e");
   }
 }
 

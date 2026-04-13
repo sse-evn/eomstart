@@ -93,34 +93,46 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     );
   }
 
-  Widget _buildFallbackAvatar({double? battery, Color? color}) {
+  Widget _buildFallbackAvatar({double? battery, Color? color, String? label}) {
     return Container(
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
         color: color ?? Colors.green[700],
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2),
+        border: Border.all(color: Colors.white, width: 2.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          const Icon(Icons.person, color: Colors.white, size: 20),
+          if (label != null)
+             Text(label.substring(0, 1).toUpperCase(), 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+          else
+            const Icon(Icons.person, color: Colors.white, size: 24),
           if (battery != null)
             Positioned(
-              top: -6,
-              right: -6,
+              top: -2,
+              right: -2,
               child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: battery > 20 ? Colors.green : Colors.red,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white, width: 1),
                 ),
                 child: Text(
                   '${battery.toInt()}%',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 10,
+                    fontSize: 9,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -156,7 +168,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: AppConstants.cartoDbPositronUrl,
+                    urlTemplate: AppConstants.mapUrl,
+                    subdomains: AppConstants.mapSubdomains,
                     userAgentPackageName: AppConstants.userAgentPackageName,
                     retinaMode: RetinaMode.isHighDensity(context),
                     tileProvider: _logic.tileProvider,
@@ -167,7 +180,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                         return Polygon(
                           points: polygon.points,
                           borderColor: Colors.red,
-                          color: Colors.red.withOpacity(0.15),
+                          color: Colors.red.withOpacity(0.12),
                           borderStrokeWidth: 2.0,
                         );
                       }).toList(),
@@ -177,30 +190,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                       polylines: _logic.geoJsonParser.polylines.map((polyline) {
                         return Polyline(
                           points: polyline.points,
-                          color: Colors.blue.withOpacity(0.7),
+                          color: Colors.blue.withOpacity(0.6),
                           strokeWidth: 3,
-                        );
-                      }).toList(),
-                    ),
-                  if (_logic.geoJsonParser.polygons.isNotEmpty && _logic.showParkingZones)
-                    PolygonLayer(
-                      polygons: _logic.geoJsonParser.polygons.map((polygon) {
-                        return Polygon(
-                          points: polygon.points,
-                          borderColor: Colors.pink,
-                          color: Colors.pink.withOpacity(0.15),
-                          borderStrokeWidth: 2.0,
-                        );
-                      }).toList(),
-                    ),
-                  if (_logic.geoJsonParser.polygons.isNotEmpty && _logic.showSpeedLimitZones)
-                    PolygonLayer(
-                      polygons: _logic.geoJsonParser.polygons.map((polygon) {
-                        return Polygon(
-                          points: polygon.points,
-                          borderColor: Colors.green,
-                          color: Colors.green.withOpacity(0.15),
-                          borderStrokeWidth: 2.0,
                         );
                       }).toList(),
                     ),
@@ -214,26 +205,40 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                         ),
                       ],
                     ),
+                  if (_logic.geoJsonParser.markers.isNotEmpty)
+                    MarkerLayer(markers: _logic.geoJsonParser.markers),
                   if (_logic.currentLocation != null)
                     MarkerLayer(
                       markers: [
                         Marker(
                           point: _logic.currentLocation!,
-                          width: 48,
-                          height: 48,
-                          child: ClipOval(
-                            child: _logic.currentUserAvatarUrl != null
-                                ? Image.network(
-                                    _logic.currentUserAvatarUrl!,
-                                    fit: BoxFit.cover,
-                                    width: 48,
-                                    height: 48,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            _buildFallbackAvatar(
-                                                color: Colors.blue[700]),
-                                  )
-                                : _buildFallbackAvatar(color: Colors.blue[700]),
+                          width: 50,
+                          height: 50,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: _logic.currentUserAvatarUrl != null
+                                  ? Image.network(
+                                      _logic.currentUserAvatarUrl!,
+                                      fit: BoxFit.cover,
+                                      width: 48,
+                                      height: 48,
+                                      errorBuilder: (context, error, stackTrace) =>
+                                          _buildFallbackAvatar(
+                                              color: Colors.blue[700]),
+                                    )
+                                  : _buildFallbackAvatar(color: Colors.blue[700]),
+                            ),
                           ),
                         ),
                       ],
@@ -243,23 +248,38 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                       markers: _logic.employeeLocations.map((emp) {
                         return Marker(
                           point: emp.position,
-                          width: 40,
-                          height: 40,
+                          width: 44,
+                          height: 44,
                           child: GestureDetector(
                             onTap: () => _showHistory(emp),
-                            child: ClipOval(
-                              child: emp.avatarUrl != null
-                                  ? Image.network(
-                                      emp.avatarUrl!,
-                                      fit: BoxFit.cover,
-                                      width: 40,
-                                      height: 40,
-                                      errorBuilder:
-                                          (context, error, stackTrace) =>
-                                              _buildFallbackAvatar(
-                                                  battery: emp.battery),
-                                    )
-                                  : _buildFallbackAvatar(battery: emp.battery),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2.5),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child: emp.avatarUrl != null
+                                    ? Image.network(
+                                        emp.avatarUrl!,
+                                        fit: BoxFit.cover,
+                                        width: 40,
+                                        height: 40,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                _buildFallbackAvatar(
+                                                    battery: emp.battery,
+                                                    label: emp.name),
+                                      )
+                                    : _buildFallbackAvatar(
+                                        battery: emp.battery, label: emp.name),
+                              ),
                             ),
                           ),
                         );

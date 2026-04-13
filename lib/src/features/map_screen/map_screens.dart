@@ -4,7 +4,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:micro_mobility_app/src/core/utils/map_app_constants.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/shift_provider.dart';
 import 'map_logic.dart';
 
 class MapScreen extends StatefulWidget {
@@ -29,6 +30,14 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
 
     logic = MapLogic(context);
+    
+    // Получаем автарку из провайдера
+    final shiftProvider = context.read<ShiftProvider>();
+    final avatar = shiftProvider.profile?['avatar'] as String?;
+    if (avatar != null) {
+      logic.updateAvatarUrl(avatar);
+    }
+
     logic.onStateChanged = () {
       if (mounted) setState(() {});
     };
@@ -117,8 +126,8 @@ class _MapScreenState extends State<MapScreen> {
           children: [
             // 🔥 Заменён TileLayer с кэшированием
             TileLayer(
-              urlTemplate: AppConstants.cartoDbPositronUrl,
-              // subdomains: AppConstants.cartoDbSubdomains,
+              urlTemplate: AppConstants.mapUrl,
+              subdomains: AppConstants.mapSubdomains,
               userAgentPackageName: AppConstants.userAgentPackageName,
               retinaMode: MediaQuery.of(context).devicePixelRatio > 1.0,
               // tileProvider: _tileProvider, // ← Вот оно!
@@ -148,68 +157,63 @@ class _MapScreenState extends State<MapScreen> {
                 }).toList(),
               ),
             if (logic.geoJsonParser.markers.isNotEmpty)
-              MarkerLayer(
-                markers:
-                    logic.geoJsonParser.markers.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final marker = entry.value;
-                  return Marker(
-                    point: marker.point,
-                    width: 30,
-                    height: 30,
-                    child: Container(
-                      alignment: Alignment.center,
-                      child: Text(
-                        '${index + 1}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          shadows: [
-                            Shadow(
-                              blurRadius: 3.0,
-                              color: Colors.black,
-                              offset: Offset(1.0, 1.0),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
+              MarkerLayer(markers: logic.geoJsonParser.markers),
             if (logic.currentLocation != null)
               MarkerLayer(
                 markers: [
                   Marker(
                     point: logic.currentLocation!,
-                    width: 48,
-                    height: 48,
-                    child: ClipOval(
-                      child: logic.currentUserAvatarUrl != null
-                          ? Image.network(
-                              logic.currentUserAvatarUrl!,
-                              fit: BoxFit.cover,
-                              width: 48,
-                              height: 48,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(
+                    width: 54,
+                    height: 54,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 8,
+                            spreadRadius: 2,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: logic.currentUserAvatarUrl != null
+                            ? Image.network(
+                                logic.currentUserAvatarUrl!,
+                                fit: BoxFit.cover,
+                                width: 48,
+                                height: 48,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(
+                                    color: Colors.blue[300],
+                                    child: const CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                  color: Colors.blue[700],
+                                  child: const Icon(
+                                    Icons.person,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
+                                ),
+                              )
+                            : Container(
                                 color: Colors.blue[700],
                                 child: const Icon(
                                   Icons.person,
                                   color: Colors.white,
-                                  size: 24,
+                                  size: 28,
                                 ),
                               ),
-                            )
-                          : Container(
-                              color: Colors.blue[700],
-                              child: const Icon(
-                                Icons.person,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                            ),
+                      ),
                     ),
                   ),
                 ],

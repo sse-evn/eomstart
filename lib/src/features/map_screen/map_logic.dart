@@ -48,9 +48,75 @@ class MapLogic {
   static const String _SELECTED_MAP_ID_KEY = 'selected_map_id_cache';
   static const Duration _CACHE_TTL = Duration(minutes: 10);
 
-  MapLogic(this.context, {String? initialAvatarUrl})
-      : currentUserAvatarUrl = initialAvatarUrl {
+  MapLogic(this.context, {String? initialAvatarUrl}) {
     mapController = MapController();
+    
+    // Настраиваем кастомный билдер маркеров для зон
+    geoJsonParser.markerCreationCallback = _customMarkerBuilder;
+    
+    if (initialAvatarUrl != null) {
+      updateAvatarUrl(initialAvatarUrl);
+    }
+  }
+
+  Marker _customMarkerBuilder(LatLng point, Map<String, dynamic> properties) {
+    String label = properties['description']?.toString() ?? 
+                   properties['iconContent']?.toString() ?? 
+                   '';
+                 
+    // Если это "ГРАНИЦА", рисуем маленькую точку без текста
+    if (label.toUpperCase() == 'ГРАНИЦА') {
+      return Marker(
+        point: point,
+        width: 10,
+        height: 10,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.blue,
+            shape: BoxShape.circle,
+          ),
+        ),
+      );
+    }
+
+    return Marker(
+      point: point,
+      width: 40,
+      height: 40,
+      child: Center(
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            shadows: [
+              Shadow(
+                blurRadius: 4.0,
+                color: Colors.black,
+                offset: Offset(1.5, 1.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void updateAvatarUrl(String url) {
+    if (url.isEmpty) return;
+    
+    if (url.startsWith('http')) {
+      currentUserAvatarUrl = url;
+    } else {
+      final baseUrl = AppConfig.mediaBaseUrl;
+      // Убираем лишние слеши при конкатенации
+      final cleanUrl = url.startsWith('/') ? url : '/$url';
+      currentUserAvatarUrl = baseUrl.endsWith('/') 
+          ? '$baseUrl${cleanUrl.substring(1)}' 
+          : '$baseUrl$cleanUrl';
+    }
+    _notify();
   }
 
   void _notify() {

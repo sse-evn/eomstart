@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
+import '../../../core/services/advice_service.dart';
 
 class DashboardInterestingThings extends StatelessWidget {
   const DashboardInterestingThings({super.key});
@@ -8,7 +9,7 @@ class DashboardInterestingThings extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final isDarkMode = theme.brightness == Brightness.dark;
+    final advice = AdviceService.getDailyAdvice();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -26,67 +27,12 @@ class DashboardInterestingThings extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        // "Tip of the day" card with Glassmorphism
-        _buildTipCard(context),
+        _buildTipCard(context, advice),
       ],
     );
   }
 
-  Widget _buildStatCard(
-    BuildContext context,
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: isDarkMode ? Colors.black26 : Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
-                ),
-              ),
-            ],
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTipCard(BuildContext context) {
+  Widget _buildTipCard(BuildContext context, DailyAdvice advice) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -138,12 +84,23 @@ class DashboardInterestingThings extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Всегда делайте четкие фото ДО смены, чтобы избежать штрафов.',
+                        advice.text,
                         style: TextStyle(
                           fontSize: 13,
                           color: colorScheme.onSurface.withOpacity(0.7),
                         ),
                       ),
+                      if (advice.translation != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          advice.translation!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: colorScheme.onSurface.withOpacity(0.5),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

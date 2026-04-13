@@ -204,15 +204,14 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      final shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
       try {
-        final shiftProvider =
-            Provider.of<ShiftProvider>(context, listen: false);
         await shiftProvider.setToken(token);
       } catch (e) {
         debugPrint("Could not set token in ShiftProvider: $e");
       }
 
-      final profile = await _apiService.getUserProfile(token);
+      final profile = await shiftProvider.loadProfile(force: true) ?? {};
       final status = profile['status']?.toString() ?? 'pending';
       final role = profile['role']?.toString().toLowerCase() ?? 'user';
 
@@ -251,14 +250,14 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      final shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
       try {
-        final shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
         await shiftProvider.setToken(token);
       } catch (e) {
         debugPrint("Could not set token in ShiftProvider: $e");
       }
 
-      final profile = await _apiService.getUserProfile(token);
+      final profile = await shiftProvider.loadProfile(force: true) ?? {};
       final status = profile['status']?.toString() ?? 'pending';
       final role = profile['role']?.toString().toLowerCase() ?? 'user';
 

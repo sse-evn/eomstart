@@ -20,6 +20,9 @@ import 'package:micro_mobility_app/src/core/providers/shift_provider.dart';
 
 // Services
 import 'package:micro_mobility_app/src/core/services/api_service.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:micro_mobility_app/src/features/home/bloc/shift_bloc.dart';
+import 'package:micro_mobility_app/src/features/home/bloc/shift_event.dart';
 
 
 final class AppRunner {
@@ -39,21 +42,28 @@ final class AppRunner {
     await _requestAllPermissions();
 
     runApp(
-      MultiProvider(
+      MultiBlocProvider(
         providers: [
-          ChangeNotifierProvider(create: (_) => SettingsProvider()),
-          ChangeNotifierProvider(
-            create: (_) => ShiftProvider(
-              apiService: apiService,
-              storage: storage,
-              prefs: prefs,
-            ),
+          BlocProvider(
+            create: (_) => ShiftBloc(apiService: apiService)..add(LoadShift()),
           ),
-          ChangeNotifierProvider(
-            create: (_) => ThemeProvider(),
-          )
         ],
-        child: const App(),
+        child: MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => SettingsProvider()),
+            ChangeNotifierProvider(
+              create: (_) => ShiftProvider(
+                apiService: apiService,
+                storage: storage,
+                prefs: prefs,
+              ),
+            ),
+            ChangeNotifierProvider(
+              create: (_) => ThemeProvider(),
+            )
+          ],
+          child: const App(),
+        ),
       ),
     );
   }

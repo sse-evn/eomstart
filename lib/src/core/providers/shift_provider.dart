@@ -17,6 +17,7 @@ import '../services/geo_tracking_service.dart'
         stopBackgroundTracking,
         syncBufferedData,
         isBackgroundTrackingRunning;
+import '../utils/time_utils.dart';
 
 class ShiftProvider with ChangeNotifier {
   final ApiService _apiService;
@@ -28,6 +29,10 @@ class ShiftProvider with ChangeNotifier {
   DateTime _selectedDate = DateTime.now().toLocal();
   bool _isEndingSlot = false;
   bool _isStartingSlot = false;
+  final Completer<void> _initCompleter = Completer<void>();
+  
+  // Future to wait for initialization
+  Future<void> get initialized => _initCompleter.future;
   Map<String, dynamic>? _botStatsData;
   bool _isLoadingBotStats = false;
   DateTime? _lastBotStatsFetchTime;
@@ -157,20 +162,45 @@ class ShiftProvider with ChangeNotifier {
   Future<void> setToken(String token) async {
     _token = token;
     await _storage.write(key: 'jwt_token', value: token);
+    if (!_initCompleter.isCompleted) {
+      _initCompleter.complete();
+    }
+    // Автоматически загружаем профиль при получении нового токена
+    await loadProfile(force: true);
   }
 
   Future<void> _initializeShiftProvider() async {
-    _token ??= await _storage.read(key: 'jwt_token');
-    await loadFromCache();
-    if (_isOnline && _token != null && !_hasLoadedShifts) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        loadShifts();
-      });
+    try {
+      _token ??= await _storage.read(key: 'jwt_token');
+      await loadFromCache();
+      if (_isOnline && _token != null) {
+        // При инициализации всегда пытаемся обновить профиль и смены
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          loadShifts();
+          loadProfile();
+        });
+      }
+    } finally {
+      if (!_initCompleter.isCompleted) {
+        _initCompleter.complete();
+      }
     }
   }
 
   Future<model.ActiveShift?> getActiveShift() async {
     if (_token == null || _isLoadingActiveShift) return _activeShift;
+    
+    // Проверка на истечение времени слота (локальная)
+    if (_activeShift != null && BreakTimeUtils.isSlotExpired(
+      _activeShift!.slotTimeRange,
+      shiftStartTime: _activeShift!.startTime,
+    )) {
+       debugPrint('ShiftProvider: Локальное обнаружение истечения слота. Сбрасываем.');
+       _activeShift = null;
+       notifyListeners();
+       return null;
+    }
+
     if (_lastActiveShiftFetchTime != null) {
       final now = DateTime.now();
       final difference = now.difference(_lastActiveShiftFetchTime!);
@@ -186,7 +216,16 @@ class ShiftProvider with ChangeNotifier {
       if (response == null) {
         _activeShift = null;
       } else {
-        _activeShift = response;
+        // Проверка на сервере может быть запаздывающей, поэтому проверяем и здесь
+        if (BreakTimeUtils.isSlotExpired(
+          response.slotTimeRange,
+          shiftStartTime: response.startTime,
+        )) {
+           debugPrint('ShiftProvider: Получена смена с истекшим слотом. Игнорируем.');
+           _activeShift = null;
+        } else {
+           _activeShift = response;
+        }
       }
 
       _lastActiveShiftFetchTime = DateTime.now();

@@ -13,6 +13,8 @@ dependencies:
   flutter:
     sdk: flutter
   provider: ^6.1.1 # Используйте последнюю версию
+  flutter_bloc: ^8.1.6
+  equatable: ^2.0.5
   flutter_map: ^7.0.2
   latlong2: ^0.9.0
   geolocator: ^14.0.2

@@ -9,6 +9,10 @@ import 'package:micro_mobility_app/src/core/services/api_service.dart' show ApiS
 import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:micro_mobility_app/src/features/home/bloc/shift_bloc.dart';
+import 'package:micro_mobility_app/src/features/home/bloc/shift_event.dart';
+import 'package:micro_mobility_app/src/features/home/bloc/shift_state.dart';
 
 class SlotSetupModal extends StatefulWidget {
   const SlotSetupModal({super.key});
@@ -126,39 +130,26 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       await _startNewShift();
     }
   }
-
   Future<void> _startNewShift() async {
-    if (_token == null) { _showError('Требуется авторизация'); return; }
-    if (_selectedTime == null) { _showError('Выберите время смены'); return; }
-    if (_zone == null) { _showError('Нет доступных зон'); return; }
-    if (_selfie == null) { _showError('Сделайте селфи'); return; }
-    if (_position == null || _position!.isEmpty) {
-      _showError('Не удалось определить вашу должность. Обратитесь к администратору.'); return;
-    }
-
-    final provider = Provider.of<ShiftProvider>(context, listen: false);
+    if (_selfie == null || _token == null) return;
+    final bloc = BlocProvider.of<ShiftBloc>(context);
     try {
       final processedFile = await _processSelfieWithOverlay(File(_selfie!.path));
-      await _retryApiCall(() => provider.startSlot(
+      
+      bloc.add(StartShiftRequested(
         slotTimeRange: _selectedTime!,
         position: _position!,
         zone: _zone!,
         selfie: XFile(processedFile.path),
       ));
-      await provider.loadShifts();
+
       if (mounted) {
         Navigator.pop(context, true);
-        _showSuccess('Смена успешно начата');
+        _showSuccess('Запрос на открытие смены отправлен');
       }
     } catch (e) {
       if (mounted) {
-        final errorMessage = e.toString().contains('502')
-            ? 'Сервер временно недоступен (502). Пожалуйста, попробуйте позже.'
-            : e.toString().contains('active')
-                ? 'У вас уже есть активная смена'
-                : 'Ошибка при старте смены: ${e.toString()}';
-        _showError(errorMessage);
-        if (e.toString().contains('active')) _backendConflict = true;
+        _showError('Ошибка при обработке фото: ${e.toString()}');
       }
     }
   }
@@ -166,19 +157,20 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   Future<void> _endShift() async {
     if (_token == null) { _showError('Требуется авторизация'); return; }
     try {
-      final provider = Provider.of<ShiftProvider>(context, listen: false);
-      await _retryApiCall(() => provider.endSlot());
-      await provider.loadShifts();
+      final bloc = BlocProvider.of<ShiftBloc>(context);
+      bloc.add(EndShiftRequested());
+      
       if (mounted) {
         setState(() {
           _hasActiveShift = false;
           _backendConflict = false;
           _activeShift = null;
         });
-        _showSuccess('Смена успешно завершена');
+        Navigator.pop(context, true);
+        _showSuccess('Запрос на завершение смены отправлен');
       }
     } catch (e) {
-      if (mounted) _showError('Ошибка при завершении смены: ${e.toString()}');
+      if (mounted) _showError('Ошибка при отправке запроса: ${e.toString()}');
     }
   }
 

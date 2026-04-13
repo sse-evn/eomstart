@@ -1,29 +1,36 @@
 // ====== slot_card.dart (ПОЛНЫЙ, ИСПРАВЛЕННЫЙ, НЕ УПРОЩЕННЫЙ) ======
 
 import 'package:flutter/material.dart';
-import 'package:micro_mobility_app/src/core/themes/colors.dart';
-import 'package:micro_mobility_app/src/core/providers/shift_provider.dart' show ShiftProvider;
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
+import 'package:micro_mobility_app/src/features/home/bloc/shift_bloc.dart';
+import 'package:micro_mobility_app/src/features/home/bloc/shift_state.dart';
+import 'package:micro_mobility_app/src/core/utils/time_utils.dart';
 import 'package:micro_mobility_app/src/features/app/models/active_shift.dart';
-
-
+import 'package:micro_mobility_app/src/core/config/app_config.dart';
+import 'package:micro_mobility_app/src/core/themes/colors.dart';
+import 'package:micro_mobility_app/src/core/providers/shift_provider.dart';
 import 'slot_setup_modal.dart';
-import '../../../core/config/app_config.dart';
 
 class SlotCard extends StatelessWidget {
   const SlotCard({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ShiftProvider>(
-      builder: (context, provider, child) {
-        if (!provider.hasLoadedShifts) {
+    return BlocBuilder<ShiftBloc, ShiftState>(
+      builder: (context, state) {
+        if (state is ShiftLoading) {
           return const Center(child: CircularProgressIndicator());
         }
 
         final theme = Theme.of(context);
         final isDarkMode = theme.brightness == Brightness.dark;
-        final activeShift = provider.activeShift;
+        
+        ActiveShift? activeShift;
+        if (state is ShiftActive) {
+          activeShift = state.shift;
+        }
+
         final hasActiveShift = activeShift != null;
 
         return Column(
@@ -76,25 +83,22 @@ class SlotCard extends StatelessWidget {
 
   Widget _buildActiveShiftUI(
       ActiveShift activeShift, ThemeData theme, bool isDarkMode) {
-    final String serverTime = activeShift.startTimeString != null
-        ? _formatLocalTime(activeShift.startTimeString!)
+    final String serverTime = activeShift.startTime != null
+        ? '${activeShift.startTime!.hour.toString().padLeft(2, '0')}:${activeShift.startTime!.minute.toString().padLeft(2, '0')}'
         : '--:--';
 
     final String slotTime = activeShift.slotTimeRange.isNotEmpty
         ? activeShift.slotTimeRange
         : 'Не указан';
 
-    if (activeShift.startTimeString == null) {
-      return Text(
-        'Время начала неизвестно',
-        style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
-      );
-    }
-
-    final duration = Duration(seconds: activeShift.currentDurationSeconds ?? 0);
+    final duration = activeShift.startTime != null 
+        ? DateTime.now().difference(activeShift.startTime!)
+        : const Duration();
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final durationStr = '$hoursч $minutesм';
+
+    final breakTime = BreakTimeUtils.getCurrentBreakTime();
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -153,40 +157,62 @@ class SlotCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Container(
-            decoration: BoxDecoration(
-                color: theme.colorScheme.secondary,
-                borderRadius: BorderRadius.circular(12)),
-            padding: const EdgeInsets.all(10),
-            child: const Row(
+          _buildBreakStatusUI(theme, isDarkMode),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBreakStatusUI(ThemeData theme, bool isDarkMode) {
+    final status = BreakTimeUtils.getBreakStatus();
+    final bool isInside = status['isInside'] == true;
+    final String label = status['label'] ?? '';
+    final String range = status['range'] ?? '';
+
+    if (range.isEmpty && !isInside) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDarkMode ? Colors.black26 : Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Icon(
+            Icons.fastfood,
+            size: 30,
+            color: isInside ? Colors.greenAccent : Colors.white70,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
               children: [
-                Icon(
-                  Icons.fastfood,
-                  size: 30,
-                ),
-                SizedBox(
-                  width: 10,
-                ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      Text(
-                        'У вас сейчас время перерыва',
-                        textAlign: TextAlign.center,
-                      ),
-                      Text(
-                        '10:00 - 10:40',
-                        style: TextStyle(
-                            fontSize: 18,
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold),
-                      )
-                    ],
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withOpacity(0.9),
                   ),
-                )
+                ),
+                Text(
+                  range,
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: isInside ? Colors.greenAccent : Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (isInside && status['remainingMinutes'] != null)
+                  Text(
+                    'Осталось: ${status['remainingMinutes']} мин',
+                    style: const TextStyle(color: Colors.greenAccent, fontSize: 11),
+                  ),
               ],
             ),
-          ),
+          )
         ],
       ),
     );

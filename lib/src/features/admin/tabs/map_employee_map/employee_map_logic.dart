@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart' show MapController;
+import 'package:flutter_map/flutter_map.dart' show MapController, Marker;
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -60,6 +60,52 @@ class EmployeeMapLogic {
 
   EmployeeMapLogic() {
     mapController = MapController();
+    // Настраиваем кастомный билдер маркеров для зон
+    geoJsonParser.markerCreationCallback = _customMarkerBuilder;
+  }
+
+  Marker _customMarkerBuilder(LatLng point, Map<String, dynamic> properties) {
+    String label = properties['description']?.toString() ?? 
+                   properties['iconContent']?.toString() ?? 
+                   '';
+                 
+    // Если это "ГРАНИЦА", рисуем маленькую точку без текста
+    if (label.toUpperCase() == 'ГРАНИЦА') {
+      return Marker(
+        point: point,
+        width: 10,
+        height: 10,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.blue,
+            shape: BoxShape.circle,
+          ),
+        ),
+      );
+    }
+
+    return Marker(
+      point: point,
+      width: 40,
+      height: 40,
+      child: Center(
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            shadows: [
+              Shadow(
+                blurRadius: 4.0,
+                color: Colors.black,
+                offset: Offset(1.5, 1.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _notify() {
@@ -229,7 +275,8 @@ class EmployeeMapLogic {
 
   void startLiveTracking() {
     stopLiveTracking();
-    _liveTrackingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    // Интервал сокращен до 10 секунд для "железнобетонного" мониторинга
+    _liveTrackingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (_disposed) return;
       fetchEmployeeLocations();
     });
