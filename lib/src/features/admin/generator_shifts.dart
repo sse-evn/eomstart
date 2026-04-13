@@ -23,6 +23,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
   int _fullCount = 0;
 
   List<Map<String, dynamic>> _availableScouts = [];
+  List<String> _availableZones = [];
   Set<String> _busyShifts = {};
   List<Map<String, dynamic>> _previewResult = [];
 
@@ -33,6 +34,8 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
   final TextEditingController _morningController = TextEditingController(text: '1');
   final TextEditingController _eveningController = TextEditingController(text: '1');
   final TextEditingController _fullController = TextEditingController(text: '0');
+  final TextEditingController _aiController = TextEditingController();
+  bool _isAiProcessing = false;
 
   @override
   void initState() {
@@ -45,6 +48,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
     _morningController.dispose();
     _eveningController.dispose();
     _fullController.dispose();
+    _aiController.dispose();
     super.dispose();
   }
 
@@ -65,12 +69,15 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
               })
           .toList();
 
+      final zones = await _apiService.getAvailableZones(token);
+
       final days = _isWeekly ? 7 : 1;
       final busy = await _getBusyShifts(token, _startDate, days);
 
       if (mounted) {
         setState(() {
           _availableScouts = scouts;
+          _availableZones = zones;
           _busyShifts = busy;
           _isLoading = false;
         });
@@ -142,7 +149,84 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
     return candidates.take(needed).toList();
   }
 
-  Future<void> _calculatePreview() async {
+  Future<void> _processAiCommand() async {
+    final text = _aiController.text.trim().toLowerCase();
+    if (text.isEmpty) return;
+
+    setState(() => _isAiProcessing = true);
+
+    // Имитация "размышления" ИИ
+    await Future.delayed(const Duration(milliseconds: 1500));
+
+    bool morningSet = false;
+    bool eveningSet = false;
+    bool fullSet = false;
+
+    // Регулярки для поиска чисел
+    final numReg = RegExp(r'(\d+)');
+    
+    // Сценарии
+    if (text.contains('недел')) {
+      _isWeekly = true;
+    } else if (text.contains('завтр')) {
+      _startDate = DateTime.now().add(const Duration(days: 1));
+      _isWeekly = false;
+    } else if (text.contains('сегод') || text.contains('сейч')) {
+      _startDate = DateTime.now();
+      _isWeekly = false;
+    }
+
+    bool noZones = text.contains('без зон');
+
+    // Парсинг количеств
+    final parts = text.split(RegExp(r'[,.;]|\sи\s'));
+    for (var part in parts) {
+      final match = numReg.firstMatch(part);
+      if (match != null) {
+        final count = int.parse(match.group(1)!);
+        if (part.contains('утр')) {
+          _morningCount = count;
+          _morningController.text = count.toString();
+          morningSet = true;
+        } else if (part.contains('веч')) {
+          _eveningCount = count;
+          _eveningController.text = count.toString();
+          eveningSet = true;
+        } else if (part.contains('полн') || part.contains('день')) {
+          _fullCount = count;
+          _fullController.text = count.toString();
+          fullSet = true;
+        }
+      }
+    }
+
+    // Если прямого указания не было, но есть одно число — применяем его ко всему или по логике
+    if (!morningSet && !eveningSet && !fullSet) {
+       final match = numReg.firstMatch(text);
+       if (match != null) {
+         final count = int.parse(match.group(1)!);
+         _morningCount = count;
+         _morningController.text = count.toString();
+         _eveningCount = count;
+         _eveningController.text = count.toString();
+       }
+    }
+
+    setState(() => _isAiProcessing = false);
+    await _calculatePreview(autoAssignZones: !noZones);
+    
+    if (mounted) {
+       ScaffoldMessenger.of(context).showSnackBar(
+         const SnackBar(
+           content: Text('✨ ИИ: Расписание сформировано и зоны распределены'),
+           backgroundColor: Colors.indigo,
+           behavior: SnackBarBehavior.floating,
+         )
+       );
+    }
+  }
+
+  Future<void> _calculatePreview({bool autoAssignZones = true}) async {
     if (_morningCount + _eveningCount + _fullCount == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Укажите количество смен')));
@@ -161,6 +245,8 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
     final result = <Map<String, dynamic>>[];
     final workingBusy = Set<String>.from(_busyShifts);
 
+    int zoneIndex = 0;
+
     for (int i = 0; i < days; i++) {
       final date = _startDate.add(Duration(days: i));
       final dateStr =
@@ -178,11 +264,23 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
       final evening = _simulateAssignment(scoutIds, _eveningCount, date, 'evening', workingBusy);
       for (var id in evening) workingBusy.add('$id-$dateStr-any');
 
+      // Авто-распределение зон
+      final dayAssignments = <String, List<int>>{};
+      if (autoAssignZones && _availableZones.isNotEmpty) {
+        for (var id in [...full, ...morning, ...evening]) {
+          final zone = _availableZones[zoneIndex % _availableZones.length];
+          if (!dayAssignments.containsKey(zone)) dayAssignments[zone] = [];
+          dayAssignments[zone]!.add(id);
+          zoneIndex++;
+        }
+      }
+
       result.add({
         'date': date,
         'full': full,
         'morning': morning,
         'evening': evening,
+        'assignments': dayAssignments, // Зона -> Список ID
       });
     }
 
@@ -194,54 +292,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
     }
   }
 
-  Future<void> _saveShifts() async {
-    if (_previewResult.isEmpty) return;
-
-    final token = await _storage.read(key: 'jwt_token');
-    if (token == null) return;
-
-    setState(() => _isSaving = true);
-
-    try {
-      int successCount = 0;
-      for (final day in _previewResult) {
-        final date = day['date'] as DateTime;
-        final morning = List<int>.from(day['morning']);
-        final evening = List<int>.from(day['evening']);
-        final full = List<int>.from(day['full']);
-
-        // Собираем всех выбранных скаутов для этого дня (хотя бэкэнд может ожидать другую структуру, 
-        // но ApiService.generateShifts принимает morningCount, eveningCount и список IDs)
-        // В текущей реализации бэкенда GenerateShiftsRequest имеет MorningCount, EveningCount, FullCount и ScoutIDs.
-        // Он распределяет их последовательно.
-        
-        final List<int> allIds = [...full, ...morning, ...evening];
-        if (allIds.isEmpty) continue;
-
-        await _apiService.generateShifts(
-          token: token,
-          date: date,
-          morningCount: morning.length,
-          eveningCount: evening.length,
-          fullCount: full.length,
-          selectedScoutIds: allIds,
-        );
-        successCount++;
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Успешно сохранено смен за $successCount дн.'), backgroundColor: Colors.green));
-        setState(() => _isSaving = false);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка сохранения: $e'), backgroundColor: Colors.red));
-      }
-    }
-  }
+  // _saveShifts удален по запросу, так как сохранение в БД больше не требуется
 
   String _getHandle(int id) {
     for (final scout in _availableScouts) {
@@ -266,9 +317,18 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
       final full = List<int>.from(day['full']);
       final morning = List<int>.from(day['morning']);
       final evening = List<int>.from(day['evening']);
+      final assignments = Map<String, List<int>>.from(day['assignments'] ?? {});
       
       buffer.writeln('--------------------------');
       buffer.writeln('📅 *${date.day}.${date.month}.${date.year}*');
+
+      if (assignments.isNotEmpty) {
+        assignments.forEach((zone, ids) {
+          buffer.writeln('📍 *Зона $zone*: ${ids.map((id) => _getHandle(id)).join(', ')}');
+        });
+        buffer.writeln();
+      }
+
       if (full.isNotEmpty) {
         buffer.writeln('🌕 07:00-23:00: ${full.map((id) => _getHandle(id)).join(', ')}');
       }
@@ -297,16 +357,21 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSectionTitle('Параметры генерации'),
-                const SizedBox(height: 12),
-                _buildSettingsCard(primaryColor),
+                _buildAiAssistantCard(primaryColor),
+                const SizedBox(height: 16),
+                Theme(
+                  data: theme.copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    title: const Text('Ручные параметры (опционально)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.grey)),
+                    tilePadding: EdgeInsets.zero,
+                    children: [
+                      _buildSettingsCard(primaryColor),
+                      const SizedBox(height: 12),
+                      _buildShiftCountsCard(),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 24),
-                _buildSectionTitle('Количество сотрудников в смену'),
-                const SizedBox(height: 12),
-                _buildShiftCountsCard(),
-                const SizedBox(height: 32),
-                _buildActionButtons(primaryColor),
-                const SizedBox(height: 32),
                 if (_previewResult.isNotEmpty) ...[
                   _buildSectionTitle('Предварительный просмотр'),
                   const SizedBox(height: 16),
@@ -360,6 +425,123 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAiAssistantCard(Color primaryColor) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [primaryColor.withOpacity(0.15), Colors.indigo.withOpacity(0.1)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: primaryColor.withOpacity(0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(color: primaryColor.withOpacity(0.05), blurRadius: 30, spreadRadius: 5),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: primaryColor.withOpacity(0.25),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: primaryColor.withOpacity(0.2), blurRadius: 10, spreadRadius: 1),
+                  ],
+                ),
+                child: Icon(Icons.auto_awesome, color: primaryColor, size: 24),
+              ),
+              const SizedBox(width: 14),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ИИ ПОМОЩНИК',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 1.2),
+                  ),
+                  Text(
+                    'Умное распределение смен и зон',
+                    style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              if (_isAiProcessing)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.indigo),
+                ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          TextField(
+            controller: _aiController,
+            maxLines: 2,
+            minLines: 1,
+            decoration: InputDecoration(
+              hintText: 'Пример: "Смена на завтра, 2 человека утром и 1 вечером. Без зон."',
+              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 13),
+              filled: true,
+              fillColor: theme.cardColor,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: BorderSide(color: Colors.grey[200]!, width: 1),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: BorderSide(color: primaryColor, width: 1.5),
+              ),
+              suffixIcon: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  icon: Icon(Icons.send_rounded, color: primaryColor, size: 28),
+                  onPressed: _isAiProcessing ? null : _processAiCommand,
+                ),
+              ),
+            ),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            onSubmitted: (_) => _isAiProcessing ? null : _processAiCommand(),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: [
+              _buildFastChip('Завтра 2+1', () => _aiController.text = 'Смена на завтра, 2 утром и 1 вечером'),
+              _buildFastChip('Неделя по 1', () => _aiController.text = 'На неделю по 1 человеку в смену'),
+              _buildFastChip('Без зон', () {
+                if (!_aiController.text.contains('Без зон')) {
+                  _aiController.text += ' Без зон.';
+                }
+              }),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFastChip(String label, VoidCallback onTap) {
+    return ActionChip(
+      label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+      onPressed: onTap,
+      backgroundColor: Colors.white.withOpacity(0.5),
+      padding: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
 
@@ -458,47 +640,6 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
     );
   }
 
-  Widget _buildActionButtons(Color primaryColor) {
-    return Row(
-      children: [
-        Expanded(
-          child: SizedBox(
-            height: 56,
-            child: ElevatedButton(
-              onPressed: _isCalculating ? null : _calculatePreview,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
-              ),
-              child: _isCalculating 
-                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('Распределить', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-            ),
-          ),
-        ),
-        if (_previewResult.isNotEmpty) ...[
-          const SizedBox(width: 12),
-          Expanded(
-            child: SizedBox(
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _isSaving ? null : _saveShifts,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 0,
-                ),
-                child: _isSaving 
-                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Сохранить всё', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
 
   Widget _buildDayPreviewCard(Map<String, dynamic> day) {
     final theme = Theme.of(context);
@@ -506,6 +647,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
     final full = List<int>.from(day['full']);
     final morning = List<int>.from(day['morning']);
     final evening = List<int>.from(day['evening']);
+    final assignments = Map<String, List<int>>.from(day['assignments'] ?? {});
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -514,6 +656,9 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: theme.dividerColor),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -529,7 +674,29 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
               ),
             ],
           ),
+          if (assignments.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text('📍 РАСПРЕДЕЛЕНИЕ ПО ЗОНАМ:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 0.5)),
+            const SizedBox(height: 8),
+            ...assignments.entries.map((e) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 14,
+                    decoration: BoxDecoration(color: Colors.indigo, borderRadius: BorderRadius.circular(2)),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('Зона ${e.key}: ', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  Expanded(child: Text(e.value.map((id) => _getHandle(id)).join(', '), style: const TextStyle(fontSize: 13))),
+                ],
+              ),
+            )),
+          ],
           const SizedBox(height: 12),
+          const Text('⏰ ГРАФИК РАБОТЫ:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 0.5)),
+          const SizedBox(height: 8),
           if (full.isNotEmpty) _buildShiftSummaryRow(Icons.wb_sunny, '07:00–23:00', full, Colors.orange),
           if (morning.isNotEmpty) _buildShiftSummaryRow(Icons.wb_sunny_outlined, '07:00–15:00', morning, Colors.blue),
           if (evening.isNotEmpty) _buildShiftSummaryRow(Icons.wb_twilight, '15:00–23:00', evening, Colors.indigo),

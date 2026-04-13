@@ -7,8 +7,8 @@ class AppConstants {
 
   // ✅ Обновлено: стиль карты как в 2GIS (более детализированный)
   static const String mapUrl =
-      'https://tile{s}.maps.2gis.com/tiles?z={z}&x={x}&y={y}&v=1';
-  static const List<String> mapSubdomains = ['1', '2', '3', '4'];
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+  static const List<String> mapSubdomains = ['a', 'b', 'c', 'd'];
 
   static const String userAgentPackageName = 'kz.evn';
 
