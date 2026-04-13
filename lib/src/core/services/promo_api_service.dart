@@ -269,6 +269,58 @@ class PromoApiService {
     return null;
   }
 
+  Future<Map<String, String>> getBrandFormats() async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/formats'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map;
+      return data.map((key, value) => MapEntry(key.toString(), value.toString()));
+    } else if (response.statusCode == 401) {
+      throw PromoApiServiceException('Сессия истекла', statusCode: 401);
+    } else if (response.statusCode == 403) {
+      throw PromoApiServiceException('Доступ запрещён', statusCode: 403);
+    } else {
+      throw PromoApiServiceException('Ошибка загрузки форматов',
+          statusCode: response.statusCode);
+    }
+  }
+
+  Future<void> updateBrandFormat(String brand, String format) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+
+    final response = await http.put(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/formats'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json'
+      },
+      body: jsonEncode({'brand': brand, 'format': format}),
+    );
+
+    if (response.statusCode == 401) {
+      throw PromoApiServiceException('Сессия истекла', statusCode: 401);
+    }
+    if (response.statusCode == 403) {
+      throw PromoApiServiceException('Доступ запрещён', statusCode: 403);
+    }
+    if (response.statusCode != 200) {
+      final error = _tryParseJson(utf8.decode(response.bodyBytes))?['error'];
+      throw PromoApiServiceException(error ?? 'Неизвестная ошибка',
+          statusCode: response.statusCode);
+    }
+  }
+
   Map<String, dynamic>? _tryParseJson(String body) {
     try {
       return jsonDecode(body) as Map<String, dynamic>?;

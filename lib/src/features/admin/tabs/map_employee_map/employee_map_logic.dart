@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart' show MapController, Marker;
+import 'package:flutter_map/flutter_map.dart' show MapController, Marker, LatLngBounds, CameraFit;
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -13,6 +13,7 @@ import 'package:micro_mobility_app/src/core/services/api_service.dart';
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'package:micro_mobility_app/src/features/app/models/active_shift.dart';
 
 class EmployeeMapLogic {
   LatLng? currentLocation;
@@ -36,12 +37,47 @@ class EmployeeMapLogic {
   FMTCTileProvider? tileProvider;
   Timer? _liveTrackingTimer;
 
+  // Новые поля для истории
+  DateTime selectedDate = DateTime.now();
+  List<ActiveShift> historyShifts = [];
+  bool isHistoryLoading = false;
+  ActiveShift? selectedShift;
+
+  bool get isHistoryMode {
+    final now = DateTime.now();
+    return selectedDate.year != now.year ||
+           selectedDate.month != now.month ||
+           selectedDate.day != now.day;
+  }
+
   final GeoJsonParser geoJsonParser = GeoJsonParser();
   bool showRestrictedZones = true;
   bool showBoundaries = true;
   bool showParkingZones = true;
   bool showSpeedLimitZones = true;
+  bool showMarkers = true; // Для общих маркеров из GeoJSON
+  
   Map<String, String> _userNameCache = {};
+
+  bool isEmployeeOnline(DateTime? timestamp) {
+    if (timestamp == null) return false;
+    // Если обновление было менее 5 минут назад - считаем онлайн
+    return DateTime.now().difference(timestamp).inMinutes < 5;
+  }
+
+  void zoomToEmployee(EmployeeLocation emp) {
+    mapController.move(emp.position, 15.0);
+    _notify();
+  }
+
+  void toggleLayer(String layer) {
+    switch (layer) {
+      case 'restricted': showRestrictedZones = !showRestrictedZones; break;
+      case 'boundaries': showBoundaries = !showBoundaries; break;
+      case 'markers': showMarkers = !showMarkers; break;
+    }
+    _notify();
+  }
   String _formatDateWithTimezone(DateTime dt) {
     final local = dt.toLocal(); // Убедиться что локальная TZ применена
     final offset = local.timeZoneOffset;
@@ -285,6 +321,116 @@ class EmployeeMapLogic {
   void stopLiveTracking() {
     _liveTrackingTimer?.cancel();
     _liveTrackingTimer = null;
+  }
+
+  Future<void> setDate(DateTime date) async {
+    selectedDate = date;
+    if (isHistoryMode) {
+      stopLiveTracking();
+      employeeLocations = []; // Скрываем живых в режиме истории
+      await fetchShiftsForDate(date);
+    } else {
+      historyShifts = [];
+      selectedShift = null;
+      selectedEmployeeHistory = [];
+      startLiveTracking();
+      await fetchEmployeeLocations();
+    }
+    _notify();
+  }
+
+  Future<void> fetchShiftsForDate(DateTime date) async {
+    if (_disposed) return;
+    isHistoryLoading = true;
+    _notify();
+
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) return;
+
+      // 1. Загружаем завершенные смены
+      final ended = await _apiService.getEndedShifts(token);
+      
+      // 2. Загружаем активные смены (на случай если мы смотрим "сегодня", но через историю)
+      // Хотя обычно для сегодня есть LIVE, но для полноты картины:
+      final response = await http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/admin/active-shifts'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      List<ActiveShift> active = [];
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body is List) {
+          active = body.map((e) => ActiveShift.fromJson(e)).toList();
+        }
+      }
+
+      final allShifts = [...active, ...ended];
+
+      // Фильтруем по дате
+      historyShifts = allShifts.where((s) {
+        final sDate = s.startTime ?? s.endTime;
+        if (sDate == null) return false;
+        return sDate.year == date.year &&
+               sDate.month == date.month &&
+               sDate.day == date.day;
+      }).toList();
+
+      // Сортируем по времени начала
+      historyShifts.sort((a, b) => (b.startTime ?? DateTime(0)).compareTo(a.startTime ?? DateTime(0)));
+
+    } catch (e) {
+      debugPrint('Ошибка загрузки смен за дату: $e');
+    } finally {
+      isHistoryLoading = false;
+      _notify();
+    }
+  }
+
+  Future<void> selectShift(ActiveShift shift) async {
+    selectedShift = shift;
+    if (shift.startTime != null) {
+      // Автоматически загружаем историю за время смены
+      final end = shift.endTime ?? DateTime.now();
+      await loadEmployeeHistory(
+        shift.userId.toString(),
+        range: DateTimeRange(start: shift.startTime!, end: end),
+      );
+      
+      // Зум на маршрут
+      if (selectedEmployeeHistory.isNotEmpty) {
+        _zoomToHistoryRoute();
+      }
+    }
+    _notify();
+  }
+
+  void _zoomToHistoryRoute() {
+    if (selectedEmployeeHistory.isEmpty) return;
+    
+    double minLat = selectedEmployeeHistory.first.latitude;
+    double maxLat = selectedEmployeeHistory.first.latitude;
+    double minLon = selectedEmployeeHistory.first.longitude;
+    double maxLon = selectedEmployeeHistory.first.longitude;
+
+    for (var point in selectedEmployeeHistory) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLon) minLon = point.longitude;
+      if (point.longitude > maxLon) maxLon = point.longitude;
+    }
+
+    final bounds = LatLngBounds(
+      LatLng(minLat, minLon),
+      LatLng(maxLat, maxLon),
+    );
+
+    mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.all(50),
+      ),
+    );
   }
 
   Future<void> loadEmployeeHistory(String userId,

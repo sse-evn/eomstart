@@ -34,9 +34,8 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   // --- НОВАЯ ПЕРЕМЕННАЯ ---
   String? _selectedBrandForUpload; // Бренд, выбранный для загрузки файла
 
-  // --- НОВЫЕ ПЕРЕМЕННЫЕ ---
-  bool _showClaimedPromos = false; // Управляет видимостью списка
   String _searchQuery = ''; // Для поиска по имени
+  Map<String, String> _brandFormats = {}; // Форматы промокодов
 
   @override
   void initState() {
@@ -48,6 +47,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     await _loadStats();
     await _loadClaimedPromos();
     await _loadActiveBrand();
+    await _loadBrandFormats();
   }
 
   Future<void> _loadStats() async {
@@ -98,6 +98,67 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
       final data = await _service.getActivePromoBrand();
       if (mounted) setState(() => _activeBrand = data);
     } catch (e) {}
+  }
+
+  Future<void> _loadBrandFormats() async {
+    try {
+      final data = await _service.getBrandFormats();
+      if (mounted) setState(() => _brandFormats = data);
+    } catch (e) {
+      debugPrint('Error loading brand formats: $e');
+    }
+  }
+
+  void _showBrandFormatsDialog() {
+    final controllers = <String, TextEditingController>{};
+    for (var brand in ['JET', 'YANDEX', 'WHOOSH', 'BOLT']) {
+      controllers[brand] = TextEditingController(text: _brandFormats[brand] ?? '');
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Типы промокодов'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: controllers.entries.map((e) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: TextField(
+              controller: e.value,
+              decoration: InputDecoration(
+                labelText: 'Формат для ${e.key}',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          )).toList(),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              setState(() => _isLoading = true);
+              try {
+                for (var brand in controllers.keys) {
+                  await _service.updateBrandFormat(brand, controllers[brand]!.text);
+                }
+                await _loadBrandFormats();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Форматы обновлены')));
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+                }
+              } finally {
+                if (mounted) setState(() => _isLoading = false);
+              }
+            },
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
   }
 
 
@@ -432,7 +493,16 @@ Future<void> _uploadExcel() async {
                   _buildUploadActions(isDarkMode),
                   
                   const SizedBox(height: 24),
-                  _buildSectionHeader('Статистика остатков', Icons.analytics_outlined),
+                  _buildSectionHeader(
+                    'Статистика остатков', 
+                    Icons.analytics_outlined,
+                    trailing: IconButton(
+                      icon: const Icon(Icons.settings_outlined, size: 18, color: Colors.grey),
+                      onPressed: _showBrandFormatsDialog,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ),
                   if (_stats == null)
                     const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
                   else
@@ -449,14 +519,15 @@ Future<void> _uploadExcel() async {
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
+  Widget _buildSectionHeader(String title, IconData icon, {Widget? trailing}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, left: 4),
       child: Row(
         children: [
           Icon(icon, size: 20, color: Colors.green),
           const SizedBox(width: 10),
-          Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.5, color: Colors.grey)),
+          Expanded(child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.5, color: Colors.grey))),
+          if (trailing != null) trailing,
         ],
       ),
     );
@@ -694,13 +765,13 @@ Future<void> _uploadExcel() async {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                _buildStatRow('JET', summary['JET'] ?? 0, 'GT9-XXXXXX', isDarkMode),
+                _buildStatRow('JET', summary['JET'] ?? 0, _brandFormats['JET'] ?? 'GT9-XXXXXX', isDarkMode),
                 const Divider(height: 24),
-                _buildStatRow('YANDEX', summary['YANDEX'] ?? 0, 'ocf/ocm + цифры', isDarkMode),
+                _buildStatRow('YANDEX', summary['YANDEX'] ?? 0, _brandFormats['YANDEX'] ?? 'ocf/ocm + цифры', isDarkMode),
                 const Divider(height: 24),
-                _buildStatRow('WHOOSH', summary['WHOOSH'] ?? 0, 'WSH_XXXXXX', isDarkMode),
+                _buildStatRow('WHOOSH', summary['WHOOSH'] ?? 0, _brandFormats['WHOOSH'] ?? 'WSH_XXXXXX', isDarkMode),
                 const Divider(height: 24),
-                _buildStatRow('BOLT', summary['BOLT'] ?? 0, 'BOLTXXXXXX', isDarkMode),
+                _buildStatRow('BOLT', summary['BOLT'] ?? 0, _brandFormats['BOLT'] ?? 'BOLTXXXXXX', isDarkMode),
               ],
             ),
           ),
