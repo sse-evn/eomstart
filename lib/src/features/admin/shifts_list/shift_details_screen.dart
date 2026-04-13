@@ -247,34 +247,74 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
     );
   }
 
+  void _showZoomedPhoto(String url) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Center(
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white, size: 64),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSelfieCard(ThemeData theme) {
     final photoUrl = '${AppConfig.mediaBaseUrl}${widget.shift.selfie}';
-    return Container(
-      height: 300,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-              color: theme.brightness == Brightness.dark ? Colors.black26 : Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 4))
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: widget.shift.selfie.isEmpty
-          ? const Center(child: Icon(Icons.no_photography_outlined, size: 48, color: Colors.grey))
-          : Image.network(
-              photoUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 48, color: Colors.grey)),
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return const Center(child: CircularProgressIndicator());
-              },
-            ),
+    return GestureDetector(
+      onTap: widget.shift.selfie.isEmpty ? null : () => _showZoomedPhoto(photoUrl),
+      child: Container(
+        height: 300,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+                color: theme.brightness == Brightness.dark ? Colors.black26 : Colors.black.withOpacity(0.04),
+                blurRadius: 20,
+                offset: const Offset(0, 4))
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: widget.shift.selfie.isEmpty
+            ? const Center(child: Icon(Icons.no_photography_outlined, size: 48, color: Colors.grey))
+            : Hero(
+                tag: 'shift_selfie_${widget.shift.id}',
+                child: Image.network(
+                  photoUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 48, color: Colors.grey)),
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const Center(child: CircularProgressIndicator());
+                  },
+                ),
+              ),
+        ),
       ),
     );
   }

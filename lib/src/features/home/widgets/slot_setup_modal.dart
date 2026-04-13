@@ -72,7 +72,18 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
       final serverZones = await _retryApiCall(() => _apiService.getAvailableZones(_token!));
       final serverTimeSlots = await _retryApiCall(() => _apiService.getAvailableTimeSlotsForStart(_token!));
+      
+      // Сортировка зон: сначала числа по возрастанию, затем все остальное
       final uniqueZones = serverZones.toSet().toList();
+      uniqueZones.sort((a, b) {
+        final aInt = int.tryParse(a);
+        final bInt = int.tryParse(b);
+        if (aInt != null && bInt != null) return aInt.compareTo(bInt);
+        if (aInt != null) return -1;
+        if (bInt != null) return 1;
+        return a.compareTo(b);
+      });
+
       final defaultZone = uniqueZones.isNotEmpty ? uniqueZones.first : null;
 
       if (mounted) {
@@ -195,34 +206,82 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isDarkMode = theme.brightness == Brightness.dark;
+    
     return PopScope(
       canPop: !_isLoading,
       child: Container(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
-        decoration: BoxDecoration(
-          color: isDarkMode ? Colors.grey[900] : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
         ),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _hasActiveShift ? 'Завершить смену' : 'Начать новую смену',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.green[800]),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    if (_hasActiveShift) _buildActiveShiftInfo() else _buildNewShiftForm(isDarkMode),
-                    const SizedBox(height: 24),
-                    _buildActionButton(),
-                    const SizedBox(height: 24),
-                  ],
-                ),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          left: 20,
+          right: 20,
+          top: 10,
+        ),
+        decoration: BoxDecoration(
+          color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            )
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle for modal
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
               ),
+            ),
+            
+            Text(
+              _hasActiveShift ? 'Завершить смену' : 'Начать новую смену',
+              style: TextStyle(
+                fontSize: 22, 
+                fontWeight: FontWeight.w900, 
+                color: isDarkMode ? Colors.white : Colors.black,
+                letterSpacing: -0.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            
+            Flexible(
+              child: _isLoading
+                ? const Padding(
+                    padding: EdgeInsets.all(40.0),
+                    child: CircularProgressIndicator(),
+                  )
+                : SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_hasActiveShift) 
+                          _buildActiveShiftInfo(theme) 
+                        else 
+                          _buildNewShiftForm(theme, isDarkMode),
+                        const SizedBox(height: 24),
+                        _buildActionButton(theme),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -264,119 +323,259 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     return await tempFile.writeAsBytes(jpeg);
   }
 
-  Widget _buildActiveShiftInfo() {
+  Widget _buildActiveShiftInfo(ThemeData theme) {
     if (_activeShift == null) return const SizedBox.shrink();
-    return Card(
-      color: Colors.red[50],
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Внимание!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red[800])),
-          const SizedBox(height: 8),
-          const Text('У вас уже есть активная смена.'),
-          if (_activeShift['slot_time_range'] != null) Text('Время: ${_activeShift['slot_time_range']}'),
-          if (_activeShift['zone'] != null) Text('Зона: ${_activeShift['zone']}'),
-          if (_activeShift['position'] != null) Text('Должность: ${_activeShift['position']}'),
-        ]),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.red.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, 
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+              const SizedBox(width: 12),
+              Text('Внимание!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red[800])),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text('У вас уже есть активная смена. Вы не можете начать новую, пока не завершите текущую.', 
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 16),
+          Divider(color: Colors.red.withOpacity(0.1)),
+          const SizedBox(height: 16),
+          if (_activeShift['slot_time_range'] != null) 
+            _buildInfoRow(Icons.access_time, 'Время', _activeShift['slot_time_range']),
+          if (_activeShift['zone'] != null) 
+            _buildInfoRow(Icons.location_on_outlined, 'Зона', _activeShift['zone']),
+          if (_activeShift['position'] != null) 
+            _buildInfoRow(Icons.work_outline, 'Должность', _activeShift['position']),
+        ]
       ),
     );
   }
 
-  Widget _buildNewShiftForm(bool isDarkMode) {
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey[600]),
+          const SizedBox(width: 8),
+          Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+          const SizedBox(width: 8),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNewShiftForm(ThemeData theme, bool isDarkMode) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Selfie Area
         Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: isDarkMode ? Colors.grey[850] : Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[50],
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[200]!),
+          ),
           child: Column(
             children: [
-              Row(children: [Icon(Icons.camera_alt, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 8), const Text('Селфи', style: TextStyle(fontWeight: FontWeight.w500))]),
-              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(Icons.camera_alt_outlined, size: 20),
+                  const SizedBox(width: 10),
+                  const Text('Фото-подтверждение', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                ],
+              ),
+              const SizedBox(height: 20),
               _selfie != null ? _buildSelfiePreview() : _buildSelfiePlaceholder(isDarkMode),
-              const SizedBox(height: 12),
+              const SizedBox(height: 20),
               _buildSelfieButton(isDarkMode),
             ],
           ),
         ),
-        const SizedBox(height: 24),
-        if (_timeSlots.isEmpty) _buildNoTimeSlotsWarning() else _buildTimeSlotsSelection(isDarkMode),
-        const SizedBox(height: 24),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: isDarkMode ? Colors.grey[850] : Colors.grey[100], borderRadius: BorderRadius.circular(12)),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [Icon(Icons.location_on, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 6), const Text('Зона', style: TextStyle(fontWeight: FontWeight.w500))]),
-                    const SizedBox(height: 6),
+        const SizedBox(height: 20),
+        
+        // Time Slot Area
+        if (_timeSlots.isEmpty) 
+          _buildNoTimeSlotsWarning(isDarkMode) 
+        else 
+          _buildTimeSlotsSelection(isDarkMode),
+        
+        const SizedBox(height: 20),
+        
+        // Zone and Position
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final bool isNarrow = constraints.maxWidth < 350;
+            if (isNarrow) {
+              return Column(
+                children: [
+                  _buildInputWrapper(
+                    isDarkMode,
+                    'Зона',
+                    Icons.location_on_outlined,
                     _buildZoneDropdown(isDarkMode),
-                  ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildInputWrapper(
+                    isDarkMode,
+                    'Должность',
+                    Icons.work_outline,
+                    _buildPositionField(isDarkMode),
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(
+                  child: _buildInputWrapper(
+                    isDarkMode,
+                    'Зона',
+                    Icons.location_on_outlined,
+                    _buildZoneDropdown(isDarkMode),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [Icon(Icons.work, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 6), const Text('Должность', style: TextStyle(fontWeight: FontWeight.w500))]),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      initialValue: _position ?? 'Не указана',
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        filled: true,
-                        fillColor: isDarkMode ? Colors.grey[800] : Colors.grey[50],
-                        hintStyle: TextStyle(color: isDarkMode ? Colors.grey[500] : Colors.grey[400]),
-                      ),
-                      style: TextStyle(color: isDarkMode ? Colors.white : Colors.black, fontSize: 16),
-                    ),
-                  ],
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildInputWrapper(
+                    isDarkMode,
+                    'Должность',
+                    Icons.work_outline,
+                    _buildPositionField(isDarkMode),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          }
         ),
       ],
     );
   }
 
-  Widget _buildNoTimeSlotsWarning() => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.orange[100], borderRadius: BorderRadius.circular(12)),
-        child: const Column(
+  Widget _buildInputWrapper(bool isDarkMode, String label, IconData icon, Widget child) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Row(
+            children: [
+              Icon(icon, size: 14, color: Colors.grey[600]),
+              const SizedBox(width: 6),
+              Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[600])),
+            ],
+          ),
+        ),
+        child,
+      ],
+    );
+  }
+
+  Widget _buildPositionField(bool isDarkMode) {
+    return TextFormField(
+      initialValue: _position ?? 'Не указана',
+      readOnly: true,
+      decoration: InputDecoration(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        filled: true,
+        fillColor: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+      ),
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+    );
+  }
+
+  Widget _buildNoTimeSlotsWarning(bool isDarkMode) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.orange.withOpacity(0.2)),
+        ),
+        child: Column(
           children: [
-            Icon(Icons.access_time, color: Colors.orange, size: 32),
-            SizedBox(height: 8),
-            Text('Сейчас не время начала смены', textAlign: TextAlign.center, style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('Доступные слоты:\n• 06:40–15:00\n• 14:40–23:00', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), shape: BoxShape.circle),
+              child: const Icon(Icons.access_time_filled, color: Colors.orange, size: 28),
+            ),
+            const SizedBox(height: 16),
+            const Text('Сейчас не время начала смены', 
+              textAlign: TextAlign.center, 
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.orange)),
+            const SizedBox(height: 8),
+            Text('Начало смены доступно только в пределах выбранных слотов.', 
+              textAlign: TextAlign.center, 
+              style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text('Слоты: 06:40–15:00, 14:40–23:00', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            ),
           ],
         ),
       );
 
   Widget _buildTimeSlotsSelection(bool isDarkMode) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: isDarkMode ? Colors.grey[850] : Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[50],
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[200]!),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [Icon(Icons.schedule, color: isDarkMode ? Colors.white : Colors.black), const SizedBox(width: 8), const Text('Время смены', style: TextStyle(fontWeight: FontWeight.w500))]),
-            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.history_toggle_off, size: 20),
+                const SizedBox(width: 10),
+                const Text('Выберите слот', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              ],
+            ),
+            const SizedBox(height: 16),
             Wrap(
               spacing: 8.0,
               runSpacing: 8.0,
               children: _timeSlots.map((slot) {
                 final isSelected = _selectedTime == slot;
-                return ChoiceChip(
-                  label: Text(slot),
-                  selected: isSelected,
-                  selectedColor: Colors.green[700],
-                  onSelected: _isLoading ? null : (selected) { if (selected && mounted) setState(() => _selectedTime = slot); },
+                return GestureDetector(
+                  onTap: _isLoading ? null : () { if (mounted) setState(() => _selectedTime = slot); },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.green : (isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: isSelected ? Colors.green : (isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[300]!)),
+                      boxShadow: isSelected ? [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))] : [],
+                    ),
+                    child: Text(slot, 
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : (isDarkMode ? Colors.white : Colors.black),
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        fontSize: 13,
+                      )),
+                  ),
                 );
               }).toList(),
             ),
@@ -384,82 +583,139 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         ),
       );
 
-  Widget _buildSelfiePreview() => ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          children: [
-            Image.file(File(_selfie!.path), height: 150, width: 150, fit: BoxFit.cover),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: GestureDetector(
-                onTap: () { if (mounted) setState(() => _selfie = null); },
-                child: Container(padding: const EdgeInsets.all(4), decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 16)),
+  Widget _buildSelfiePreview() => Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            height: 180,
+            width: 180,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15)],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Image.file(File(_selfie!.path), fit: BoxFit.cover),
+            ),
+          ),
+          Positioned(
+            top: -5,
+            right: -5,
+            child: IconButton(
+              onPressed: () { if (mounted) setState(() => _selfie = null); },
+              icon: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                child: const Icon(Icons.close, color: Colors.white, size: 14),
               ),
             ),
+          ),
+        ],
+      );
+
+  Widget _buildSelfiePlaceholder(bool isDarkMode) => Container(
+        height: 180,
+        width: 180,
+        decoration: BoxDecoration(
+          color: isDarkMode ? Colors.white.withOpacity(0.02) : Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[300]!, style: BorderStyle.none),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_outline, size: 64, color: isDarkMode ? Colors.grey[700] : Colors.grey[300]),
+            const SizedBox(height: 8),
+            Text('Нет фото', style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.bold)),
           ],
         ),
       );
 
-  Widget _buildSelfiePlaceholder(bool isDarkMode) => Container(
-        height: 150,
-        width: 150,
-        decoration: BoxDecoration(
-          color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!, width: 2),
+  Widget _buildSelfieButton(bool isDarkMode) => SizedBox(
+    width: double.infinity,
+    child: ElevatedButton.icon(
+          onPressed: _isLoading ? null : _takeSelfie,
+          icon: const Icon(Icons.add_a_photo_outlined, size: 20),
+          label: const Text('Сделать селфи', style: TextStyle(fontWeight: FontWeight.bold)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
         ),
-        child: Icon(Icons.person, size: 60, color: isDarkMode ? Colors.grey[600] : Colors.grey[400]),
-      );
-
-  Widget _buildSelfieButton(bool isDarkMode) => ElevatedButton.icon(
-        onPressed: _isLoading ? null : _takeSelfie,
-        icon: const Icon(Icons.camera_alt, color: Colors.white),
-        label: const Text('Сделать селфи', style: TextStyle(color: Colors.white)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green[700],
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+  );
 
   Widget _buildZoneDropdown(bool isDarkMode) {
     final validZone = _zones.contains(_zone) ? _zone : (_zones.isNotEmpty ? _zones.first : null);
-    return DropdownButtonFormField<String>(
-      initialValue: validZone,
-      items: _zones.map((item) => DropdownMenuItem(value: item, child: Text(item, style: TextStyle(color: isDarkMode ? Colors.white : Colors.black)))).toList(),
-      onChanged: _isLoading ? null : (String? value) { if (mounted && value != null) setState(() => _zone = value); },
-      decoration: InputDecoration(
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        filled: true,
-        fillColor: isDarkMode ? Colors.grey[800] : Colors.grey[50],
-        hintStyle: TextStyle(color: isDarkMode ? Colors.grey[500] : Colors.grey[400]),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+        borderRadius: BorderRadius.circular(16),
       ),
-      dropdownColor: isDarkMode ? Colors.grey[800] : Colors.white,
-      style: TextStyle(color: isDarkMode ? Colors.white : Colors.black, fontSize: 16),
-      icon: Icon(Icons.arrow_drop_down, color: isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: validZone,
+          isExpanded: true,
+          menuMaxHeight: 350,
+          items: _zones.map((item) => DropdownMenuItem(
+            value: item, 
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(item, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))
+            )
+          )).toList(),
+          onChanged: _isLoading ? null : (String? value) { if (mounted && value != null) setState(() => _zone = value); },
+          dropdownColor: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+        ),
+      ),
     );
   }
 
-  Widget _buildActionButton() {
+  Widget _buildActionButton(ThemeData theme) {
     bool canSubmit = !_isLoading && !_hasActiveShift && _selectedTime != null && _selfie != null && _position != null && _zone != null;
-    return SizedBox(
+    final isEnded = _hasActiveShift;
+    
+    return Container(
       width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          if (canSubmit || isEnded)
+            BoxShadow(
+              color: (isEnded ? Colors.red : Colors.green).withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            )
+        ],
+      ),
       child: ElevatedButton(
-        onPressed: (_hasActiveShift || canSubmit) ? _finish : null,
+        onPressed: (isEnded || canSubmit) ? _finish : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: _hasActiveShift ? Colors.red[700] : (canSubmit ? AppColors.primary : Colors.grey[400]),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 2,
+          backgroundColor: isEnded ? Colors.red : (canSubmit ? Colors.green : Colors.grey[300]),
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: theme.brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.grey[200],
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         ),
         child: _isLoading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(_hasActiveShift ? Icons.stop : Icons.play_arrow, color: Colors.white),
-                const SizedBox(width: 8),
-                Text(_hasActiveShift ? 'Закончить смену' : (canSubmit ? 'Начать смену' : 'Недоступно'), style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
-              ]),
+            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center, 
+                children: [
+                  Icon(isEnded ? Icons.power_settings_new : Icons.verified_user_outlined, size: 20),
+                  const SizedBox(width: 10),
+                  Text(
+                    isEnded ? 'Завершить смену' : (canSubmit ? 'Начать смену' : 'Заполните данные'), 
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.2),
+                  ),
+                ],
+              ),
       ),
     );
   }
