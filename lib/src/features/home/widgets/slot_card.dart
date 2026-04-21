@@ -1,5 +1,3 @@
-// ====== slot_card.dart (ПОЛНЫЙ, ИСПРАВЛЕННЫЙ, НЕ УПРОЩЕННЫЙ) ======
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
@@ -84,7 +82,7 @@ class SlotCard extends StatelessWidget {
   Widget _buildActiveShiftUI(
       ActiveShift activeShift, ThemeData theme, bool isDarkMode) {
     final String serverTime = activeShift.startTime != null
-        ? '${activeShift.startTime!.hour.toString().padLeft(2, '0')}:${activeShift.startTime!.minute.toString().padLeft(2, '0')}'
+        ? '${activeShift.startTime!.toLocal().hour.toString().padLeft(2, '0')}:${activeShift.startTime!.toLocal().minute.toString().padLeft(2, '0')}'
         : '--:--';
 
     final String slotTime = activeShift.slotTimeRange.isNotEmpty
