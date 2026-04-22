@@ -1112,6 +1112,27 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getShiftRecommendations(String token, DateTime date) async {
+    final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final url = '${AppConfig.apiBaseUrl}/admin/shift-recommendations?date=$dateStr';
+    
+    final response = await _authorizedRequest((token) async {
+      return await http.get(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+    }, token);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    } else {
+      throw Exception('Не удалось загрузить рекомендации ИИ');
+    }
+  }
+
   Future<List<String>> getAvailableTimeSlotsForStart(String token) async {
     final response = await _authorizedRequest((token) async {
       return await http.get(

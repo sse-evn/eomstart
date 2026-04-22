@@ -36,11 +36,14 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
   final TextEditingController _fullController = TextEditingController(text: '0');
   final TextEditingController _aiController = TextEditingController();
   bool _isAiProcessing = false;
+  Map<String, dynamic>? _aiRecommendation;
+  bool _isFetchingRecommendation = false;
 
   @override
   void initState() {
     super.initState();
     _loadScoutsAndBusyShifts();
+    _fetchAiRecommendation();
   }
 
   @override
@@ -82,13 +85,42 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
           _isLoading = false;
         });
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка загрузки: $e')));
-      }
     }
+  }
+
+  Future<void> _fetchAiRecommendation() async {
+    final token = await _storage.read(key: 'jwt_token');
+    if (token == null) return;
+
+    setState(() => _isFetchingRecommendation = true);
+    try {
+      final rec = await _apiService.getShiftRecommendations(token, _startDate);
+      if (mounted) {
+        setState(() {
+          _aiRecommendation = rec;
+          _isFetchingRecommendation = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Ошибка загрузки рекомендаций: $e');
+      if (mounted) setState(() => _isFetchingRecommendation = false);
+    }
+  }
+
+  void _applyAiRecommendation() {
+    if (_aiRecommendation == null) return;
+    
+    setState(() {
+      _morningCount = _aiRecommendation!['recommended_morning'] ?? 0;
+      _eveningCount = _aiRecommendation!['recommended_evening'] ?? 0;
+      _fullCount = _aiRecommendation!['recommended_full'] ?? 0;
+      
+      _morningController.text = _morningCount.toString();
+      _eveningController.text = _eveningCount.toString();
+      _fullController.text = _fullCount.toString();
+    });
+    
+    _calculatePreview();
   }
 
   Future<Set<String>> _getBusyShifts(String token, DateTime start, int days) async {
@@ -125,6 +157,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
     if (picked != null && picked != _startDate) {
       setState(() => _startDate = picked);
       _loadScoutsAndBusyShifts();
+      _fetchAiRecommendation();
     }
   }
 
@@ -357,6 +390,8 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _buildAiRecommendationCard(primaryColor),
+                const SizedBox(height: 16),
                 _buildAiAssistantCard(primaryColor),
                 const SizedBox(height: 16),
                 Theme(
@@ -757,6 +792,97 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildAiRecommendationCard(Color primaryColor) {
+    if (_isFetchingRecommendation) {
+      return Container(
+        height: 100,
+        decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(20)),
+        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+
+    if (_aiRecommendation == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.indigo.withOpacity(0.2) : Colors.indigo.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.indigo.withOpacity(0.3), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.psychology, color: Colors.indigo, size: 28),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'РЕКОМЕНДАЦИЯ ИИ',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1),
+                ),
+              ),
+              if (_aiRecommendation!['weather_icon'] != null)
+                Image.network(
+                  'https://openweathermap.org/img/wn/${_aiRecommendation!['weather_icon']}@2x.png',
+                  width: 40,
+                  height: 40,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.wb_sunny, color: Colors.orange),
+                ),
+              Text(
+                '${_aiRecommendation!['temperature'] ?? ''}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _aiRecommendation!['reason'] ?? '',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _buildSmallBadge('Утро: ${_aiRecommendation!['recommended_morning']}'),
+              const SizedBox(width: 8),
+              _buildSmallBadge('Вечер: ${_aiRecommendation!['recommended_evening']}'),
+              const SizedBox(width: 8),
+              _buildSmallBadge('День: ${_aiRecommendation!['recommended_full']}'),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _applyAiRecommendation,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.indigo,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
+              child: const Text('Применить план ИИ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSmallBadge(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.indigo.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.indigo)),
     );
   }
 }

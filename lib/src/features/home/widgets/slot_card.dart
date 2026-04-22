@@ -1,5 +1,3 @@
-// ====== slot_card.dart (ПОЛНЫЙ, ИСПРАВЛЕННЫЙ, НЕ УПРОЩЕННЫЙ) ======
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
