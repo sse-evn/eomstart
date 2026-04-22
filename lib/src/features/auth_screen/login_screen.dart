@@ -30,11 +30,13 @@ class _LoginScreenState extends State<LoginScreen> {
   late final WebViewController _tgController;
   final _storage = const FlutterSecureStorage();
   final ApiService _apiService = ApiService();
+  bool _isTelegramEnabled = false; 
 
   @override
   void initState() {
     super.initState();
     _checkTokenAndNavigate();
+    _checkTelegramStatus();
     _initTelegramWebView();
   }
 
@@ -147,6 +149,27 @@ class _LoginScreenState extends State<LoginScreen> {
           .setMediaPlaybackRequiresUserGesture(false);
     }
     _tgController = controller;
+  }
+
+  Future<void> _checkTelegramStatus() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${AppConfig.AppConfig.backendHost}/api/auth/check-telegram'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            _isTelegramEnabled = data['enabled'] == true;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to check Telegram status: $e');
+      if (mounted) {
+        setState(() => _isTelegramEnabled = false);
+      }
+    }
   }
 
   void _closeTelegramDialog() {
@@ -411,61 +434,63 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              const Expanded(
-                                  child: Divider(color: Colors.grey, thickness: 1)),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Text(
-                                  'или',
-                                  style: TextStyle(
-                                    color: isDarkMode
-                                        ? Colors.grey[400]
-                                        : Colors.grey[700],
-                                    fontSize: 16,
+                          if (_isTelegramEnabled) ...[
+                            const SizedBox(height: 24),
+                            Row(
+                              children: [
+                                const Expanded(
+                                    child: Divider(color: Colors.grey, thickness: 1)),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  child: Text(
+                                    'или',
+                                    style: TextStyle(
+                                      color: isDarkMode
+                                          ? Colors.grey[400]
+                                          : Colors.grey[700],
+                                      fontSize: 16,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const Expanded(
-                                  child: Divider(color: Colors.grey, thickness: 1)),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 55,
-                            child: OutlinedButton.icon(
-                              icon: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue[400],
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: SvgPicture.asset(
-                                  'assets/telegram.svg',
-                                  height: 22,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              label: const Text(
-                                'Войти через Telegram',
-                                style: TextStyle(
-                                  color: Colors.blue,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: Colors.blue[400]!),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16)),
-                              ),
-                              onPressed:
-                                  _isLoading ? null : _showTelegramAuthDialog,
+                                const Expanded(
+                                    child: Divider(color: Colors.grey, thickness: 1)),
+                              ],
                             ),
-                          ),
+                            const SizedBox(height: 24),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 55,
+                              child: OutlinedButton.icon(
+                                icon: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue[400],
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: SvgPicture.asset(
+                                    'assets/telegram.svg',
+                                    height: 22,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                label: const Text(
+                                  'Войти через Telegram',
+                                  style: TextStyle(
+                                    color: Colors.blue,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(color: Colors.blue[400]!),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16)),
+                                ),
+                                onPressed:
+                                    _isLoading ? null : _showTelegramAuthDialog,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
