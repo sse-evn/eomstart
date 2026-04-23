@@ -63,9 +63,9 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
 
     try {
       final scoutsData = await _apiService.getAdminUsers(token);
-      final scouts = scoutsData
+      final List<Map<String, dynamic>> scouts = scoutsData
           .where((u) => u is Map && u['role'] == 'scout')
-          .map((u) => {
+          .map<Map<String, dynamic>>((u) => {
                 'id': u['id'] as int,
                 'first_name': u['first_name'] as String?,
                 'username': u['username'] as String?,
@@ -80,10 +80,18 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
       if (mounted) {
         setState(() {
           _availableScouts = scouts;
-          _availableZones = zones;
+          _availableZones = List<String>.from(zones);
           _busyShifts = busy;
           _isLoading = false;
         });
+      }
+    } catch (e) {
+      debugPrint('Ошибка загрузки данных: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка загрузки данных: $e')),
+        );
       }
     }
   }
