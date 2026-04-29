@@ -43,7 +43,11 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
       return;
     }
 
-    final picked = await _picker.pickMultiImage(imageQuality: 80);
+    final picked = await _picker.pickMultiImage(
+      imageQuality: 60,
+      maxWidth: 1600,
+      maxHeight: 1600,
+    );
 
     if (picked.isEmpty) return;
 
@@ -67,7 +71,9 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
 
     final photo = await _picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 80,
+      imageQuality: 60,
+      maxWidth: 1600,
+      maxHeight: 1600,
     );
 
     if (photo == null) return;
