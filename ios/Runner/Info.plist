@@ -2,29 +2,39 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+
 	<!-- Основные метаданные приложения -->
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+
 	<key>CFBundleDisplayName</key>
 	<string>EOM Start</string>
+
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+
 	<key>CFBundleName</key>
 	<string>EOM Start</string>
+
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
+
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 
-	<!-- Безопасность и сетевые настройки -->
+	<!-- Безопасность и сеть -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoadsInWebContent</key>
@@ -32,28 +42,33 @@
 	</dict>
 
 	<!-- Разрешения -->
-	<key>NSCameraUsageDescription</key>
-	<string>Это приложение требует доступа к камере для сканирования QR-кодов.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Это приложение требует доступа к вашей фотогалерее для сохранения изображений.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Это приложение не использует микрофон.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Нужна геолокация для начала слота</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Мы используем ваше местоположение для отображения карты.</string>
 
-	<!-- Интерфейс и ориентации -->
+	<!-- Камера -->
+	<key>NSCameraUsageDescription</key>
+	<string>The camera is used to scan QR codes within the app to identify and process user actions.</string>
+
+	<!-- Фото галерея -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>You can select and save images in the app when working with content and results.</string>
+
+	<!-- Геолокация -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Your location is used to determine your position when starting a session and to display relevant data based on your current location.</string>
+
+	<!-- Интерфейс -->
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
+
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -62,10 +77,12 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 
-	<!-- Современные настройки iOS -->
+	<!-- Производительность -->
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
 </dict>
 </plist>
