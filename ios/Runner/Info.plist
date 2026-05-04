@@ -48,8 +48,6 @@
 
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Приложению нужен доступ для сохранения изображений в галерею.</string>
-    <key>NSUserTrackingUsageDescription</key>
-    <string>Этот идентификатор будет использоваться для сбора аналитики о ваших маршрутах и эффективности работы во время смен для оптимизации распределения зон.</string>
 
     <key>UIApplicationSceneManifest</key>
     <dict>

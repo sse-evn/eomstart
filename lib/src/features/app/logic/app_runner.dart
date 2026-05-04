@@ -13,7 +13,6 @@ import 'package:timezone/data/latest.dart' as tz_data;
 // Геолокация и разрешения
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 
 // Providers
 import 'package:micro_mobility_app/src/core/providers/settings_provider.dart';
@@ -41,7 +40,6 @@ final class AppRunner {
     final prefs = await SharedPreferences.getInstance();
 
     await _requestAllPermissions();
-    await _requestTrackingPermission();
 
     runApp(
       MultiBlocProvider(
@@ -94,24 +92,10 @@ Future<void> _requestAllPermissions() async {
     permission = await Geolocator.requestPermission();
   }
 
-  if (permission == LocationPermission.deniedForever) {
-    await openAppSettings();
-  }
-
   // Запрашиваем также права на камеру и уведомления
   await [
     Permission.camera,
     Permission.notification,
   ].request();
-}
-
-/// 🛡 Запрос разрешения на отслеживание (ATT)
-Future<void> _requestTrackingPermission() async {
-  final status = await AppTrackingTransparency.trackingAuthorizationStatus;
-  if (status == TrackingStatus.notDetermined) {
-    // Небольшая задержка, чтобы системный диалог гарантированно показался
-    await Future.delayed(const Duration(milliseconds: 1000));
-    await AppTrackingTransparency.requestTrackingAuthorization();
-  }
 }
 

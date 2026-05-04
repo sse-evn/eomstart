@@ -88,38 +88,39 @@ class _DashboardHomeState extends State<DashboardHome> {
 
   /// 🔒 Принудительный запрос всех разрешений
   Future<void> _requestAllPermissionsForce() async {
-    bool allGranted = false;
+    if (!mounted) return;
+    
+    bool allGranted = true;
 
-    while (!allGranted && mounted) {
-      allGranted = true;
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      // Это открытие системных настроек геолокации, что разрешено, 
+      // но лучше не спамить, если пользователь уже отключил
+      // Однако, если сервис выключен глобально, это системный диалог.
+      // Не будем менять эту часть сильно, но проверим пермишены:
+    }
 
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        await Geolocator.openLocationSettings();
+    LocationPermission locPerm = await Geolocator.checkPermission();
+    if (locPerm != LocationPermission.always && locPerm != LocationPermission.whileInUse) {
+      locPerm = await Geolocator.requestPermission();
+      if (locPerm != LocationPermission.always && locPerm != LocationPermission.whileInUse) {
+        allGranted = false;
       }
+    }
 
-      LocationPermission locPerm = await Geolocator.checkPermission();
-      if (locPerm != LocationPermission.always) {
-        locPerm = await Geolocator.requestPermission();
-        if (locPerm != LocationPermission.always) {
-          allGranted = false;
-        }
-      }
+    PermissionStatus camStatus = await Permission.camera.status;
+    if (!camStatus.isGranted) {
+      camStatus = await Permission.camera.request();
+      if (!camStatus.isGranted) allGranted = false;
+    }
 
-      PermissionStatus camStatus = await Permission.camera.status;
-      if (!camStatus.isGranted) {
-        camStatus = await Permission.camera.request();
-        if (!camStatus.isGranted) allGranted = false;
-      }
+    PermissionStatus notifStatus = await Permission.notification.status;
+    if (!notifStatus.isGranted) {
+      notifStatus = await Permission.notification.request();
+      if (!notifStatus.isGranted) allGranted = false;
+    }
 
-      PermissionStatus notifStatus = await Permission.notification.status;
-      if (!notifStatus.isGranted) {
-        notifStatus = await Permission.notification.request();
-        if (!notifStatus.isGranted) allGranted = false;
-      }
-
-      // if (!allGranted) {
-      //   await _showForcePermissionDialog();
-      // }
+    if (!allGranted && mounted) {
+      await _showForcePermissionDialog();
     }
   }
 
@@ -127,12 +128,18 @@ class _DashboardHomeState extends State<DashboardHome> {
     if (!mounted) return;
     await showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (ctx) => AlertDialog(
         title: const Text('Необходимые разрешения'),
         content: const Text(
-            'Для работы приложения необходимо разрешить все права, особенно геопозицию "Allow all the time". Без них приложение не будет работать.'),
+            'Location access is needed to show nearby vehicles and track your work shift. You can enable it later in Settings.'),
         actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Позже'),
+          ),
           TextButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
