@@ -262,8 +262,15 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                 }
 
                 final isClaimedToday = _hasClaimedToday[brand] ?? false;
+                final anyBrandClaimed = _hasClaimedToday.values.any((v) => v);
                 final isLoading = _isLoading[brand] ?? false;
-                final canClaim = _isShiftActive == true && !isClaimedToday && !isLoading;
+                
+                // Можно нажать, если:
+                // 1. Смена активна
+                // 2. И (мы еще ничего не получали ИЛИ нажимаем на бренд, который УЖЕ получили)
+                final canClaim = _isShiftActive == true &&
+                    (!anyBrandClaimed || isClaimedToday) &&
+                    !isLoading;
 
                 String subtitleText;
                 Color? subtitleColor;
@@ -278,12 +285,16 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                   subtitleColor = Colors.red;
                 } else if (isClaimedToday) {
                   final codes = _claimedToday[brand];
-                  subtitleText = 'Получено сегодня: ${codes != null && codes.isNotEmpty ? codes.join(", ") : "Коды"}';
+                  subtitleText =
+                      'Код: ${codes != null && codes.isNotEmpty ? codes.join(", ") : "получен"}';
                   subtitleColor = Colors.green;
                   trailingIcon = Icons.check_circle;
                   trailingColor = Colors.green;
+                } else if (anyBrandClaimed) {
+                  subtitleText = 'Лимит: 1 промокод за смену';
+                  subtitleColor = Colors.orange;
                 } else {
-                  subtitleText = 'Нажмите, чтобы получить промокод';
+                  subtitleText = 'Нажмите, чтобы получить';
                   subtitleColor = Colors.blue;
                 }
 

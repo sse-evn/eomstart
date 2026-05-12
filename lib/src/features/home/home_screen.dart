@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:micro_mobility_app/src/features/home/widgets/slot_card.dart';
 import 'package:micro_mobility_app/src/features/home/widgets/dashboard_stats.dart';
 import 'package:micro_mobility_app/src/core/providers/shift_provider.dart';
+import 'package:micro_mobility_app/src/features/home/bloc/shift_bloc.dart';
+import 'package:micro_mobility_app/src/features/home/bloc/shift_state.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -211,26 +214,29 @@ class _DashboardHomeState extends State<DashboardHome> {
             } else {
               return Consumer<ShiftProvider>(
                 builder: (context, provider, child) {
-                  final activeShift = provider.activeShift;
-                  final hasActiveShift = activeShift != null;
+                  return BlocBuilder<ShiftBloc, ShiftState>(
+                    builder: (context, shiftState) {
+                      final hasActiveShift = shiftState is ShiftActive;
 
-                  return SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0, vertical: 8.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (hasActiveShift) ...[
-                          _buildActiveShiftBanner(context),
-                          const SizedBox(height: 16),
-                        ],
-                        const SlotCard(),
-                        const SizedBox(height: 24),
-                        const DashboardInterestingThings(),
-                        const SizedBox(height: 32),
-                      ],
-                    ),
+                      return SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 8.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (hasActiveShift) ...[
+                              _buildActiveShiftBanner(context),
+                              const SizedBox(height: 16),
+                            ],
+                            const SlotCard(),
+                            const SizedBox(height: 24),
+                            const DashboardInterestingThings(),
+                            const SizedBox(height: 32),
+                          ],
+                        ),
+                      );
+                    },
                   );
                 },
               );

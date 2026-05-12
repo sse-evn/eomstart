@@ -105,29 +105,58 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
       return;
     }
 
-    setState(() => _sending = true);
+    // Показываем уведомление, что процесс пошел
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('🚀 Отчёт отправляется в фоне...'),
+        backgroundColor: Colors.blue,
+        duration: Duration(seconds: 3),
+      ),
+    );
 
+    // Сразу закрываем экран, возвращая true
+    Navigator.of(context).pop(true);
+
+    // Запускаем саму отправку в фоне
+    _performBackgroundUpload(
+      reportType: _reportType,
+      comment: _commentController.text.trim(),
+      scooters: List<String>.from(widget.scooterNumbers),
+      employeeName: widget.employeeName,
+      employeeUsername: widget.employeeUsername,
+      employeeTelegramId: widget.employeeTelegramId,
+      photos: List<File>.from(_photos),
+    );
+  }
+
+  Future<void> _performBackgroundUpload({
+    required String reportType,
+    required String comment,
+    required List<String> scooters,
+    required String employeeName,
+    required String? employeeUsername,
+    required int? employeeTelegramId,
+    required List<File> photos,
+  }) async {
     try {
       final uri = Uri.parse(AppConfig.reportUploadUrl);
       final request = http.MultipartRequest('POST', uri);
 
       request.headers['X-Report-Token'] = AppConfig.reportApiToken;
-      request.fields['report_type'] = _reportType;
-      request.fields['comment'] = _commentController.text.trim();
-      request.fields['scooters'] = jsonEncode(widget.scooterNumbers);
-      request.fields['employee_name'] = widget.employeeName;
+      request.fields['report_type'] = reportType;
+      request.fields['comment'] = comment;
+      request.fields['scooters'] = jsonEncode(scooters);
+      request.fields['employee_name'] = employeeName;
 
-      if (widget.employeeUsername != null &&
-          widget.employeeUsername!.trim().isNotEmpty) {
-        request.fields['employee_username'] = widget.employeeUsername!.trim();
+      if (employeeUsername != null && employeeUsername.trim().isNotEmpty) {
+        request.fields['employee_username'] = employeeUsername.trim();
       }
 
-      if (widget.employeeTelegramId != null) {
-        request.fields['employee_telegram_id'] =
-            widget.employeeTelegramId.toString();
+      if (employeeTelegramId != null) {
+        request.fields['employee_telegram_id'] = employeeTelegramId.toString();
       }
 
-      for (final file in _photos) {
+      for (final file in photos) {
         request.files.add(
           await http.MultipartFile.fromPath(
             'photos',
@@ -140,20 +169,13 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      if (!mounted) return;
-
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        _showMessage('Отчёт отправлен');
-        Navigator.of(context).pop(true);
+        debugPrint('Background report sent successfully');
       } else {
-        _showMessage('Ошибка ${response.statusCode}: ${response.body}');
+        debugPrint('Error sending background report: ${response.statusCode} ${response.body}');
       }
     } catch (e) {
-      _showMessage('Ошибка отправки: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _sending = false);
-      }
+      debugPrint('Exception in background report upload: $e');
     }
   }
 

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 import 'package:micro_mobility_app/src/core/themes/colors.dart';
 import 'package:micro_mobility_app/src/core/providers/shift_provider.dart' show ShiftProvider;
 import 'package:micro_mobility_app/src/core/services/api_service.dart' show ApiService;
@@ -127,7 +128,12 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   Future<void> _takeSelfie() async {
     if (_isLoading) return;
     try {
-      final image = await _picker.pickImage(source: ImageSource.camera, maxWidth: 800, imageQuality: 80);
+      final image = await _picker.pickImage(
+        source: ImageSource.camera, 
+        preferredCameraDevice: CameraDevice.front,
+        maxWidth: 800, 
+        imageQuality: 80
+      );
       if (image != null && mounted) setState(() => _selfie = image);
     } catch (e) {
       if (mounted) _showError('Не удалось открыть камеру');
@@ -290,35 +296,85 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     final now = DateTime.now();
     final timeStr = '${now.day}.${now.month}.${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
     String locationStr = 'Гео: недоступно';
+    Position? currentPosition;
+
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        locationStr = 'Гео: сервис отключён';
-      } else {
+      if (serviceEnabled) {
         LocationPermission permission = await Geolocator.checkPermission();
         if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-          final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium, timeLimit: const Duration(seconds: 8));
-          locationStr = 'Гео: ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
+          currentPosition = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium, timeLimit: const Duration(seconds: 8));
+          locationStr = 'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}';
         } else {
           locationStr = 'Гео: доступ запрещён';
         }
+      } else {
+        locationStr = 'Гео: сервис отключён';
       }
     } catch (_) { locationStr = 'Гео: ошибка'; }
 
     final bytes = await imageFile.readAsBytes();
     final original = img.decodeImage(bytes);
     if (original == null) throw Exception('Не удалось декодировать изображение');
+    
     final oriented = img.bakeOrientation(original);
     final resized = img.copyResize(oriented, width: 800);
+    
+    // 🗺️ ДОБАВЛЕНИЕ МИНИ-КАРТЫ
+    if (currentPosition != null) {
+      try {
+        final lat = currentPosition.latitude;
+        final lng = currentPosition.longitude;
+        final mapUrl = 'https://static-maps.yandex.ru/1.x/?ll=$lng,$lat&z=15&l=map&size=160,160&pt=$lng,$lat,pm2rdm';
+        final response = await http.get(Uri.parse(mapUrl)).timeout(const Duration(seconds: 5));
+        
+        if (response.statusCode == 200) {
+          final mapImg = img.decodeImage(response.bodyBytes);
+          if (mapImg != null) {
+            // Рамка для карты
+            img.drawRect(
+              resized,
+              x1: resized.width - 182,
+              y1: resized.height - 182,
+              x2: resized.width - 18,
+              y2: resized.height - 18,
+              color: img.ColorRgb8(255, 255, 255),
+              thickness: 2,
+            );
+            
+            img.compositeImage(
+              resized,
+              mapImg,
+              dstX: resized.width - 180,
+              dstY: resized.height - 180,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('Ошибка загрузки мини-карты: $e');
+      }
+    }
+
     final textColor = img.ColorRgb8(255, 255, 255);
     final shadowColor = img.ColorRgb8(0, 0, 0);
-    final font = img.arial48;
-    img.drawString(resized, font: font, timeStr, x: 11, y: 11, color: shadowColor);
-    img.drawString(resized, font: font, locationStr, x: 11, y: 41, color: shadowColor);
-    img.drawString(resized, font: font, timeStr, x: 10, y: 10, color: textColor);
-    img.drawString(resized, font: font, locationStr, x: 10, y: 40, color: textColor);
-    final jpeg = img.encodeJpg(resized, quality: 100);
+    final font = img.arial24;
+
+    final timeX = resized.width - (timeStr.length * 15) - 20;
+    final locationX = resized.width - (locationStr.length * 15) - 20;
+    
+    final textYOffset = currentPosition != null ? 210 : 40;
+    final bottomY = resized.height - textYOffset;
+
+    // Тень
+    img.drawString(resized, font: font, timeStr, x: timeX + 1, y: bottomY - 30 + 1, color: shadowColor);
+    img.drawString(resized, font: font, locationStr, x: locationX + 1, y: bottomY + 1, color: shadowColor);
+    
+    // Текст
+    img.drawString(resized, font: font, timeStr, x: timeX, y: bottomY - 30, color: textColor);
+    img.drawString(resized, font: font, locationStr, x: locationX, y: bottomY, color: textColor);
+
+    final jpeg = img.encodeJpg(resized, quality: 90);
     final tempFile = File('${imageFile.path}_overlay_${DateTime.now().millisecondsSinceEpoch}.jpg');
     return await tempFile.writeAsBytes(jpeg);
   }

@@ -147,25 +147,16 @@ class PromoApiService {
       // Успешно получен промокод
       return jsonDecode(utf8.decode(response.bodyBytes))
           as Map<String, dynamic>;
-    } else if (response.statusCode == 401) {
-      throw PromoApiServiceException('Сессия истекла', statusCode: 401);
-    } else if (response.statusCode == 400) {
-      // Старые ошибки 400
-      final body = utf8.decode(response.bodyBytes);
-      final error = _tryParseJson(body)?['error'] ?? body;
-      throw PromoApiServiceException(error.toString(), statusCode: 400);
-    } else if (response.statusCode == 409) {
-      // <-- Новый статус для "уже получил сегодня"
-      // Сервер вернул 409, пользователь уже получил сегодня
-      // Попробуем получить последние полученные коды из тела ответа (если сервер их возвращает)
-      // Если не возвращает, просто бросаем исключение
-      final body = utf8.decode(response.bodyBytes);
-      final error = _tryParseJson(body)?['error'] ?? body;
-      throw PromoApiServiceException(error.toString(), statusCode: 409);
     } else {
-      // Другие ошибки (например, 500)
-      throw PromoApiServiceException('Не удалось получить промокод',
-          statusCode: response.statusCode);
+      // Другие ошибки (400, 401, 403, 409, 500 и т.д.)
+      final body = utf8.decode(response.bodyBytes);
+      final errorData = _tryParseJson(body);
+      final errorMessage = errorData?['error'] ?? 'Ошибка сервера (${response.statusCode})';
+      
+      throw PromoApiServiceException(
+        errorMessage.toString(),
+        statusCode: response.statusCode,
+      );
     }
   }
 
