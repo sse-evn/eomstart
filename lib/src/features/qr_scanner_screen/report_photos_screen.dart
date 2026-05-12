@@ -397,15 +397,7 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
                   isPrimary: true,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _actionButton(
-                  onPressed: _sending ? null : _pickImages,
-                  icon: Icons.image_rounded,
-                  label: 'Галерея',
-                  isPrimary: false,
-                ),
-              ),
+             
             ],
           ),
           const SizedBox(height: 14),
