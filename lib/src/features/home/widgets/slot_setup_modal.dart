@@ -149,7 +149,10 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   }
   Future<void> _startNewShift() async {
     if (_selfie == null || _token == null) return;
+    
+    setState(() => _isLoading = true);
     final bloc = BlocProvider.of<ShiftBloc>(context);
+    
     try {
       final processedFile = await _processSelfieWithOverlay(File(_selfie!.path));
       
@@ -160,13 +163,24 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         selfie: XFile(processedFile.path),
       ));
 
+      // Ждем изменения состояния BLoC
+      final nextState = await bloc.stream.firstWhere(
+        (state) => state is ShiftActive || state is ShiftError
+      ).timeout(const Duration(seconds: 15), onTimeout: () => ShiftError('Превышено время ожидания ответа от сервера'));
+
       if (mounted) {
-        Navigator.pop(context, true);
-        _showSuccess('Запрос на открытие смены отправлен');
+        setState(() => _isLoading = false);
+        if (nextState is ShiftActive) {
+          Navigator.pop(context, true);
+          _showSuccess('Смена успешно открыта');
+        } else if (nextState is ShiftError) {
+          _showError('Ошибка открытия смены: ${nextState.message}');
+        }
       }
     } catch (e) {
       if (mounted) {
-        _showError('Ошибка при обработке фото: ${e.toString()}');
+        setState(() => _isLoading = false);
+        _showError('Ошибка: ${e.toString()}');
       }
     }
   }
