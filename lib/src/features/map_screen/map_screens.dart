@@ -84,13 +84,16 @@ class _MapScreenState extends State<MapScreen> {
                   initialZoom: AppConstants.defaultMapZoom,
                   minZoom: AppConstants.minZoom,
                   maxZoom: AppConstants.maxZoom,
+                  onTap: (tapPosition, point) => _handleMapTap(point),
                   interactionOptions: const InteractionOptions(
                     flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                   ),
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: AppConstants.mapUrl,
+                    urlTemplate: Theme.of(context).brightness == Brightness.dark
+                        ? AppConstants.darkMapUrl
+                        : AppConstants.mapUrl,
                     subdomains: AppConstants.mapSubdomains,
                     userAgentPackageName: AppConstants.userAgentPackageName,
                     retinaMode: MediaQuery.of(context).devicePixelRatio > 1.0,
@@ -100,10 +103,13 @@ class _MapScreenState extends State<MapScreen> {
                       logic.showRestrictedZones)
                     PolygonLayer(
                       polygons: logic.geoJsonParser.polygons.map((polygon) {
+                        final isDark = Theme.of(context).brightness == Brightness.dark;
                         return Polygon(
                           points: polygon.points,
-                          borderColor: Colors.red,
-                          color: Colors.red.withOpacity(0.2),
+                          borderColor: isDark ? Colors.redAccent : Colors.red,
+                          color: isDark 
+                              ? Colors.redAccent.withOpacity(0.3) 
+                              : Colors.red.withOpacity(0.2),
                           borderStrokeWidth: 2.0,
                         );
                       }).toList(),
@@ -256,6 +262,72 @@ class _MapScreenState extends State<MapScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  void _handleMapTap(LatLng point) {
+    final zoneData = logic.findPolygonAtPoint(point);
+    if (zoneData != null) {
+      // Центрируем и увеличиваем
+      logic.mapController.move(point, 17.5);
+      _showZoneInfoSheet(zoneData);
+    }
+  }
+
+  void _showZoneInfoSheet(Map<String, dynamic> data) {
+    final name = data['name']?.toString() ?? data['description']?.toString() ?? 'Активная зона';
+    final isRestricted = data['type'] == 'restricted' || (data['description']?.toString().contains('Запрет') ?? false);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A), // Темный фон для четкости
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20)
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 32,
+              height: 4,
+              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Icon(
+                  isRestricted ? Icons.block_flipped : Icons.verified_user_rounded,
+                  color: isRestricted ? Colors.redAccent : Colors.greenAccent,
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white),
+                      ),
+                      Text(
+                        isRestricted ? 'Ограничение проезда/парковки' : 'Разрешенная зона работы',
+                        style: TextStyle(color: Colors.white60, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
   }
@@ -431,40 +503,91 @@ class _MapScreenState extends State<MapScreen> {
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
         decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          color: Color(0xFF1A1A1A), // Темный фон
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Выберите город/зону',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 16),
-            ...logic.availableMaps.map((map) {
-              final id = map['id'] as int;
-              final city = map['city'] as String? ?? 'Неизвестный город';
-              final desc = map['description'] as String? ?? '';
-              final isSelected = logic.selectedMapId == id;
-
-              return ListTile(
-                leading: Icon(
-                  Icons.location_city_rounded,
-                  color: isSelected ? Colors.green : Colors.grey,
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                title: Text(city, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: desc.isNotEmpty ? Text(desc) : null,
-                trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                onTap: () {
-                  logic.onMapChanged(id);
-                  Navigator.pop(context);
-                },
-              );
-            }),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Выберите город',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
+            ),
             const SizedBox(height: 20),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: logic.availableMaps.map((map) {
+                  final id = map['id'] as int;
+                  final city = map['city'] as String? ?? 'Неизвестный город';
+                  final desc = map['description'] as String? ?? '';
+                  final isSelected = logic.selectedMapId == id;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.green.withOpacity(0.15) : Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isSelected ? Colors.green : Colors.transparent,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.green : Colors.white10,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.location_city_rounded,
+                          color: isSelected ? Colors.white : Colors.white70,
+                          size: 24,
+                        ),
+                      ),
+                      title: Text(
+                        city,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.white70,
+                          fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      subtitle: desc.isNotEmpty 
+                        ? Text(desc, style: TextStyle(color: Colors.white38, fontSize: 12)) 
+                        : null,
+                      trailing: isSelected 
+                        ? const Icon(Icons.check_circle, color: Colors.green, size: 24) 
+                        : null,
+                      onTap: () {
+                        logic.onMapChanged(id);
+                        Navigator.pop(context);
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
         ),
       ),
@@ -478,32 +601,44 @@ class _MapScreenState extends State<MapScreen> {
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
         decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          color: Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: Colors.orange[100],
-                shape: BoxShape.circle,
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-              child: Icon(Icons.person_rounded, color: Colors.orange[800], size: 40),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.15),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.orange.withOpacity(0.5), width: 2),
+              ),
+              child: const Icon(Icons.person_rounded, color: Colors.orangeAccent, size: 45),
+            ),
+            const SizedBox(height: 20),
             Text(
               name,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
             ),
             const SizedBox(height: 8),
             Text(
               'Скаут команды',
-              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+              style: TextStyle(color: Colors.white54, fontSize: 16),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [

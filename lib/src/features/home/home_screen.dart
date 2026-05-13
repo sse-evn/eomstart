@@ -8,8 +8,7 @@ import 'package:micro_mobility_app/src/features/home/bloc/shift_state.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:io' show InternetAddress;
-import 'dart:io' show SocketException;
+import 'dart:io' show InternetAddress, SocketException, Platform;
 import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 
 class DashboardHome extends StatefulWidget {

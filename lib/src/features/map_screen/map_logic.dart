@@ -42,6 +42,9 @@ class MapLogic {
   final bool _tilesPrefetched = false;
 
   String? currentUserAvatarUrl;
+  
+  /// Хранилище свойств полигонов (зон), так как GeoJsonParser 1.0.8 не отдает их напрямую
+  final List<Map<String, dynamic>> _polygonProperties = [];
 
   static const String _MAPS_CACHE_KEY = 'cached_maps_list';
   static const String _MAPS_CACHE_TIMESTAMP_KEY = 'cached_maps_list_timestamp';
@@ -53,6 +56,18 @@ class MapLogic {
     
     // Настраиваем кастомный билдер маркеров для зон
     geoJsonParser.markerCreationCallback = _customMarkerBuilder;
+
+    // Перехватываем создание полигонов, чтобы сохранить их свойства (метаданные)
+    geoJsonParser.polygonCreationCallback = (points, holePoints, properties) {
+      _polygonProperties.add(properties);
+      return Polygon(
+        points: points,
+        holePointsList: holePoints,
+        borderColor: Colors.red,
+        color: Colors.red.withOpacity(0.2),
+        borderStrokeWidth: 2.0,
+      );
+    };
     
     if (initialAvatarUrl != null) {
       updateAvatarUrl(initialAvatarUrl);
@@ -187,13 +202,15 @@ class MapLogic {
       isLoading = true;
       _notify();
 
-      await fetchCurrentLocation();
-      if (currentLocation != null && await isOnline()) {
-        // await _prefetchTilesIfNeeded();
-      }
+      // Запускаем гео в фоне, не дожидаясь (чтобы не блокировать карту)
+      fetchCurrentLocation();
 
-      await _loadSavedMapId(); // Загружаем последний выбранный ID
-      await _loadAvailableMaps();
+      // Загружаем основные данные параллельно
+      await Future.wait([
+        _loadSavedMapId(),
+        _loadAvailableMaps(),
+      ]);
+      
       await _loadAndParseGeoJson();
     } catch (e) {
       _showErrorSnackBar('Ошибка инициализации: $e');
@@ -252,30 +269,48 @@ class MapLogic {
     }
   }
 
+  /// Флаг, чтобы центрировать карту только один раз при старте
+  bool _isFirstLocationFix = true;
+
   Future<void> fetchCurrentLocation() async {
     if (_disposed) return;
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw Exception('Служба геолокации отключена');
-      }
+      if (!serviceEnabled) return;
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw Exception('Доступ к местоположению запрещён');
-        }
-      }
-      if (permission == LocationPermission.deniedForever) {
-        throw Exception('Доступ к местоположению запрещён навсегда');
+        if (permission == LocationPermission.denied) return;
       }
 
-      Position position = await Geolocator.getCurrentPosition();
+      // 🚀 Последнее известное положение
+      Position? lastPosition = await Geolocator.getLastKnownPosition();
+      if (lastPosition != null) {
+        currentLocation = LatLng(lastPosition.latitude, lastPosition.longitude);
+        if (_isFirstLocationFix) {
+          mapController.move(currentLocation!, 16.0);
+          _isFirstLocationFix = false;
+        }
+        _notify();
+      }
+
+      // 🎯 Актуальное положение с таймаутом
+      Position position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 4),
+        ),
+      );
+      
       currentLocation = LatLng(position.latitude, position.longitude);
-      mapController.move(currentLocation!, 16.0); // Установите разумный zoom
+      if (_isFirstLocationFix) {
+        mapController.move(currentLocation!, 16.0);
+        _isFirstLocationFix = false;
+      }
+      _notify();
     } catch (e) {
-      _showErrorSnackBar('Ошибка получения местоположения: $e');
+      debugPrint('Ошибка геолокации: $e');
     }
   }
 
@@ -380,6 +415,7 @@ class MapLogic {
         throw Exception('Нет доступных карт');
       }
 
+      _polygonProperties.clear();
       geoJsonParser.parseGeoJsonAsString(geoJsonString);
       _notify();
     } catch (e) {
@@ -522,21 +558,32 @@ class MapLogic {
             return Container(
               padding: const EdgeInsets.all(24),
               decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                color: Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                   const Text(
                     'Настройки слоев',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   _buildSwitchTile(
                     title: 'Запретные зоны',
-                    subtitle: 'Красные зоны (запрет на проезд)',
+                    subtitle: 'Красные зоны',
                     value: showRestrictedZones,
                     color: Colors.red.withOpacity(0.6),
                     onChanged: (v) {
@@ -569,7 +616,7 @@ class MapLogic {
                   ),
                   _buildSwitchTile(
                     title: 'Границы',
-                    subtitle: 'Синие линии (граница работы)',
+                    subtitle: 'Синие линии',
                     value: showBoundaries,
                     color: Colors.blue,
                     height: 4,
@@ -579,7 +626,6 @@ class MapLogic {
                       _notify();
                     },
                   ),
-                  const SizedBox(height: 20),
                 ],
               ),
             );
@@ -599,12 +645,13 @@ class MapLogic {
     required ValueChanged<bool> onChanged,
   }) {
     return SwitchListTile(
-      title: Text(title),
-      subtitle: Text(subtitle),
+      title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+      subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
       value: value,
+      contentPadding: EdgeInsets.zero,
       onChanged: onChanged,
       secondary: Container(
-        width: 24,
+        width: 20,
         height: height,
         decoration: BoxDecoration(
           color: color,
@@ -643,4 +690,33 @@ class MapLogic {
   }
 
   bool get isMapReady => tileProvider != null && currentLocation != null;
+
+  /// Метод для поиска зоны (полигона) в указанной точке
+  Map<String, dynamic>? findPolygonAtPoint(LatLng point) {
+    for (var i = 0; i < geoJsonParser.polygons.length; i++) {
+      final polygon = geoJsonParser.polygons[i];
+      if (_isPointInPolygon(point, polygon.points)) {
+        if (i < _polygonProperties.length) {
+          return _polygonProperties[i];
+        }
+        return {'description': 'Зона без описания'};
+      }
+    }
+    return null;
+  }
+
+  /// Алгоритм Ray Casting для проверки нахождения точки в полигоне
+  bool _isPointInPolygon(LatLng point, List<LatLng> vertices) {
+    int intersectCount = 0;
+    for (int j = 0; j < vertices.length; j++) {
+      LatLng vertJ = vertices[j];
+      LatLng vertI = vertices[(j + 1) % vertices.length];
+
+      if (((vertI.latitude > point.latitude) != (vertJ.latitude > point.latitude)) &&
+          (point.longitude < (vertJ.longitude - vertI.longitude) * (point.latitude - vertI.latitude) / (vertJ.latitude - vertI.latitude) + vertI.longitude)) {
+        intersectCount++;
+      }
+    }
+    return (intersectCount % 2) == 1;
+  }
 }

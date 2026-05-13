@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/src/core/providers/shift_provider.dart';
@@ -36,7 +38,38 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
   @override
   void initState() {
     super.initState();
+    _loadCachedPromos(); // Сначала грузим из кэша для мгновенного показа
     _loadData();
+  }
+
+  Future<void> _loadCachedPromos() async {
+    try {
+      final cached = await _storage.read(key: 'cached_promos_json');
+      if (cached != null) {
+        final Map<String, dynamic> data = jsonDecode(cached);
+        if (mounted) {
+          setState(() {
+            data.forEach((brand, codes) {
+              if (codes is List) {
+                final b = brand.toUpperCase();
+                _claimedToday[b] = codes.cast<String>();
+                _hasClaimedToday[b] = true;
+              }
+            });
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading cached promos: $e');
+    }
+  }
+
+  Future<void> _savePromosToCache() async {
+    try {
+      await _storage.write(key: 'cached_promos_json', value: jsonEncode(_claimedToday));
+    } catch (e) {
+      debugPrint('Error saving promos to cache: $e');
+    }
   }
 
   Future<void> _loadData() async {
@@ -64,6 +97,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
               _hasClaimedToday[brandUp] = true;
             }
           });
+          _savePromosToCache(); // Сохраняем в кэш после синхронизации
         });
       }
     }
@@ -203,147 +237,182 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Получить промокод')),
+      appBar: AppBar(
+        title: const Text('Промокоды', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           await Provider.of<ShiftProvider>(context, listen: false).loadProfile();
           _syncWithProfile();
           await _loadActiveBrand();
         },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
+        child: ListView(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_activeBrand != null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.star, color: Colors.amber),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Сейчас активен бренд: $_activeBrand',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    'Все бренды доступны',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ),
-              ...[
-                'JET',
-                'YANDEX',
-                'WHOOSH',
-                'BOLT',
-              ].map((brand) {
-                if (_activeBrand != null && brand != _activeBrand) {
-                  return const SizedBox.shrink();
-                }
-
-                final isClaimedToday = _hasClaimedToday[brand] ?? false;
-                final anyBrandClaimed = _hasClaimedToday.values.any((v) => v);
-                final isLoading = _isLoading[brand] ?? false;
-                
-                // Можно нажать, если:
-                // 1. Смена активна
-                // 2. И (мы еще ничего не получали ИЛИ нажимаем на бренд, который УЖЕ получили)
-                final canClaim = _isShiftActive == true &&
-                    (!anyBrandClaimed || isClaimedToday) &&
-                    !isLoading;
-
-                String subtitleText;
-                Color? subtitleColor;
-                IconData trailingIcon = Icons.arrow_forward_ios;
-                Color trailingColor = Colors.grey;
-
-                if (_isShiftActive == null) {
-                  subtitleText = 'Проверка смены...';
-                  subtitleColor = Colors.grey;
-                } else if (!_isShiftActive!) {
-                  subtitleText = 'Недоступно: смена не начата';
-                  subtitleColor = Colors.red;
-                } else if (isClaimedToday) {
-                  final codes = _claimedToday[brand];
-                  subtitleText =
-                      'Код: ${codes != null && codes.isNotEmpty ? codes.join(", ") : "получен"}';
-                  subtitleColor = Colors.green;
-                  trailingIcon = Icons.check_circle;
-                  trailingColor = Colors.green;
-                } else if (anyBrandClaimed) {
-                  subtitleText = 'Лимит: 1 промокод за смену';
-                  subtitleColor = Colors.orange;
-                } else {
-                  subtitleText = 'Нажмите, чтобы получить';
-                  subtitleColor = Colors.blue;
-                }
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  child: ListTile(
-                    leading: Icon(
-                      _getBrandIcon(brand),
-                      size: 32,
-                      color: canClaim ? Colors.blue : Colors.grey,
-                    ),
-                    title: Text(
-                      brand,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: canClaim ? Colors.blue : Colors.grey,
-                      ),
-                    ),
-                    subtitle: Text(
-                      subtitleText,
-                      style: TextStyle(color: subtitleColor),
-                    ),
-                    trailing: isLoading
-                        ? const CircularProgressIndicator()
-                        : Icon(trailingIcon, color: trailingColor),
-                    onTap: canClaim ? () => _claimPromo(brand) : null,
-                    enabled: canClaim,
-                  ),
-                );
-              }),
-            ],
-          ),
+          children: [
+            _buildStatusHeader(theme),
+            const SizedBox(height: 16),
+            ...['JET', 'YANDEX', 'WHOOSH', 'BOLT'].map((brand) {
+              if (_activeBrand != null && brand != _activeBrand) return const SizedBox.shrink();
+              return _buildSimpleBrandCard(brand, theme, isDark);
+            }),
+          ],
         ),
       ),
     );
   }
 
+  Widget _buildStatusHeader(ThemeData theme) {
+    bool hasActiveBrand = _activeBrand != null;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: hasActiveBrand 
+            ? Colors.orange.withOpacity(0.15) 
+            : theme.colorScheme.primaryContainer.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: hasActiveBrand ? Colors.orange : theme.colorScheme.primary.withOpacity(0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            hasActiveBrand ? Icons.stars_rounded : Icons.info_outline,
+            color: hasActiveBrand ? Colors.orange : theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              hasActiveBrand 
+                  ? 'Сегодня работаем с $_activeBrand' 
+                  : 'Все промокоды доступны для получения',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSimpleBrandCard(String brand, ThemeData theme, bool isDark) {
+    final isClaimed = _hasClaimedToday[brand] ?? false;
+    final isLoading = _isLoading[brand] ?? false;
+    final codes = _claimedToday[brand] ?? [];
+    final brandColor = _getBrandColor(brand);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: [
+          ListTile(
+            leading: CircleAvatar(
+              backgroundColor: brandColor.withOpacity(0.15),
+              child: Icon(_getBrandIcon(brand), color: brandColor),
+            ),
+            title: Text(brand, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            subtitle: Text(isClaimed ? 'Промокод получен' : 'Доступен 1 раз в сутки'),
+            trailing: isLoading
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                : (isClaimed 
+                    ? const Icon(Icons.check_circle, color: Colors.green)
+                    : (_isShiftActive == true 
+                        ? TextButton(
+                            onPressed: () => _claimPromo(brand),
+                            style: TextButton.styleFrom(foregroundColor: brandColor),
+                            child: const Text('ПОЛУЧИТЬ'),
+                          )
+                        : const Icon(Icons.lock_outline, size: 20))),
+          ),
+          if (isClaimed && codes.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                children: [
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  ...codes.map((code) => _buildSimpleCodeRow(code, theme, isDark)).toList(),
+                ],
+              ),
+            ),
+          if (_isShiftActive == false && !isClaimed)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              color: Colors.red.withOpacity(0.05),
+              child: const Center(
+                child: Text(
+                  'Начните смену для получения',
+                  style: TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSimpleCodeRow(String code, ThemeData theme, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white10 : Colors.black.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              code,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.copy, size: 18),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: code));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Код $code скопирован'),
+                  behavior: SnackBarBehavior.floating,
+                  width: 200,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getBrandColor(String brand) {
+    switch (brand) {
+      case 'JET': return Colors.purple;
+      case 'YANDEX': return const Color(0xFFFFB300);
+      case 'WHOOSH': return const Color(0xFFFFD100);
+      case 'BOLT': return const Color(0xFF32BB78);
+      default: return Colors.blue;
+    }
+  }
+
   IconData _getBrandIcon(String brand) {
     switch (brand) {
-      case 'JET':
-        return Icons.electric_scooter;
-      case 'YANDEX':
-        return Icons.map;
-      case 'WHOOSH':
-        return Icons.directions_bike;
-      case 'BOLT':
-        return Icons.bolt;
-      default:
-        return Icons.help;
+      case 'JET': return Icons.electric_scooter;
+      case 'YANDEX': return Icons.local_taxi;
+      case 'WHOOSH': return Icons.directions_bike;
+      case 'BOLT': return Icons.bolt;
+      default: return Icons.help_outline;
     }
   }
 }

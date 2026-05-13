@@ -8,6 +8,8 @@ class AppConstants {
   // ✅ Обновлено: стиль карты как в 2GIS (более детализированный)
   static const String mapUrl =
       'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+  static const String darkMapUrl =
+      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
   static const List<String> mapSubdomains = ['a', 'b', 'c', 'd'];
 
   static const String userAgentPackageName = 'kz.evn';

@@ -80,24 +80,36 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.green[700],
-      body: const Center(
+      backgroundColor: const Color(0xFF1B5E20), // Глубокий зеленый, без лишних градиентов
+      body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.electric_scooter, color: Colors.white, size: 80),
-            SizedBox(height: 20),
-            Text(
-              'Оператор микромобильности',
+            // Чистый и четкий логотип
+            const Icon(
+              Icons.electric_scooter_rounded,
+              color: Colors.white,
+              size: 100,
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'EOM START',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+                fontSize: 36,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2,
               ),
             ),
-            SizedBox(height: 40),
-            CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            const SizedBox(height: 48),
+            // Минималистичный лоадер
+            const SizedBox(
+              width: 30,
+              height: 30,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+              ),
             ),
           ],
         ),
