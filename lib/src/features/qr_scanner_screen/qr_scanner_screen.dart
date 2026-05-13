@@ -355,6 +355,16 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8.0),
+                      child: Text(
+                        'Шаг 2: Проверьте список самокатов',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ),
                     Container(
                       margin: const EdgeInsets.all(8),
                       padding: const EdgeInsets.all(12),

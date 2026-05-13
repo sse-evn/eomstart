@@ -49,6 +49,9 @@
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Приложению нужен доступ для сохранения изображений в галерею.</string>
 
+    <key>NSUserTrackingUsageDescription</key>
+    <string>Ваши данные будут использоваться для улучшения работы приложения и персонализации контента.</string>
+
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>

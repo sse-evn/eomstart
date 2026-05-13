@@ -352,7 +352,7 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
   }
 
   Widget _photoCard() {
-    final reportTitle = _reportType == 'before' ? 'Фото ДО' : 'Фото ПОСЛЕ';
+    final reportTitle = _reportType == 'before' ? 'Фото ДО начала работы' : 'Фото ПОСЛЕ завершения';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -424,6 +424,13 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
                     style: _theme.textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.w600,
                       color: _colors.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Нужно минимум 1 фото',
+                    style: _theme.textTheme.bodySmall?.copyWith(
+                      color: _colors.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -594,28 +601,30 @@ class _ReportPhotosScreenState extends State<ReportPhotosScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 children: [
                   _infoCard(),
-                  const SizedBox(height: 18),
-                  _sectionTitle('Тип отчёта'),
+                  const SizedBox(height: 24),
+                  _sectionTitle('Шаг 1: Выберите время съёмки'),
                   Row(
                     children: [
                       _buildTypeButton(
                         value: 'before',
-                        title: 'До',
+                        title: 'ДО работы',
                         icon: Icons.photo_camera_back_outlined,
                       ),
                       const SizedBox(width: 12),
                       _buildTypeButton(
                         value: 'after',
-                        title: 'После',
+                        title: 'ПОСЛЕ работы',
                         icon: Icons.task_alt_rounded,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 24),
+                  _sectionTitle('Шаг 2: Сделайте фотографии'),
                   _photoCard(),
-                  const SizedBox(height: 18),
-                  _sectionTitle('Комментарий'),
+                  const SizedBox(height: 24),
+                  _sectionTitle('Шаг 3: Напишите комментарий (если нужно)'),
                   _commentField(),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),

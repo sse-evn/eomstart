@@ -62,6 +62,7 @@ class MapLogic {
   Marker _customMarkerBuilder(LatLng point, Map<String, dynamic> properties) {
     String label = properties['description']?.toString() ?? 
                    properties['iconContent']?.toString() ?? 
+                   properties['name']?.toString() ??
                    '';
                  
     // Если это "ГРАНИЦА", рисуем маленькую точку без текста
@@ -79,25 +80,44 @@ class MapLogic {
       );
     }
 
+    // Специальные иконки для некоторых типов объектов
+    IconData? specialIcon;
+    Color? iconColor;
+    if (label.contains('Парковка')) {
+      specialIcon = Icons.local_parking_rounded;
+      iconColor = Colors.blue;
+    } else if (label.contains('Ремонт')) {
+      specialIcon = Icons.build_rounded;
+      iconColor = Colors.orange;
+    }
+
     return Marker(
       point: point,
-      width: 40,
+      width: label.length > 10 ? 100 : 60,
       height: 40,
       child: Center(
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            shadows: [
-              Shadow(
-                blurRadius: 4.0,
-                color: Colors.black,
-                offset: Offset(1.5, 1.5),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (specialIcon != null)
+              Icon(specialIcon, color: iconColor, size: 20),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                shadows: [
+                  Shadow(
+                    blurRadius: 6.0,
+                    color: Colors.black,
+                    offset: Offset(0, 1),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -495,48 +515,69 @@ class MapLogic {
     if (_disposed || !context.mounted) return;
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
             return Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'Настройки слоев',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 20),
                   _buildSwitchTile(
                     title: 'Запретные зоны',
-                    subtitle: 'Красные зоны (запрет на проезд/парковку)',
+                    subtitle: 'Красные зоны (запрет на проезд)',
                     value: showRestrictedZones,
                     color: Colors.red.withOpacity(0.6),
-                    onChanged: (v) => setState(() => showRestrictedZones = v),
+                    onChanged: (v) {
+                      setState(() => showRestrictedZones = v);
+                      this.showRestrictedZones = v;
+                      _notify();
+                    },
                   ),
                   _buildSwitchTile(
                     title: 'Зоны парковки',
-                    subtitle: 'Розовые зоны (запрет на парковку)',
+                    subtitle: 'Розовые зоны',
                     value: showParkingZones,
                     color: Colors.pink.withOpacity(0.6),
-                    onChanged: (v) => setState(() => showParkingZones = v),
+                    onChanged: (v) {
+                      setState(() => showParkingZones = v);
+                      this.showParkingZones = v;
+                      _notify();
+                    },
                   ),
                   _buildSwitchTile(
                     title: 'Ограничения скорости',
-                    subtitle: 'Зеленые и желтые зоны (ограничение скорости)',
+                    subtitle: 'Зеленые и желтые зоны',
                     value: showSpeedLimitZones,
-                    gradient:
-                        const LinearGradient(colors: [Colors.green, Colors.yellow]),
-                    onChanged: (v) => setState(() => showSpeedLimitZones = v),
+                    gradient: const LinearGradient(colors: [Colors.green, Colors.yellow]),
+                    onChanged: (v) {
+                      setState(() => showSpeedLimitZones = v);
+                      this.showSpeedLimitZones = v;
+                      _notify();
+                    },
                   ),
                   _buildSwitchTile(
                     title: 'Границы',
-                    subtitle: 'Синие линии (граница рабочей зоны)',
+                    subtitle: 'Синие линии (граница работы)',
                     value: showBoundaries,
                     color: Colors.blue,
                     height: 4,
-                    onChanged: (v) => setState(() => showBoundaries = v),
+                    onChanged: (v) {
+                      setState(() => showBoundaries = v);
+                      this.showBoundaries = v;
+                      _notify();
+                    },
                   ),
                   const SizedBox(height: 20),
                 ],

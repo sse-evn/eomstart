@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io' show InternetAddress;
 import 'dart:io' show SocketException;
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 
 class DashboardHome extends StatefulWidget {
   const DashboardHome({super.key});
@@ -122,6 +123,14 @@ class _DashboardHomeState extends State<DashboardHome> {
       if (!notifStatus.isGranted) allGranted = false;
     }
 
+    // 🛡️ App Tracking Transparency (для iOS)
+    if (Platform.isIOS) {
+      final status = await AppTrackingTransparency.trackingAuthorizationStatus;
+      if (status == TrackingStatus.notDetermined) {
+        await AppTrackingTransparency.requestTrackingAuthorization();
+      }
+    }
+
     if (!allGranted && mounted) {
       await _showForcePermissionDialog();
     }
@@ -227,8 +236,23 @@ class _DashboardHomeState extends State<DashboardHome> {
                           children: [
                             if (hasActiveShift) ...[
                               _buildActiveShiftBanner(context),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 20),
                             ],
+                            Text(
+                              'Ассалаумағалейкум, ${provider.profile?['firstName'] ?? 'Пользователь'}!',
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xDD61E045),
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Хорошего рабочего дня!',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Colors.grey[600],
+                                  ),
+                            ),
+                            const SizedBox(height: 24),
                             const SlotCard(),
                             const SizedBox(height: 24),
                             const DashboardInterestingThings(),
@@ -251,20 +275,30 @@ class _DashboardHomeState extends State<DashboardHome> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.1),
+        gradient: LinearGradient(
+          colors: [Colors.green[700]!, Colors.green[500]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.green.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.green.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 10,
-            height: 10,
+            width: 12,
+            height: 12,
             decoration: const BoxDecoration(
-              color: Colors.green,
+              color: Colors.white,
               shape: BoxShape.circle,
               boxShadow: [
-                BoxShadow(color: Colors.green, blurRadius: 4, spreadRadius: 1)
+                BoxShadow(color: Colors.white, blurRadius: 4, spreadRadius: 1)
               ],
             ),
           ),
@@ -273,15 +307,14 @@ class _DashboardHomeState extends State<DashboardHome> {
             child: Text(
               'СМЕНА ОТКРЫТА',
               style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-                color: Colors.green,
-                letterSpacing: 0.5,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: 1.0,
               ),
             ),
           ),
-          Icon(Icons.timer_outlined,
-              color: Colors.green.withOpacity(0.7), size: 16),
+          const Icon(Icons.timer_outlined, color: Colors.white, size: 18),
         ],
       ),
     );
