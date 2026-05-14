@@ -97,11 +97,11 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   void _syncWithProfile() {
     final profile = Provider.of<ShiftProvider>(context, listen: false).profile;
+    debugPrint('Syncing with profile: $profile');
     if (profile != null && profile['promo_codes'] != null) {
       final promos = profile['promo_codes'] as Map<String, dynamic>;
       if (mounted) {
         setState(() {
-          // Не делаем clear(), чтобы не затереть локальный кэш, если бэк прислал пустой объект
           promos.forEach((brand, codes) {
             if (codes is List && codes.isNotEmpty) {
               final brandUp = brand.toUpperCase();
@@ -109,7 +109,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
               _hasClaimedToday[brandUp] = true;
             }
           });
-          _savePromosToCache(); // Сохраняем в кэш
+          _savePromosToCache(); 
         });
       }
     }
@@ -299,30 +299,42 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   Widget _buildStatusHeader(ThemeData theme) {
     bool hasActiveBrand = _activeBrand != null && _activeBrand!.isNotEmpty;
+    bool alreadyClaimed = hasActiveBrand && (_hasClaimedToday[_activeBrand!] ?? false);
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: hasActiveBrand 
-            ? Colors.orange.withOpacity(0.15) 
-            : Colors.red.withOpacity(0.1),
+        color: alreadyClaimed 
+            ? Colors.green.withOpacity(0.1)
+            : (hasActiveBrand 
+                ? Colors.orange.withOpacity(0.15) 
+                : Colors.red.withOpacity(0.1)),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: hasActiveBrand ? Colors.orange : Colors.red.withOpacity(0.5),
+          color: alreadyClaimed 
+              ? Colors.green 
+              : (hasActiveBrand ? Colors.orange : Colors.red.withOpacity(0.5)),
         ),
       ),
       child: Row(
         children: [
           Icon(
-            hasActiveBrand ? Icons.stars_rounded : Icons.block,
-            color: hasActiveBrand ? Colors.orange : Colors.red,
+            alreadyClaimed 
+                ? Icons.check_circle 
+                : (hasActiveBrand ? Icons.stars_rounded : Icons.block),
+            color: alreadyClaimed 
+                ? Colors.green 
+                : (hasActiveBrand ? Colors.orange : Colors.red),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              hasActiveBrand 
-                  ? 'Сегодня работаем с $_activeBrand' 
-                  : 'Промокоды на сегодня не назначены',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              alreadyClaimed
+                  ? 'Промокод для $_activeBrand успешно получен!'
+                  : (hasActiveBrand 
+                      ? 'Сегодня работаем с $_activeBrand' 
+                      : 'Промокоды на сегодня не назначены'),
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -336,50 +348,101 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     final codes = _claimedToday[brand] ?? [];
     final brandColor = _getBrandColor(brand);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isClaimed 
+            ? brandColor.withOpacity(isDark ? 0.15 : 0.05) 
+            : theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isClaimed ? brandColor : Colors.transparent,
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         children: [
           ListTile(
-            leading: CircleAvatar(
-              backgroundColor: brandColor.withOpacity(0.15),
-              child: Icon(_getBrandIcon(brand), color: brandColor),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: brandColor.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(_getBrandIcon(brand), color: brandColor, size: 28),
             ),
-            title: Text(brand, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            subtitle: Text(isClaimed ? 'Промокод получен' : 'Доступен 1 раз в сутки'),
+            title: Text(
+              brand,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+            ),
+            subtitle: Text(
+              isClaimed 
+                  ? 'ВАШ ПРОМОКОД ПОЛУЧЕН' 
+                  : 'Доступен 1 раз за смену',
+              style: TextStyle(
+                color: isClaimed ? Colors.green : Colors.grey,
+                fontWeight: isClaimed ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
             trailing: isLoading
                 ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
                 : (isClaimed 
-                    ? const Icon(Icons.check_circle, color: Colors.green)
+                    ? const Icon(Icons.stars_rounded, color: Colors.green, size: 32)
                     : (_isShiftActive == true 
-                        ? TextButton(
+                        ? ElevatedButton(
                             onPressed: () => _claimPromo(brand),
-                            style: TextButton.styleFrom(foregroundColor: brandColor),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: brandColor,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
                             child: const Text('ПОЛУЧИТЬ'),
                           )
-                        : const Icon(Icons.lock_outline, size: 20))),
+                        : const Icon(Icons.lock_outline, size: 24, color: Colors.grey))),
           ),
           if (isClaimed && codes.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Column(
                 children: [
-                  const Divider(),
+                  const Divider(height: 24),
+                  const Text(
+                    'СКОПИРУЙТЕ И ИСПОЛЬЗУЙТЕ:',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
+                  ),
+                  const SizedBox(height: 12),
+                  ...codes.map((code) => _buildProminentCodeRow(code, brandColor, isDark)).toList(),
                   const SizedBox(height: 8),
-                  ...codes.map((code) => _buildSimpleCodeRow(code, theme, isDark)).toList(),
+                  const Text(
+                    'Действует до конца смены',
+                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
+                  ),
                 ],
               ),
             ),
           if (_isShiftActive == false && !isClaimed)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              color: Colors.red.withOpacity(0.05),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
               child: const Center(
                 child: Text(
-                  'Начните смену для получения',
-                  style: TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold),
+                  'НУЖНО ОТКРЫТЬ СМЕНУ',
+                  style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -388,36 +451,38 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     );
   }
 
-  Widget _buildSimpleCodeRow(String code, ThemeData theme, bool isDark) {
+  Widget _buildProminentCodeRow(String code, Color brandColor, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white10 : Colors.black.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(8),
+        color: isDark ? Colors.white10 : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: brandColor.withOpacity(0.5), width: 1),
       ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               code,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'monospace',
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: brandColor,
+                letterSpacing: 2,
               ),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.copy, size: 18),
+            icon: Icon(Icons.copy_rounded, color: brandColor, size: 28),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: code));
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Код $code скопирован'),
+                  content: Text('Промокод $code скопирован!'),
+                  backgroundColor: brandColor,
                   behavior: SnackBarBehavior.floating,
-                  width: 200,
                 ),
               );
             },

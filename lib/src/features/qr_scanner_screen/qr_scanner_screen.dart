@@ -250,6 +250,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
