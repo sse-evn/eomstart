@@ -44,19 +44,28 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   Future<void> _loadCachedPromos() async {
     try {
-      final cached = await _storage.read(key: 'cached_promos_json');
+      final cached = await _storage.read(key: 'cached_promos_json_v2');
       if (cached != null) {
         final Map<String, dynamic> data = jsonDecode(cached);
-        if (mounted) {
-          setState(() {
-            data.forEach((brand, codes) {
-              if (codes is List) {
-                final b = brand.toUpperCase();
-                _claimedToday[b] = codes.cast<String>();
-                _hasClaimedToday[b] = true;
-              }
+        final cachedDate = data['date'];
+        final today = DateTime.now().toIso8601String().split('T')[0];
+
+        if (cachedDate == today && data['promos'] != null) {
+          final promos = data['promos'] as Map<String, dynamic>;
+          if (mounted) {
+            setState(() {
+              promos.forEach((brand, codes) {
+                if (codes is List && codes.isNotEmpty) {
+                  final b = brand.toUpperCase();
+                  _claimedToday[b] = codes.cast<String>();
+                  _hasClaimedToday[b] = true;
+                }
+              });
             });
-          });
+          }
+        } else {
+          // Кэш устарел (другой день), удаляем
+          await _storage.delete(key: 'cached_promos_json_v2');
         }
       }
     } catch (e) {
@@ -66,7 +75,11 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   Future<void> _savePromosToCache() async {
     try {
-      await _storage.write(key: 'cached_promos_json', value: jsonEncode(_claimedToday));
+      final dataToSave = {
+        'date': DateTime.now().toIso8601String().split('T')[0],
+        'promos': _claimedToday,
+      };
+      await _storage.write(key: 'cached_promos_json_v2', value: jsonEncode(dataToSave));
     } catch (e) {
       debugPrint('Error saving promos to cache: $e');
     }
@@ -88,16 +101,15 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
       final promos = profile['promo_codes'] as Map<String, dynamic>;
       if (mounted) {
         setState(() {
-          _claimedToday.clear();
-          _hasClaimedToday.updateAll((key, value) => false);
+          // Не делаем clear(), чтобы не затереть локальный кэш, если бэк прислал пустой объект
           promos.forEach((brand, codes) {
-            if (codes is List) {
+            if (codes is List && codes.isNotEmpty) {
               final brandUp = brand.toUpperCase();
               _claimedToday[brandUp] = codes.cast<String>();
               _hasClaimedToday[brandUp] = true;
             }
           });
-          _savePromosToCache(); // Сохраняем в кэш после синхронизации
+          _savePromosToCache(); // Сохраняем в кэш
         });
       }
     }
@@ -190,9 +202,15 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
         if (e.statusCode == 401) {
           _handleUnauthorized();
         } else if (e.statusCode == 409) {
+          // Запрашиваем обновление профиля, если бэк говорит, что уже брали
+          final shiftProvider = Provider.of<ShiftProvider>(context, listen: false);
+          await shiftProvider.loadProfile();
+          _syncWithProfile();
+
           setState(() {
             _hasClaimedToday[brand] = true;
           });
+          
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Вы уже получали промокод этого бренда сегодня'),
@@ -257,9 +275,22 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
             _buildStatusHeader(theme),
             const SizedBox(height: 16),
             ...['JET', 'YANDEX', 'WHOOSH', 'BOLT'].map((brand) {
-              if (_activeBrand != null && brand != _activeBrand) return const SizedBox.shrink();
+              final isClaimed = _hasClaimedToday[brand] ?? false;
+              final hasActiveBrand = _activeBrand != null && _activeBrand!.isNotEmpty;
+              
+              // 1. Если админ не указал бренд, и мы его не брали - скрываем
+              if (!hasActiveBrand && !isClaimed) {
+                return const SizedBox.shrink();
+              }
+              
+              // 2. Если админ указал ДРУГОЙ бренд, и мы его не брали - скрываем
+              if (hasActiveBrand && brand != _activeBrand && !isClaimed) {
+                return const SizedBox.shrink();
+              }
+              
               return _buildSimpleBrandCard(brand, theme, isDark);
             }),
+
           ],
         ),
       ),
@@ -267,30 +298,30 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
   }
 
   Widget _buildStatusHeader(ThemeData theme) {
-    bool hasActiveBrand = _activeBrand != null;
+    bool hasActiveBrand = _activeBrand != null && _activeBrand!.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: hasActiveBrand 
             ? Colors.orange.withOpacity(0.15) 
-            : theme.colorScheme.primaryContainer.withOpacity(0.3),
+            : Colors.red.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: hasActiveBrand ? Colors.orange : theme.colorScheme.primary.withOpacity(0.5),
+          color: hasActiveBrand ? Colors.orange : Colors.red.withOpacity(0.5),
         ),
       ),
       child: Row(
         children: [
           Icon(
-            hasActiveBrand ? Icons.stars_rounded : Icons.info_outline,
-            color: hasActiveBrand ? Colors.orange : theme.colorScheme.primary,
+            hasActiveBrand ? Icons.stars_rounded : Icons.block,
+            color: hasActiveBrand ? Colors.orange : Colors.red,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               hasActiveBrand 
                   ? 'Сегодня работаем с $_activeBrand' 
-                  : 'Все промокоды доступны для получения',
+                  : 'Промокоды на сегодня не назначены',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),

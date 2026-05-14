@@ -21,6 +21,7 @@ class MapLogic {
   final GeoJsonParser geoJsonParser = GeoJsonParser();
   late final MapController mapController;
   bool isLoading = false;
+  bool isLocating = false; // Флаг для индикатора загрузки геопозиции
   List<dynamic> availableMaps = [];
   int selectedMapId = -1;
   final FlutterSecureStorage storage = const FlutterSecureStorage();
@@ -272,25 +273,39 @@ class MapLogic {
   /// Флаг, чтобы центрировать карту только один раз при старте
   bool _isFirstLocationFix = true;
 
-  Future<void> fetchCurrentLocation() async {
+  Future<void> fetchCurrentLocation({bool isManual = false}) async {
     if (_disposed) return;
     try {
+      if (isManual) {
+        isLocating = true;
+        _notify();
+      }
+
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) {
+        if (isManual) _showErrorSnackBar('Включите GPS для определения местоположения');
+        if (isManual) { isLocating = false; _notify(); }
+        return;
+      }
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return;
+        if (permission == LocationPermission.denied) {
+          if (isManual) _showErrorSnackBar('Нет разрешения на доступ к геопозиции');
+          if (isManual) { isLocating = false; _notify(); }
+          return;
+        }
       }
 
       // 🚀 Последнее известное положение
       Position? lastPosition = await Geolocator.getLastKnownPosition();
       if (lastPosition != null) {
         currentLocation = LatLng(lastPosition.latitude, lastPosition.longitude);
-        if (_isFirstLocationFix) {
-          mapController.move(currentLocation!, 16.0);
-          _isFirstLocationFix = false;
+        if (_isFirstLocationFix || isManual) {
+          final targetZoom = mapController.camera.zoom > 14 ? mapController.camera.zoom : 16.0;
+          mapController.move(currentLocation!, targetZoom);
+          if (!isManual) _isFirstLocationFix = false;
         }
         _notify();
       }
@@ -304,13 +319,19 @@ class MapLogic {
       );
       
       currentLocation = LatLng(position.latitude, position.longitude);
-      if (_isFirstLocationFix) {
-        mapController.move(currentLocation!, 16.0);
+      if (_isFirstLocationFix || isManual) {
+        final targetZoom = mapController.camera.zoom > 14 ? mapController.camera.zoom : 16.0;
+        mapController.move(currentLocation!, targetZoom);
         _isFirstLocationFix = false;
       }
-      _notify();
     } catch (e) {
       debugPrint('Ошибка геолокации: $e');
+      if (isManual) _showErrorSnackBar('Не удалось определить местоположение');
+    } finally {
+      if (isManual && !_disposed) {
+        isLocating = false;
+      }
+      _notify();
     }
   }
 

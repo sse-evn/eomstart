@@ -74,7 +74,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       return urentMatch.group(1)!;
     }
 
-    final yandexRegExp = RegExp(r'go\.yandex\/scooters\?number=(\d+)');
+    final yandexRegExp = RegExp(r'go\.yandex\/scooters\?number=([a-zA-Z0-9]+)');
     final yandexMatch = yandexRegExp.firstMatch(link);
     if (yandexMatch != null && yandexMatch.group(1) != null) {
       return yandexMatch.group(1)!;

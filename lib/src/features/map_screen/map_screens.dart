@@ -407,7 +407,7 @@ class _MapScreenState extends State<MapScreen> {
         ),
         const SizedBox(height: 16),
         GestureDetector(
-          onTap: logic.fetchCurrentLocation,
+          onTap: () => logic.fetchCurrentLocation(isManual: true),
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -422,7 +422,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ],
             ),
-            child: logic.isLoading
+            child: logic.isLocating
                 ? const SizedBox(
                     width: 24,
                     height: 24,
