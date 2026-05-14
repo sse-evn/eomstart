@@ -31,21 +31,37 @@ String extractDateFromIsoString(String? isoString) {
 }
 
 class BreakTimeUtils {
-  static final List<Map<String, String>> scheduledBreaks = [
+  static List<Map<String, String>> getScheduledBreaks(String? zone) {
+    if (zone == null || zone.isEmpty) return _evenZoneBreaks;
+
+    final match = RegExp(r'\d+').firstMatch(zone);
+    if (match != null) {
+      final number = int.tryParse(match.group(0)!);
+      if (number != null && number % 2 != 0) {
+        return _oddZoneBreaks;
+      }
+    }
+    return _evenZoneBreaks;
+  }
+
+  static final List<Map<String, String>> _evenZoneBreaks = [
     {'start': '10:00', 'end': '10:40', 'label': 'Утренний перерыв 1'},
-    {'start': '10:40', 'end': '11:20', 'label': 'Утренний перерыв 2'},
-    {'start': '14:00', 'end': '14:40', 'label': 'Обеденный перерыв'},
     {'start': '19:00', 'end': '19:40', 'label': 'Вечерний перерыв 1'},
+  ];
+
+  static final List<Map<String, String>> _oddZoneBreaks = [
+    {'start': '10:40', 'end': '11:20', 'label': 'Утренний перерыв 2'},
     {'start': '19:40', 'end': '20:20', 'label': 'Вечерний перерыв 2'},
   ];
 
-  static Map<String, dynamic> getBreakStatus() {
+  static Map<String, dynamic> getBreakStatus(String? zone) {
     final now = DateTime.now();
     final hour = now.hour;
     final minute = now.minute;
     final currentTimeMinutes = hour * 60 + minute;
+    final breaks = getScheduledBreaks(zone);
 
-    for (var b in scheduledBreaks) {
+    for (var b in breaks) {
       final startParts = b['start']!.split(':');
       final endParts = b['end']!.split(':');
       final startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
@@ -62,7 +78,7 @@ class BreakTimeUtils {
     }
 
     // Find next break
-    for (var b in scheduledBreaks) {
+    for (var b in breaks) {
       final startParts = b['start']!.split(':');
       final startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
       if (startMinutes > currentTimeMinutes) {
@@ -82,8 +98,8 @@ class BreakTimeUtils {
     };
   }
 
-  static String getCurrentBreakTime() {
-    final status = getBreakStatus();
+  static String getCurrentBreakTime(String? zone) {
+    final status = getBreakStatus(zone);
     if (status['isInside'] == true) {
       return status['range'];
     }

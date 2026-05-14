@@ -19,15 +19,13 @@ class DashboardHome extends StatefulWidget {
   State<DashboardHome> createState() => _DashboardHomeState();
 }
 
-class _DashboardHomeState extends State<DashboardHome> with WidgetsBindingObserver {
+class _DashboardHomeState extends State<DashboardHome> {
   late Future<void> _loadDataFuture;
   bool _hasInternet = true;
-  bool _isDialogShowing = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     // Проверяем интернет и запускаем загрузку только если он есть
     _loadDataFuture = _checkInternetAndLoad();
 
@@ -38,16 +36,7 @@ class _DashboardHomeState extends State<DashboardHome> with WidgetsBindingObserv
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // При возвращении в приложение проверяем права снова (без кулдауна, так как пользователь мог быть в настройках)
-      _requestAllPermissionsForce(ignoreCooldown: true);
-    }
   }
 
   Future<void> _checkInternetAndLoad() async {
@@ -105,117 +94,33 @@ class _DashboardHomeState extends State<DashboardHome> with WidgetsBindingObserv
     await provider.loadShifts();
   }
 
-  /// 🔒 Умный запрос разрешений (не беспокоим, если уже дали или недавно отказались)
-  Future<void> _requestAllPermissionsForce({bool ignoreCooldown = false}) async {
+  /// 🔒 Запрос разрешений (один раз за всё время использования)
+  Future<void> _requestAllPermissionsForce() async {
     if (!mounted) return;
 
-    // 1. Проверяем критические разрешения
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyRequested = prefs.getBool('permissions_requested_once') ?? false;
+
+    if (alreadyRequested) return;
+    await prefs.setBool('permissions_requested_once', true);
+
+    // Запрашиваем геопозицию
     LocationPermission locPerm = await Geolocator.checkPermission();
-    bool locationGranted = locPerm == LocationPermission.always || locPerm == LocationPermission.whileInUse;
+    if (locPerm == LocationPermission.denied) {
+      await Geolocator.requestPermission();
+    }
 
+    // Запрашиваем камеру
     PermissionStatus camStatus = await Permission.camera.status;
-    bool cameraGranted = camStatus.isGranted;
-
-    // Если всё основное есть — выходим и закрываем диалог, если он открыт
-    if (locationGranted && cameraGranted) {
-      if (_isDialogShowing && mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
-        _isDialogShowing = false;
-      }
-      return;
+    if (camStatus.isDenied) {
+      await Permission.camera.request();
     }
 
-    // Если диалог уже показан, не плодим копии
-    if (_isDialogShowing) return;
-
-    // 2. Проверяем "кулдаун", если не указано игнорировать
-    if (!ignoreCooldown) {
-      final prefs = await SharedPreferences.getInstance();
-      final lastNag = prefs.getInt('last_permission_nag_time') ?? 0;
-      final now = DateTime.now().millisecondsSinceEpoch;
-      if (now - lastNag < 12 * 60 * 60 * 1000) return;
-    }
-
-    // 3. Пытаемся запросить системно те, что не заблокированы навсегда
-    if (!locationGranted && locPerm != LocationPermission.deniedForever) {
-      locPerm = await Geolocator.requestPermission();
-      locationGranted = locPerm == LocationPermission.always || locPerm == LocationPermission.whileInUse;
-    }
-
-    if (!cameraGranted && camStatus != PermissionStatus.permanentlyDenied) {
-      camStatus = await Permission.camera.request();
-      cameraGranted = camStatus.isGranted;
-    }
-
-    // 4. Опционально: уведомления (тихий запрос)
+    // Запрашиваем уведомления
     PermissionStatus notifStatus = await Permission.notification.status;
-    if (!notifStatus.isGranted && notifStatus != PermissionStatus.permanentlyDenied) {
+    if (notifStatus.isDenied) {
       await Permission.notification.request();
     }
-
-    // 5. Показываем диалог, если критические права всё еще отсутствуют
-    if (!locationGranted && mounted) {
-      await _showForcePermissionDialog(isLocation: true);
-    } else if (!cameraGranted && mounted) {
-      await _showForcePermissionDialog(isLocation: false);
-    }
-  }
-
-  Future<void> _showForcePermissionDialog({required bool isLocation}) async {
-    if (!mounted || _isDialogShowing) return;
-    
-    _isDialogShowing = true;
-    await showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Row(
-          children: [
-            Icon(isLocation ? Icons.location_on : Icons.camera_alt, 
-                 color: Colors.green, size: 28),
-            const SizedBox(width: 12),
-            const Text('Разрешение'),
-          ],
-        ),
-        content: Text(
-          isLocation
-            ? 'Для работы приложения и отображения самокатов рядом необходим доступ к геопозиции. Пожалуйста, разрешите доступ в настройках.'
-            : 'Для верификации селфи необходим доступ к камере. Пожалуйста, разрешите доступ в настройках.',
-          style: const TextStyle(fontSize: 15, height: 1.4),
-        ),
-        actionsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setInt('last_permission_nag_time',
-                  DateTime.now().millisecondsSinceEpoch);
-              if (ctx.mounted) {
-                Navigator.of(ctx).pop();
-              }
-            },
-            child: Text('Позже', style: TextStyle(color: Colors.grey[600])),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await openAppSettings();
-              // Мы не закрываем диалог сами, он закроется автоматически в didChangeAppLifecycleState
-              // когда пользователь вернется и права будут выданы.
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text('В настройки'),
-          ),
-        ],
-      ),
-    ).then((_) {
-      _isDialogShowing = false;
-    });
   }
 
   @override

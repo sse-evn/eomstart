@@ -96,7 +96,7 @@ class SlotCard extends StatelessWidget {
     final minutes = duration.inMinutes.remainder(60);
     final durationStr = '$hoursч $minutesм';
 
-    final breakTime = BreakTimeUtils.getCurrentBreakTime();
+    final breakTime = BreakTimeUtils.getCurrentBreakTime(activeShift.zone);
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -155,14 +155,14 @@ class SlotCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          _buildBreakStatusUI(theme, isDarkMode),
+          _buildBreakStatusUI(activeShift.zone, theme, isDarkMode),
         ],
       ),
     );
   }
 
-  Widget _buildBreakStatusUI(ThemeData theme, bool isDarkMode) {
-    final status = BreakTimeUtils.getBreakStatus();
+  Widget _buildBreakStatusUI(String zone, ThemeData theme, bool isDarkMode) {
+    final status = BreakTimeUtils.getBreakStatus(zone);
     final bool isInside = status['isInside'] == true;
     final String label = status['label'] ?? '';
     final String range = status['range'] ?? '';

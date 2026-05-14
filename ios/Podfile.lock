@@ -1,4 +1,6 @@
 PODS:
+  - app_tracking_transparency (0.0.1):
+    - Flutter
   - audioplayers_darwin (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -155,6 +157,7 @@ PODS:
     - FlutterMacOS
 
 DEPENDENCIES:
+  - app_tracking_transparency (from `.symlinks/plugins/app_tracking_transparency/ios`)
   - audioplayers_darwin (from `.symlinks/plugins/audioplayers_darwin/darwin`)
   - battery_plus (from `.symlinks/plugins/battery_plus/ios`)
   - camera_avfoundation (from `.symlinks/plugins/camera_avfoundation/ios`)
@@ -201,6 +204,8 @@ SPEC REPOS:
     - SwiftyGif
 
 EXTERNAL SOURCES:
+  app_tracking_transparency:
+    :path: ".symlinks/plugins/app_tracking_transparency/ios"
   audioplayers_darwin:
     :path: ".symlinks/plugins/audioplayers_darwin/darwin"
   battery_plus:
@@ -249,6 +254,7 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/webview_flutter_wkwebview/darwin"
 
 SPEC CHECKSUMS:
+  app_tracking_transparency: 3d84f147f67ca82d3c15355c36b1fa6b66ca7c92
   audioplayers_darwin: 835ced6edd4c9fc8ebb0a7cc9e294a91d99917d5
   battery_plus: 1f754123913841c027a12384d25b1463d113aae7
   camera_avfoundation: be3be85408cd4126f250386828e9b1dfa40ab436
@@ -291,6 +297,6 @@ SPEC CHECKSUMS:
   url_launcher_ios: 694010445543906933d732453a59da0a173ae33d
   webview_flutter_wkwebview: 1821ceac936eba6f7984d89a9f3bcb4dea99ebb2
 
-PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e
+PODFILE CHECKSUM: 251cb053df7158f337c0712f2ab29f4e0fa474ce
 
 COCOAPODS: 1.16.2
