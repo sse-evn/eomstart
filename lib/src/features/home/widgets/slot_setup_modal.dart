@@ -14,6 +14,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:micro_mobility_app/src/features/home/bloc/shift_bloc.dart';
 import 'package:micro_mobility_app/src/features/home/bloc/shift_event.dart';
 import 'package:micro_mobility_app/src/features/home/bloc/shift_state.dart';
+import 'package:micro_mobility_app/src/features/qr_scanner_screen/custom_camera_screen.dart';
 
 class SlotSetupModal extends StatefulWidget {
   const SlotSetupModal({super.key});
@@ -128,13 +129,15 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   Future<void> _takeSelfie() async {
     if (_isLoading) return;
     try {
-      final image = await _picker.pickImage(
-        source: ImageSource.camera, 
-        preferredCameraDevice: CameraDevice.front,
-        maxWidth: 800, 
-        imageQuality: 80
+      final String? photoPath = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const CustomCameraScreen(
+            overlayType: CameraOverlayType.helmetSelfie,
+          ),
+        ),
       );
-      if (image != null && mounted) setState(() => _selfie = image);
+      if (photoPath != null && mounted) setState(() => _selfie = XFile(photoPath));
     } catch (e) {
       if (mounted) _showError('Не удалось открыть камеру');
     }

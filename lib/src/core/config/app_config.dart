@@ -62,7 +62,8 @@ class AppConfig {
       '$backendHost/uploads/app/app-release.apk';
 
   static String get promoApplyUrl => '$apiBaseUrl/promo/apply';
-  static String get iosAppUrl => '$backendHost/app/your-app';
+  static const String iosAppId = '6761343473';
+  static String get iosAppUrl => 'https://apps.apple.com/us/app/eom-start/id$iosAppId';
 
   static final String geoTrackUrl = '$apiBaseUrl/geo';
   static final String lastLocationsUrl = '$apiBaseUrl/last';

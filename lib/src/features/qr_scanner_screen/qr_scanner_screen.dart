@@ -1,11 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/src/core/providers/shift_provider.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'report_photos_screen.dart';
 
@@ -24,6 +25,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   );
 
   List<String> _scannedNumbers = [];
+  Map<String, int> _competitorCounts = {
+    'Yandex': 0,
+    'Jet': 0,
+    'Whoosh': 0,
+    'Bolt': 0,
+  };
   String _scanStatus = 'Ожидание сканирования...';
   Color _scanStatusColor = Colors.blueAccent;
   String? _lastScannedCode;
@@ -46,12 +53,22 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _scannedNumbers = prefs.getStringList('scooterScannedNumbers') ?? [];
+      final compStr = prefs.getString('scooterCompetitorCounts');
+      if (compStr != null) {
+        try {
+          final Map<String, dynamic> decoded = jsonDecode(compStr);
+          _competitorCounts =
+              decoded.map((key, value) => MapEntry(key, value as int));
+        } catch (_) {}
+      }
     });
   }
 
   Future<void> _saveScannedNumbers() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('scooterScannedNumbers', _scannedNumbers);
+    await prefs.setString(
+        'scooterCompetitorCounts', jsonEncode(_competitorCounts));
   }
 
   String _extractNumberFromLink(String link) {
@@ -135,6 +152,69 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     );
   }
 
+  void _showCompetitorsDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Количество'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: _competitorCounts.keys.map((key) {
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(key, style: const TextStyle(fontSize: 16)),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove, color: Colors.red),
+                            onPressed: () {
+                              if (_competitorCounts[key]! > 0) {
+                                setStateDialog(() {
+                                  _competitorCounts[key] =
+                                      _competitorCounts[key]! - 1;
+                                });
+                              }
+                            },
+                          ),
+                          Text('${_competitorCounts[key]}',
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold)),
+                          IconButton(
+                            icon: const Icon(Icons.add, color: Colors.green),
+                            onPressed: () {
+                              setStateDialog(() {
+                                _competitorCounts[key] =
+                                    _competitorCounts[key]! + 1;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    setState(() {});
+                    _saveScannedNumbers();
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Готово'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _addScannedNumber(String rawCode) {
     final cleanedNumber = _extractNumberFromLink(rawCode);
 
@@ -177,8 +257,16 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   void _copyAllNumbers() {
-    if (_scannedNumbers.isEmpty) return;
-    final allNumbersText = _scannedNumbers.join('\n');
+    final hasCounts = _competitorCounts.values.any((v) => v > 0);
+    if (_scannedNumbers.isEmpty && !hasCounts) return;
+
+    final List<String> allLines = [];
+    if (_scannedNumbers.isNotEmpty) allLines.addAll(_scannedNumbers);
+    _competitorCounts.forEach((key, value) {
+      if (value > 0) allLines.add('$key: $value');
+    });
+
+    final allNumbersText = allLines.join('\n');
     Clipboard.setData(ClipboardData(text: allNumbersText));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Все номера скопированы')),
@@ -210,6 +298,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     if (confirmClear == true) {
       setState(() {
         _scannedNumbers.clear();
+        _competitorCounts.updateAll((key, value) => 0);
         _scanStatus = 'Список очищен';
         _scanStatusColor = Colors.grey;
       });
@@ -218,10 +307,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   void _goNext() {
-    if (_scannedNumbers.isEmpty) {
+    final hasCounts = _competitorCounts.values.any((v) => v > 0);
+    if (_scannedNumbers.isEmpty && !hasCounts) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Сначала отсканируй хотя бы один самокат')),
+            content:
+                Text('Сначала отсканируй или добавь хотя бы один самокат')),
       );
       return;
     }
@@ -233,15 +324,19 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final username = profile['username'];
     final telegramId = profile['telegram_id'];
 
-    final employeeName = firstName?.toString() ?? username?.toString() ?? 'Пользователь';
+    final employeeName =
+        firstName?.toString() ?? username?.toString() ?? 'Пользователь';
     final String? employeeUsername = username?.toString();
-    final int? employeeTelegramId = (telegramId is int) ? telegramId : int.tryParse(telegramId?.toString() ?? '');
+    final int? employeeTelegramId = (telegramId is int)
+        ? telegramId
+        : int.tryParse(telegramId?.toString() ?? '');
 
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ReportPhotosScreen(
           scooterNumbers: List<String>.from(_scannedNumbers),
+          competitorCounts: Map<String, int>.from(_competitorCounts),
           employeeName: employeeName,
           employeeUsername: employeeUsername,
           employeeTelegramId: employeeTelegramId,
@@ -249,7 +344,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       ),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -324,30 +418,55 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                                             ? Icons.flashlight_off_rounded
                                             : Icons.flashlight_on_rounded,
                                         color: Colors.white,
+                                        size: 18,
                                       );
                                     },
                                   ),
                                   label: const Text(
                                     'Фонарик',
-                                    style: TextStyle(color: Colors.white),
+                                    style: TextStyle(
+                                        color: Colors.white, fontSize: 11),
                                   ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.orange,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 2),
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              // const SizedBox(width: 4),
+                              // Expanded(
+                              //   child: ElevatedButton.icon(
+                              //     onPressed: _addNumberManually,
+                              //     icon: const Icon(Icons.edit,
+                              //         color: Colors.white, size: 18),
+                              //     label: const Text(
+                              //       'Вручную',
+                              //       style: TextStyle(color: Colors.white, fontSize: 11),
+                              //     ),
+                              //     style: ElevatedButton.styleFrom(
+                              //       backgroundColor: Colors.blue,
+                              //       padding: const EdgeInsets.symmetric(horizontal: 2),
+                              //     ),
+                              //   ),
+                              // ),
+                              const SizedBox(width: 4),
                               Expanded(
                                 child: ElevatedButton.icon(
-                                  onPressed: _addNumberManually,
-                                  icon: const Icon(Icons.edit,
-                                      color: Colors.white),
+                                  onPressed: _showCompetitorsDialog,
+                                  icon: const Icon(Icons.electric_scooter,
+                                      color: Colors.white, size: 18),
                                   label: const Text(
-                                    'Вручную',
-                                    style: TextStyle(color: Colors.white),
+                                    'Количество',
+                                    style: TextStyle(
+                                        color: Colors.white, fontSize: 11),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue,
+                                    backgroundColor: Colors.purple,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 2),
                                   ),
                                 ),
                               ),
@@ -361,9 +480,10 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                       padding: const EdgeInsets.only(left: 8.0),
                       child: Text(
                         'Шаг 2: Проверьте список самокатов',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                       ),
                     ),
                     Container(
@@ -376,7 +496,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                       child: Column(
                         children: [
                           Text(
-                            'Всего: ${_scannedNumbers.length}',
+                            'Всего: ${_scannedNumbers.length + _competitorCounts.values.fold(0, (sum, v) => sum + v)}',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -385,30 +505,54 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                           const SizedBox(height: 10),
                           SizedBox(
                             height: 180,
-                            child: _scannedNumbers.isEmpty
-                                ? const Center(
-                                    child: Text(
-                                      'Список пуст. Отсканируй или добавь вручную.',
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    itemCount: _scannedNumbers.length,
-                                    itemBuilder: (context, index) {
-                                      final number = _scannedNumbers[index];
-                                      return Card(
-                                        child: ListTile(
-                                          title: Text(number),
-                                          trailing: IconButton(
-                                            icon: const Icon(Icons.close,
-                                                color: Colors.red),
-                                            onPressed: () =>
-                                                _removeScannedNumber(index),
-                                          ),
-                                        ),
-                                      );
-                                    },
+                            child: Builder(builder: (context) {
+                              final List<String> displayItems =
+                                  List.from(_scannedNumbers);
+                              _competitorCounts.forEach((key, value) {
+                                if (value > 0) {
+                                  displayItems.add('$key: $value');
+                                }
+                              });
+
+                              if (displayItems.isEmpty) {
+                                return const Center(
+                                  child: Text(
+                                    'Список пуст. Отсканируй или добавь вручную.',
+                                    textAlign: TextAlign.center,
                                   ),
+                                );
+                              }
+
+                              return ListView.builder(
+                                itemCount: displayItems.length,
+                                itemBuilder: (context, index) {
+                                  final item = displayItems[index];
+                                  final isScanned =
+                                      index < _scannedNumbers.length;
+
+                                  return Card(
+                                    child: ListTile(
+                                      title: Text(item),
+                                      trailing: IconButton(
+                                        icon: const Icon(Icons.close,
+                                            color: Colors.red),
+                                        onPressed: () {
+                                          if (isScanned) {
+                                            _removeScannedNumber(index);
+                                          } else {
+                                            final key = item.split(':')[0];
+                                            setState(() {
+                                              _competitorCounts[key] = 0;
+                                            });
+                                            _saveScannedNumbers();
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            }),
                           ),
                           const SizedBox(height: 12),
                           Row(

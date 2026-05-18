@@ -1,6 +1,9 @@
 // lib/screens/profile_screen.dart
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
+
+import 'package:http/http.dart' as http;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -232,15 +235,65 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
 
   Future<bool> _checkServerForUpdate(String currentVersion) async {
     try {
-      final token = await _storage.read(key: 'jwt_token');
-      if (token != null) {
-        // TODO: запросите актуальную версию с вашего API и сравните
+      if (Platform.isIOS) {
+        // iTunes Lookup API — получаем актуальную версию из App Store
+        final response = await http.get(
+          Uri.parse(
+              'https://itunes.apple.com/lookup?id=${AppConfig.iosAppId}&country=us'),
+        ).timeout(const Duration(seconds: 8));
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final results = data['results'] as List?;
+          if (results != null && results.isNotEmpty) {
+            final storeVersion = results[0]['version'] as String?;
+            if (storeVersion != null) {
+              return _isNewerVersion(storeVersion, currentVersion);
+            }
+          }
+        }
+      } else if (Platform.isAndroid) {
+        // Для Android пробуем запросить актуальную версию с бэкенда
+        try {
+          final token = await _storage.read(key: 'jwt_token');
+          final response = await http.get(
+            Uri.parse('${AppConfig.backendHost}/uploads/app/version.txt'),
+            headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+          ).timeout(const Duration(seconds: 5));
+
+          if (response.statusCode == 200) {
+            final serverVersion = response.body.trim();
+            return _isNewerVersion(serverVersion, currentVersion);
+          }
+        } catch (_) {
+          // Если нет эндпоинта версии — не показываем ошибку,
+          // но предлагаем скачать APK (считаем что есть обновление)
+          return false;
+        }
       }
     } catch (e) {
       debugPrint('Ошибка проверки версии: $e');
     }
     return false;
   }
+
+  /// Сравнивает версии формата "1.2.3"
+  bool _isNewerVersion(String serverVersion, String currentVersion) {
+    try {
+      final cleanServer = serverVersion.split('+')[0];
+      final cleanCurrent = currentVersion.split('+')[0];
+      final server = cleanServer.split('.').map(int.parse).toList();
+      final current = cleanCurrent.split('.').map(int.parse).toList();
+      for (int i = 0; i < server.length && i < current.length; i++) {
+        if (server[i] > current[i]) return true;
+        if (server[i] < current[i]) return false;
+      }
+      return server.length > current.length;
+    } catch (_) {
+      return false;
+    }
+  }
+
 
   void _showUpdateDialog(String currentVersion) {
     showDialog(

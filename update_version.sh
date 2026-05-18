@@ -58,10 +58,34 @@ flutter clean
 flutter build apk --release   # Android
 # flutter build ios --release  # iOS на macOS
 
+# --- ДЕПЛОЙ НА СЕРВЕР ---
+SSH_TARGET="eom1"
+REMOTE_DIR="/home/eom/eom_backendl/uploads/app"
+APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
+
+echo "🚀 Отправка APK на сервер $SSH_TARGET..."
+if [ -f "$APK_PATH" ]; then
+    # Создаем директорию на сервере если ее вдруг нет
+    ssh "$SSH_TARGET" "mkdir -p $REMOTE_DIR"
+    
+    # Отправляем сам файл APK
+    scp "$APK_PATH" "$SSH_TARGET:$REMOTE_DIR/app-release.apk"
+    
+    # Обновляем version.txt на сервере
+    ssh "$SSH_TARGET" "echo -n '$NEW_VERSION' > $REMOTE_DIR/version.txt"
+    
+    echo "✅ APK успешно загружен на сервер!"
+    echo "🌐 Ссылка: https://start.eom.kz/uploads/app/app-release.apk"
+else
+    echo "❌ Ошибка: Сборка провалилась, файл APK не найден ($APK_PATH)"
+    exit 1
+fi
+# ------------------------
+
 # Создаём git tag для версии
 git add $PUBSPEC_FILE
 git commit -m "Обновление версии до $NEW_VERSION"
 git tag "v$NEW_VERSION"
 git push origin --tags
 
-echo "Сборка завершена. Новая версия: $NEW_VERSION"
+echo "Сборка и деплой завершены. Новая версия: $NEW_VERSION"
