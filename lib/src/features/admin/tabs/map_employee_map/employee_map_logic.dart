@@ -311,8 +311,8 @@ class EmployeeMapLogic {
 
   void startLiveTracking() {
     stopLiveTracking();
-    // Интервал сокращен до 10 секунд для "железнобетонного" мониторинга
-    _liveTrackingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    // Интервал для эффекта Zenly/2GIS: каждые 3 секунды
+    _liveTrackingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (_disposed) return;
       fetchEmployeeLocations();
     });

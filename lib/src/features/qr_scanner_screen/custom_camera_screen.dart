@@ -148,7 +148,27 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
         child: Stack(
           children: [
             Positioned.fill(
-              child: CameraPreview(_controller!),
+              child: ClipRect(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isPortrait = constraints.maxHeight > constraints.maxWidth;
+                    final effectiveRatio = isPortrait
+                        ? (1 / _controller!.value.aspectRatio)
+                        : _controller!.value.aspectRatio;
+                    final screenRatio = constraints.maxWidth / constraints.maxHeight;
+                    final scale = screenRatio > effectiveRatio
+                        ? screenRatio / effectiveRatio
+                        : effectiveRatio / screenRatio;
+
+                    return Transform.scale(
+                      scale: scale,
+                      child: Center(
+                        child: CameraPreview(_controller!),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
             if (widget.overlayType == CameraOverlayType.landscape)
               Positioned.fill(

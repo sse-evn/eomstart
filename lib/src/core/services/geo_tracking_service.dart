@@ -72,12 +72,12 @@ FutureOr<bool> onStart(ServiceInstance service) async {
 
   // Запускаем таймер сбора данных
   _backgroundTimer = Timer.periodic(
-      const Duration(seconds: 45), (timer) async {
+      const Duration(seconds: 5), (timer) async {
          await _collectAndAttemptToSendGeoData(timer);
          if (service is AndroidServiceInstance) {
            service.setForegroundNotificationInfo(
              title: "Микромобильность",
-             content: "Геопозиция обновлена: ${DateTime.now().hour}:${DateTime.now().minute}",
+             content: "Геопозиция обновлена: ${DateTime.now().hour}:${DateTime.now().minute}:${DateTime.now().second}",
            );
          }
       });
@@ -122,12 +122,11 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
     int batteryLevel;
 
     try {
-      // Пытаемся получить максимально точную позицию
       position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.best,
           distanceFilter: 0, // Собираем даже малые перемещения для "четкости"
-          timeLimit: Duration(seconds: 15),
+          timeLimit: Duration(seconds: 4),
         ),
       );
     } catch (e) {

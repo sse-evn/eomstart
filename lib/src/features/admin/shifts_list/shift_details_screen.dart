@@ -173,6 +173,20 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
                 Text(widget.shift.username, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 Text('${widget.shift.position} • ${widget.shift.zone}', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                if (widget.shift.slotTimeRange.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Смена: ${widget.shift.slotTimeRange}',
+                      style: TextStyle(color: colorScheme.primary, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -207,6 +221,10 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
       ),
       child: Column(
         children: [
+          _buildTimeRow(Icons.schedule, 'График', 
+              widget.shift.slotTimeRange.isNotEmpty ? widget.shift.slotTimeRange : 'Не указан', 
+              'Тип смены', Colors.blue),
+          const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider()),
           _buildTimeRow(Icons.play_circle_outline, 'Начало', 
               extractTimeFromIsoString(widget.shift.startTimeString), 
               extractDateFromIsoString(widget.shift.startTimeString), theme.colorScheme.primary),
