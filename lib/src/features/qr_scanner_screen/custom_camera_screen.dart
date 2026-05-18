@@ -72,6 +72,16 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
         return;
       }
 
+      try {
+        if (widget.overlayType == CameraOverlayType.landscape) {
+          await controller.lockCaptureOrientation(DeviceOrientation.landscapeLeft);
+        } else if (widget.overlayType == CameraOverlayType.helmetSelfie) {
+          await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+        }
+      } catch (e) {
+        debugPrint('Error locking capture orientation: $e');
+      }
+
       if (mounted) {
         setState(() {
           _controller = controller;
@@ -151,14 +161,12 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
               child: ClipRect(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final isPortrait = constraints.maxHeight > constraints.maxWidth;
-                    final effectiveRatio = isPortrait
-                        ? (1 / _controller!.value.aspectRatio)
-                        : _controller!.value.aspectRatio;
                     final screenRatio = constraints.maxWidth / constraints.maxHeight;
-                    final scale = screenRatio > effectiveRatio
-                        ? screenRatio / effectiveRatio
-                        : effectiveRatio / screenRatio;
+                    final cameraRatio = _controller!.value.aspectRatio;
+                    double scale = screenRatio / cameraRatio;
+                    if (scale < 1.0) {
+                      scale = 1.0 / scale;
+                    }
 
                     return Transform.scale(
                       scale: scale,
@@ -292,6 +300,7 @@ class LandscapeOverlayPainter extends CustomPainter {
     canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(16)), borderPaint);
   }
 
+  @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
