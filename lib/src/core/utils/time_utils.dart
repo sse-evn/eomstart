@@ -45,13 +45,13 @@ class BreakTimeUtils {
   }
 
   static final List<Map<String, String>> _evenZoneBreaks = [
-    {'start': '10:00', 'end': '10:40', 'label': 'Утренний перерыв 1'},
-    {'start': '19:00', 'end': '19:40', 'label': 'Вечерний перерыв 1'},
+    {'start': '10:00', 'end': '10:40', 'label': 'Утренний перерыв 2'},
+    {'start': '19:00', 'end': '19:40', 'label': 'Вечерний перерыв 2'},
   ];
 
   static final List<Map<String, String>> _oddZoneBreaks = [
-    {'start': '10:40', 'end': '11:20', 'label': 'Утренний перерыв 2'},
-    {'start': '19:40', 'end': '20:20', 'label': 'Вечерний перерыв 2'},
+    {'start': '10:40', 'end': '11:20', 'label': 'Утренний перерыв 1'},
+    {'start': '19:40', 'end': '20:20', 'label': 'Вечерний перерыв 1'},
   ];
 
   static Map<String, dynamic> getBreakStatus(String? zone) {
@@ -64,10 +64,12 @@ class BreakTimeUtils {
     for (var b in breaks) {
       final startParts = b['start']!.split(':');
       final endParts = b['end']!.split(':');
-      final startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+      final startMinutes =
+          int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
       final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
 
-      if (currentTimeMinutes >= startMinutes && currentTimeMinutes < endMinutes) {
+      if (currentTimeMinutes >= startMinutes &&
+          currentTimeMinutes < endMinutes) {
         return {
           'isInside': true,
           'label': b['label'],
@@ -80,7 +82,8 @@ class BreakTimeUtils {
     // Find next break
     for (var b in breaks) {
       final startParts = b['start']!.split(':');
-      final startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+      final startMinutes =
+          int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
       if (startMinutes > currentTimeMinutes) {
         return {
           'isInside': false,
@@ -106,7 +109,8 @@ class BreakTimeUtils {
     return ''; // Возвращаем пустоту, если сейчас не время перерыва
   }
 
-  static DateTime? getSlotEndTime(String slotRange, {DateTime? shiftStartTime}) {
+  static DateTime? getSlotEndTime(String slotRange,
+      {DateTime? shiftStartTime}) {
     if (slotRange.isEmpty || !slotRange.contains('-')) return null;
     try {
       final parts = slotRange.split('-');
@@ -114,25 +118,27 @@ class BreakTimeUtils {
       final endTimeToken = parts[1].trim();
       final timeParts = endTimeToken.split(':');
       if (timeParts.length < 2) return null;
-      
+
       final hour = int.parse(timeParts[0]);
       final minute = int.parse(timeParts[1]);
-      
+
       // Используем дату начала смены как базу
       final baseDate = shiftStartTime ?? DateTime.now();
-      var end = DateTime(baseDate.year, baseDate.month, baseDate.day, hour, minute);
-      
+      var end =
+          DateTime(baseDate.year, baseDate.month, baseDate.day, hour, minute);
+
       final startTimeToken = parts[0].trim();
       final startTimeParts = startTimeToken.split(':');
       final startHour = int.parse(startTimeParts[0]);
       final startMinute = int.parse(startTimeParts[1]);
-      final start = DateTime(baseDate.year, baseDate.month, baseDate.day, startHour, startMinute);
-      
+      final start = DateTime(
+          baseDate.year, baseDate.month, baseDate.day, startHour, startMinute);
+
       if (end.isBefore(start)) {
         // Слот переходит через полночь
         end = end.add(const Duration(days: 1));
       }
-      
+
       return end;
     } catch (e) {
       return null;
