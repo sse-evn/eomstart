@@ -313,49 +313,56 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
             child: _buildDateSelector(),
           ),
           DraggableScrollableSheet(
-            initialChildSize: 0.12,
-            minChildSize: 0.08,
-            maxChildSize: 0.6,
+            initialChildSize: 0.20,
+            minChildSize: 0.15,
+            maxChildSize: 0.75,
             builder: (context, scrollController) {
-              return Container(
-                decoration: BoxDecoration(
-                  color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2))),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _logic.isHistoryMode
-                                ? 'Архив смен (${_logic.historyShifts.length})'
-                                : 'Сотрудники (${_logic.employeeLocations.length})',
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-                          ),
-                          if (!_logic.isHistoryMode)
-                            TextButton(
-                              onPressed: _logic.fetchEmployeeLocations,
-                              child: const Text('Обновить', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final showHeader = constraints.maxHeight > 80;
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 12),
+                        Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2))),
+                        if (showHeader) ...[
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _logic.isHistoryMode
+                                      ? 'Архив смен (${_logic.historyShifts.length})'
+                                      : 'Сотрудники (${_logic.employeeLocations.length})',
+                                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                                ),
+                                if (!_logic.isHistoryMode)
+                                  TextButton(
+                                    onPressed: _logic.fetchEmployeeLocations,
+                                    child: const Text('Обновить', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                                  ),
+                              ],
                             ),
+                          ),
                         ],
-                      ),
+                        Expanded(
+                          child: _logic.isHistoryMode
+                              ? _buildHistoryList(scrollController, isDarkMode)
+                              : _buildLiveList(scrollController, isDarkMode),
+                        ),
+                      ],
                     ),
-                    Expanded(
-                      child: _logic.isHistoryMode
-                          ? _buildHistoryList(scrollController, isDarkMode)
-                          : _buildLiveList(scrollController, isDarkMode),
-                    ),
-                  ],
-                ),
+                  );
+                },
               );
             },
           ),
