@@ -236,21 +236,36 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
   Future<bool> _checkServerForUpdate(String currentVersion) async {
     try {
       if (Platform.isIOS) {
-        // iTunes Lookup API — получаем актуальную версию из App Store
-        final response = await http.get(
-          Uri.parse(
-              'https://itunes.apple.com/lookup?id=${AppConfig.iosAppId}&country=us'),
-        ).timeout(const Duration(seconds: 8));
+        // Так как приложение скрыто (unlisted) в App Store, iTunes Lookup API всегда возвращает пустые результаты.
+        // Поэтому мы проверяем версию исключительно через наш собственный защищенный бэкенд.
+        try {
+          final token = await _storage.read(key: 'jwt_token');
+          String? serverVersion;
 
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final results = data['results'] as List?;
-          if (results != null && results.isNotEmpty) {
-            final storeVersion = results[0]['version'] as String?;
-            if (storeVersion != null) {
-              return _isNewerVersion(storeVersion, currentVersion);
+          // 1. Проверяем специализированный файл версии для iOS
+          final iosResponse = await http.get(
+            Uri.parse('${AppConfig.backendHost}/uploads/app/version_ios.txt'),
+            headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+          ).timeout(const Duration(seconds: 5));
+
+          if (iosResponse.statusCode == 200) {
+            serverVersion = iosResponse.body.trim();
+          } else {
+            // 2. Если его нет, используем общий version.txt
+            final generalResponse = await http.get(
+              Uri.parse('${AppConfig.backendHost}/uploads/app/version.txt'),
+              headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+            ).timeout(const Duration(seconds: 5));
+            if (generalResponse.statusCode == 200) {
+              serverVersion = generalResponse.body.trim();
             }
           }
+
+          if (serverVersion != null && serverVersion.isNotEmpty) {
+            return _isNewerVersion(serverVersion, currentVersion);
+          }
+        } catch (e) {
+          debugPrint('Ошибка проверки версии iOS на бэкенде: $e');
         }
       } else if (Platform.isAndroid) {
         // Для Android пробуем запросить актуальную версию с бэкенда
@@ -335,7 +350,10 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
       }
 
       if (await canLaunchUrl(Uri.parse(downloadUrl))) {
-        await launchUrl(Uri.parse(downloadUrl));
+        await launchUrl(
+          Uri.parse(downloadUrl),
+          mode: LaunchMode.externalApplication,
+        );
       } else {
         throw 'Не удалось открыть ссылку для загрузки';
       }

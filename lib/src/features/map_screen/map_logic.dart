@@ -1,19 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_geojson/flutter_map_geojson.dart';
+import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:micro_mobility_app/src/core/config/app_config.dart' show AppConfig;
-import 'package:path_provider/path_provider.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:flutter_map_geojson/flutter_map_geojson.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
-import '../../core/services/api_service.dart';
+import 'package:micro_mobility_app/src/core/config/app_config.dart'
+    show AppConfig;
+import 'package:path_provider/path_provider.dart';
 
+import '../../core/services/api_service.dart';
 
 class MapLogic {
   final BuildContext context;
@@ -43,7 +45,7 @@ class MapLogic {
   final bool _tilesPrefetched = false;
 
   String? currentUserAvatarUrl;
-  
+
   /// Хранилище свойств полигонов (зон), так как GeoJsonParser 1.0.8 не отдает их напрямую
   final List<Map<String, dynamic>> _polygonProperties = [];
 
@@ -54,7 +56,7 @@ class MapLogic {
 
   MapLogic(this.context, {String? initialAvatarUrl}) {
     mapController = MapController();
-    
+
     // Настраиваем кастомный билдер маркеров для зон
     geoJsonParser.markerCreationCallback = _customMarkerBuilder;
 
@@ -69,18 +71,18 @@ class MapLogic {
         borderStrokeWidth: 2.0,
       );
     };
-    
+
     if (initialAvatarUrl != null) {
       updateAvatarUrl(initialAvatarUrl);
     }
   }
 
   Marker _customMarkerBuilder(LatLng point, Map<String, dynamic> properties) {
-    String label = properties['description']?.toString() ?? 
-                   properties['iconContent']?.toString() ?? 
-                   properties['name']?.toString() ??
-                   '';
-                 
+    String label = properties['description']?.toString() ??
+        properties['iconContent']?.toString() ??
+        properties['name']?.toString() ??
+        '';
+
     // Если это "ГРАНИЦА", рисуем маленькую точку без текста
     if (label.toUpperCase() == 'ГРАНИЦА') {
       return Marker(
@@ -141,15 +143,15 @@ class MapLogic {
 
   void updateAvatarUrl(String url) {
     if (url.isEmpty) return;
-    
+
     if (url.startsWith('http')) {
       currentUserAvatarUrl = url;
     } else {
       final baseUrl = AppConfig.mediaBaseUrl;
       // Убираем лишние слеши при конкатенации
       final cleanUrl = url.startsWith('/') ? url : '/$url';
-      currentUserAvatarUrl = baseUrl.endsWith('/') 
-          ? '$baseUrl${cleanUrl.substring(1)}' 
+      currentUserAvatarUrl = baseUrl.endsWith('/')
+          ? '$baseUrl${cleanUrl.substring(1)}'
           : '$baseUrl$cleanUrl';
     }
     _notify();
@@ -211,7 +213,7 @@ class MapLogic {
         _loadSavedMapId(),
         _loadAvailableMaps(),
       ]);
-      
+
       await _loadAndParseGeoJson();
     } catch (e) {
       _showErrorSnackBar('Ошибка инициализации: $e');
@@ -260,7 +262,7 @@ class MapLogic {
       if (token == null) return;
 
       final locations = await _apiService.getLastLocations(token);
-      
+
       // Исключаем себя из списка "других", если хотим (но на бэкенде это обычно все активные)
       // Для простоты оставим всех, в UI отфильтруем или покажем как есть
       otherScoutsLocations = locations;
@@ -283,8 +285,12 @@ class MapLogic {
 
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if (isManual) _showErrorSnackBar('Включите GPS для определения местоположения');
-        if (isManual) { isLocating = false; _notify(); }
+        if (isManual)
+          _showErrorSnackBar('Включите GPS для определения местоположения');
+        if (isManual) {
+          isLocating = false;
+          _notify();
+        }
         return;
       }
 
@@ -292,8 +298,12 @@ class MapLogic {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          if (isManual) _showErrorSnackBar('Нет разрешения на доступ к геопозиции');
-          if (isManual) { isLocating = false; _notify(); }
+          if (isManual)
+            _showErrorSnackBar('Нет разрешения на доступ к геопозиции');
+          if (isManual) {
+            isLocating = false;
+            _notify();
+          }
           return;
         }
       }
@@ -303,7 +313,8 @@ class MapLogic {
       if (lastPosition != null) {
         currentLocation = LatLng(lastPosition.latitude, lastPosition.longitude);
         if (_isFirstLocationFix || isManual) {
-          final targetZoom = mapController.camera.zoom > 14 ? mapController.camera.zoom : 16.0;
+          final targetZoom =
+              mapController.camera.zoom > 14 ? mapController.camera.zoom : 16.0;
           mapController.move(currentLocation!, targetZoom);
           if (!isManual) _isFirstLocationFix = false;
         }
@@ -317,10 +328,11 @@ class MapLogic {
           timeLimit: Duration(seconds: 4),
         ),
       );
-      
+
       currentLocation = LatLng(position.latitude, position.longitude);
       if (_isFirstLocationFix || isManual) {
-        final targetZoom = mapController.camera.zoom > 14 ? mapController.camera.zoom : 16.0;
+        final targetZoom =
+            mapController.camera.zoom > 14 ? mapController.camera.zoom : 16.0;
         mapController.move(currentLocation!, targetZoom);
         _isFirstLocationFix = false;
       }
@@ -441,7 +453,8 @@ class MapLogic {
       _notify();
     } catch (e) {
       debugPrint('Ошибка парсинга GeoJSON: $e');
-      _showErrorSnackBar('Не удалось загрузить зоны для этой карты. Попробуйте обновить.');
+      _showErrorSnackBar(
+          'Не удалось загрузить зоны для этой карты. Попробуйте обновить.');
     }
   }
 
@@ -454,7 +467,8 @@ class MapLogic {
         isMapLoadedOffline = true;
         return content;
       } else {
-        debugPrint('⚠️ Кэшированный файл пуст или не в формате JSON. Удаление.');
+        debugPrint(
+            '⚠️ Кэшированный файл пуст или не в формате JSON. Удаление.');
         await localFile.delete();
       }
     }
@@ -599,11 +613,14 @@ class MapLogic {
                   const SizedBox(height: 24),
                   const Text(
                     'Настройки слоев',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white),
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white),
                   ),
                   const SizedBox(height: 12),
                   _buildSwitchTile(
-                    title: 'Запретные зоны',
+                    title: 'Рабочие зоны',
                     subtitle: 'Красные зоны',
                     value: showRestrictedZones,
                     color: Colors.red.withOpacity(0.6),
@@ -628,7 +645,8 @@ class MapLogic {
                     title: 'Ограничения скорости',
                     subtitle: 'Зеленые и желтые зоны',
                     value: showSpeedLimitZones,
-                    gradient: const LinearGradient(colors: [Colors.green, Colors.yellow]),
+                    gradient: const LinearGradient(
+                        colors: [Colors.green, Colors.yellow]),
                     onChanged: (v) {
                       setState(() => showSpeedLimitZones = v);
                       this.showSpeedLimitZones = v;
@@ -666,8 +684,11 @@ class MapLogic {
     required ValueChanged<bool> onChanged,
   }) {
     return SwitchListTile(
-      title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-      subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+      title: Text(title,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+      subtitle: Text(subtitle,
+          style: const TextStyle(color: Colors.white54, fontSize: 12)),
       value: value,
       contentPadding: EdgeInsets.zero,
       onChanged: onChanged,
@@ -733,8 +754,13 @@ class MapLogic {
       LatLng vertJ = vertices[j];
       LatLng vertI = vertices[(j + 1) % vertices.length];
 
-      if (((vertI.latitude > point.latitude) != (vertJ.latitude > point.latitude)) &&
-          (point.longitude < (vertJ.longitude - vertI.longitude) * (point.latitude - vertI.latitude) / (vertJ.latitude - vertI.latitude) + vertI.longitude)) {
+      if (((vertI.latitude > point.latitude) !=
+              (vertJ.latitude > point.latitude)) &&
+          (point.longitude <
+              (vertJ.longitude - vertI.longitude) *
+                      (point.latitude - vertI.latitude) /
+                      (vertJ.latitude - vertI.latitude) +
+                  vertI.longitude)) {
         intersectCount++;
       }
     }
