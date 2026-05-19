@@ -23,6 +23,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
   bool _isCameraInitialized = false;
+  FlashMode _flashMode = FlashMode.off;
 
   @override
   void initState() {
@@ -70,6 +71,12 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
       if (_isDisposed) {
         await controller.dispose();
         return;
+      }
+
+      try {
+        await controller.setFlashMode(_flashMode);
+      } catch (e) {
+        debugPrint('Error setting flash mode: $e');
       }
 
       try {
@@ -125,6 +132,30 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
         break;
       default:
         break;
+    }
+  }
+
+  Future<void> _toggleFlash() async {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    
+    try {
+      FlashMode newMode;
+      if (_flashMode == FlashMode.off) {
+        newMode = FlashMode.always;
+      } else if (_flashMode == FlashMode.always) {
+        newMode = FlashMode.torch;
+      } else {
+        newMode = FlashMode.off;
+      }
+      
+      await _controller!.setFlashMode(newMode);
+      if (mounted) {
+        setState(() {
+          _flashMode = newMode;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error toggling flash: $e');
     }
   }
 
@@ -221,6 +252,23 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
               child: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
                 onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            // Кнопка вспышки
+            Positioned(
+              top: 20,
+              right: 20,
+              child: IconButton(
+                icon: Icon(
+                  _flashMode == FlashMode.off 
+                      ? Icons.flash_off 
+                      : _flashMode == FlashMode.always 
+                          ? Icons.flash_on 
+                          : Icons.highlight, 
+                  color: Colors.white, 
+                  size: 30,
+                ),
+                onPressed: _toggleFlash,
               ),
             ),
             // Кнопка съемки
