@@ -243,11 +243,12 @@ Future<void> _uploadExcel() async {
             ),
             if (dialogBrand == 'YANDEX') ...[
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
+              DropdownButtonFormField<String?>(
                 value: dialogSubtype,
                 items: const [
-                  DropdownMenuItem(value: 'start', child: Text('🔴 Бесплатный старт')),
-                  DropdownMenuItem(value: 'minutes', child: Text('🟢 Бесплатные минуты')),
+                  DropdownMenuItem(value: null, child: Text('⚡️ Автоопределение (Смешанный файл)')),
+                  DropdownMenuItem(value: 'start', child: Text('🔴 Бесплатный старт (начинается с 2)')),
+                  DropdownMenuItem(value: 'minutes', child: Text('🟢 Бесплатные минуты (начинается с 3)')),
                 ],
                 onChanged: (v) => setDialogState(() => dialogSubtype = v),
                 decoration: const InputDecoration(labelText: 'Тип промокода'),
@@ -285,13 +286,6 @@ Future<void> _uploadExcel() async {
           ElevatedButton(
             onPressed: () {
               if (dialogBrand != null && dialogDate != null) {
-                // Для YANDEX обязательно выбрать subtype
-                if (dialogBrand == 'YANDEX' && dialogSubtype == null) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(content: Text('Выберите тип промокода для YANDEX'), backgroundColor: Colors.orange),
-                  );
-                  return;
-                }
                 Navigator.pop(ctx, {
                   'brand': dialogBrand!,
                   'validUntil': dialogDate!.toIso8601String().split('T')[0],
@@ -399,11 +393,12 @@ Future<void> _uploadExcel() async {
                 ),
                 if (dialogBrand == 'YANDEX') ...[
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
+                  DropdownButtonFormField<String?>(
                     value: dialogSubtype,
                     items: const [
-                      DropdownMenuItem(value: 'start', child: Text('🔴 Бесплатный старт')),
-                      DropdownMenuItem(value: 'minutes', child: Text('🟢 Бесплатные минуты')),
+                      DropdownMenuItem(value: null, child: Text('⚡️ Автоопределение (Смешанный файл)')),
+                      DropdownMenuItem(value: 'start', child: Text('🔴 Бесплатный старт (начинается с 2)')),
+                      DropdownMenuItem(value: 'minutes', child: Text('🟢 Бесплатные минуты (начинается с 3)')),
                     ],
                     onChanged: (v) => setDialogState(() => dialogSubtype = v),
                     decoration: const InputDecoration(labelText: 'Тип промокода'),
@@ -441,12 +436,6 @@ Future<void> _uploadExcel() async {
                 if (controller.text.isNotEmpty &&
                     dialogBrand != null &&
                     dialogDate != null) {
-                  if (dialogBrand == 'YANDEX' && dialogSubtype == null) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('Выберите тип промокода для YANDEX'), backgroundColor: Colors.orange),
-                    );
-                    return;
-                  }
                   Navigator.pop(ctx, {
                     'url': controller.text.trim(),
                     'brand': dialogBrand!,

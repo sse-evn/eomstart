@@ -1,19 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart' show MapController, Marker, LatLngBounds, CameraFit;
-import 'package:latlong2/latlong.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
-import 'package:geolocator/geolocator.dart';
-import 'package:micro_mobility_app/src/core/config/app_config.dart' show AppConfig;
-import 'package:micro_mobility_app/src/features/app/models/location.dart';
-import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
-import 'package:micro_mobility_app/src/core/services/api_service.dart';
-import 'package:flutter_map_geojson/flutter_map_geojson.dart';
-import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart'
+    show MapController, Marker, LatLngBounds, CameraFit;
+import 'package:flutter_map_geojson/flutter_map_geojson.dart';
+import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
+import 'package:micro_mobility_app/src/core/config/app_config.dart'
+    show AppConfig;
+import 'package:micro_mobility_app/src/core/services/api_service.dart';
 import 'package:micro_mobility_app/src/features/app/models/active_shift.dart';
+import 'package:micro_mobility_app/src/features/app/models/location.dart';
+import 'package:path_provider/path_provider.dart';
 
 class EmployeeMapLogic {
   LatLng? currentLocation;
@@ -47,8 +50,8 @@ class EmployeeMapLogic {
   bool get isHistoryMode {
     final now = DateTime.now();
     return selectedDate.year != now.year ||
-           selectedDate.month != now.month ||
-           selectedDate.day != now.day;
+        selectedDate.month != now.month ||
+        selectedDate.day != now.day;
   }
 
   final GeoJsonParser geoJsonParser = GeoJsonParser();
@@ -57,7 +60,7 @@ class EmployeeMapLogic {
   bool showParkingZones = true;
   bool showSpeedLimitZones = true;
   bool showMarkers = true; // Для общих маркеров из GeoJSON
-  
+
   Map<String, String> _userNameCache = {};
 
   bool isEmployeeOnline(DateTime? timestamp) {
@@ -73,12 +76,19 @@ class EmployeeMapLogic {
 
   void toggleLayer(String layer) {
     switch (layer) {
-      case 'restricted': showRestrictedZones = !showRestrictedZones; break;
-      case 'boundaries': showBoundaries = !showBoundaries; break;
-      case 'markers': showMarkers = !showMarkers; break;
+      case 'restricted':
+        showRestrictedZones = !showRestrictedZones;
+        break;
+      case 'boundaries':
+        showBoundaries = !showBoundaries;
+        break;
+      case 'markers':
+        showMarkers = !showMarkers;
+        break;
     }
     _notify();
   }
+
   String _formatDateWithTimezone(DateTime dt) {
     final local = dt.toLocal(); // Убедиться что локальная TZ применена
     final offset = local.timeZoneOffset;
@@ -102,10 +112,10 @@ class EmployeeMapLogic {
   }
 
   Marker _customMarkerBuilder(LatLng point, Map<String, dynamic> properties) {
-    String label = properties['description']?.toString() ?? 
-                   properties['iconContent']?.toString() ?? 
-                   '';
-                 
+    String label = properties['description']?.toString() ??
+        properties['iconContent']?.toString() ??
+        '';
+
     // Если это "ГРАНИЦА", рисуем маленькую точку без текста
     if (label.toUpperCase() == 'ГРАНИЦА') {
       return Marker(
@@ -209,7 +219,9 @@ class EmployeeMapLogic {
           final firstName = u['first_name']?.toString();
           final username = u['username']?.toString();
           if (id != null) {
-            cache[id] = (firstName != null && firstName.isNotEmpty) ? firstName : (username ?? 'ID $id');
+            cache[id] = (firstName != null && firstName.isNotEmpty)
+                ? firstName
+                : (username ?? 'ID $id');
           }
         }
       }
@@ -274,7 +286,7 @@ class EmployeeMapLogic {
       if (token == null) return;
 
       final decoded = await _apiService.getLastLocations(token);
-      
+
       employeeLocations = decoded
           .map((item) {
             if (item is! Map<String, dynamic>) return null;
@@ -311,7 +323,8 @@ class EmployeeMapLogic {
           activeEmployeesPaths[userId] = [emp.position];
         } else {
           final lastPoint = path.last;
-          if (lastPoint.latitude != emp.position.latitude || lastPoint.longitude != emp.position.longitude) {
+          if (lastPoint.latitude != emp.position.latitude ||
+              lastPoint.longitude != emp.position.longitude) {
             final updatedPath = List<LatLng>.from(path)..add(emp.position);
             activeEmployeesPaths[userId] = updatedPath;
           }
@@ -339,7 +352,8 @@ class EmployeeMapLogic {
       for (var emp in employeeLocations) {
         final userId = emp.userId;
         try {
-          final points = await _apiService.getLocationHistory(token, userId, fromStr, toStr);
+          final points = await _apiService.getLocationHistory(
+              token, userId, fromStr, toStr);
           if (points.isNotEmpty) {
             final gpsPoints = points
                 .map((item) {
@@ -405,7 +419,7 @@ class EmployeeMapLogic {
 
       // 1. Загружаем завершенные смены
       final ended = await _apiService.getEndedShifts(token);
-      
+
       // 2. Загружаем активные смены (на случай если мы смотрим "сегодня", но через историю)
       final response = await http.get(
         Uri.parse('${AppConfig.apiBaseUrl}/admin/active-shifts'),
@@ -426,13 +440,13 @@ class EmployeeMapLogic {
         final sDate = s.startTime ?? s.endTime;
         if (sDate == null) return false;
         return sDate.year == date.year &&
-               sDate.month == date.month &&
-               sDate.day == date.day;
+            sDate.month == date.month &&
+            sDate.day == date.day;
       }).toList();
 
       // Сортируем по времени начала
-      historyShifts.sort((a, b) => (b.startTime ?? DateTime(0)).compareTo(a.startTime ?? DateTime(0)));
-
+      historyShifts.sort((a, b) =>
+          (b.startTime ?? DateTime(0)).compareTo(a.startTime ?? DateTime(0)));
     } catch (e) {
       debugPrint('Ошибка загрузки смен за дату: $e');
     } finally {
@@ -450,7 +464,7 @@ class EmployeeMapLogic {
         shift.userId.toString(),
         range: DateTimeRange(start: shift.startTime!, end: end),
       );
-      
+
       // Зум на маршрут
       if (selectedEmployeeHistory.isNotEmpty) {
         _zoomToHistoryRoute();
@@ -461,7 +475,7 @@ class EmployeeMapLogic {
 
   void _zoomToHistoryRoute() {
     if (selectedEmployeeHistory.isEmpty) return;
-    
+
     double minLat = selectedEmployeeHistory.first.latitude;
     double maxLat = selectedEmployeeHistory.first.latitude;
     double minLon = selectedEmployeeHistory.first.longitude;
@@ -513,7 +527,8 @@ class EmployeeMapLogic {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) return;
 
-      final points = await _apiService.getLocationHistory(token, userId, fromStr, toStr);
+      final points =
+          await _apiService.getLocationHistory(token, userId, fromStr, toStr);
 
       if (points.isNotEmpty) {
         final gpsPoints = points
