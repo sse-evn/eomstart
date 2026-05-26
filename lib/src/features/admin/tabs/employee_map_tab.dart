@@ -1,13 +1,13 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:micro_mobility_app/src/core/config/app_config.dart';
-import 'package:micro_mobility_app/src/features/app/models/location.dart';
 import 'package:micro_mobility_app/src/core/utils/map_app_constants.dart'
     show AppConstants;
 import 'package:micro_mobility_app/src/features/admin/tabs/map_employee_map/employee_map_logic.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:micro_mobility_app/src/features/app/models/location.dart';
 
 class EmployeeMapTab extends StatefulWidget {
   const EmployeeMapTab({super.key});
@@ -20,6 +20,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     with AutomaticKeepAliveClientMixin {
   late final EmployeeMapLogic _logic;
   bool _disposed = false;
+  late final DraggableScrollableController _sheetController;
 
   @override
   bool get wantKeepAlive => true;
@@ -27,6 +28,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   @override
   void initState() {
     super.initState();
+    _sheetController = DraggableScrollableController();
     _logic = EmployeeMapLogic();
     _logic.onStateChanged = () {
       if (!_disposed && mounted) setState(() {});
@@ -37,8 +39,22 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   @override
   void dispose() {
     _disposed = true;
+    _sheetController.dispose();
     _logic.dispose();
     super.dispose();
+  }
+
+  void _toggleSheet() {
+    if (!_sheetController.isAttached) return;
+    if (_sheetController.size > 0.3) {
+      _sheetController.animateTo(0.15,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic);
+    } else {
+      _sheetController.animateTo(0.40,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic);
+    }
   }
 
   void _showHistory(EmployeeLocation emp) async {
@@ -78,15 +94,15 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: Theme.of(context).colorScheme.copyWith(
-            primary: Colors.green,
-            onPrimary: Colors.white,
-            surface: Theme.of(context).cardColor,
-            onSurface: Theme.of(context).textTheme.bodyLarge?.color,
-          ),
+                primary: Colors.green,
+                onPrimary: Colors.white,
+                surface: Theme.of(context).cardColor,
+                onSurface: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
           appBarTheme: Theme.of(context).appBarTheme.copyWith(
-            backgroundColor: Colors.green,
-            foregroundColor: Colors.white,
-          ),
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
         ),
         child: child!,
       ),
@@ -120,7 +136,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
           height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: isOnline ? Colors.white : Colors.grey, width: 2.5),
+            border: Border.all(
+                color: isOnline ? Colors.white : Colors.grey, width: 2.5),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.2),
@@ -134,8 +151,11 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 ? CachedNetworkImage(
                     imageUrl: emp.avatarUrl!,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => const CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
-                    errorWidget: (_, __, ___) => _buildFallbackAvatar(battery: emp.battery, label: emp.name),
+                    placeholder: (context, url) =>
+                        const CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.green),
+                    errorWidget: (_, __, ___) => _buildFallbackAvatar(
+                        battery: emp.battery, label: emp.name),
                   )
                 : _buildFallbackAvatar(battery: emp.battery, label: emp.name),
           ),
@@ -166,8 +186,11 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       color: color ?? Colors.green[700],
       child: Center(
         child: Text(
-          (label?.isNotEmpty == true) ? label!.substring(0, 1).toUpperCase() : '?',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          (label?.isNotEmpty == true)
+              ? label!.substring(0, 1).toUpperCase()
+              : '?',
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
     );
@@ -177,7 +200,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   Widget build(BuildContext context) {
     super.build(context);
     if (_logic.isLoading) {
-      return const Center(child: CircularProgressIndicator(color: Colors.green));
+      return const Center(
+          child: CircularProgressIndicator(color: Colors.green));
     }
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -188,7 +212,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
           FlutterMap(
             mapController: _logic.mapController,
             options: MapOptions(
-              initialCenter: _logic.currentLocation ?? const LatLng(43.2389, 76.8897),
+              initialCenter:
+                  _logic.currentLocation ?? const LatLng(43.2389, 76.8897),
               initialZoom: 12.0,
               minZoom: 5.0,
               maxZoom: 18.0,
@@ -204,7 +229,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 retinaMode: RetinaMode.isHighDensity(context),
                 tileProvider: _logic.tileProvider,
               ),
-              if (_logic.geoJsonParser.polygons.isNotEmpty && _logic.showRestrictedZones)
+              if (_logic.geoJsonParser.polygons.isNotEmpty &&
+                  _logic.showRestrictedZones)
                 PolygonLayer(
                   polygons: _logic.geoJsonParser.polygons.map((polygon) {
                     return Polygon(
@@ -215,7 +241,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                     );
                   }).toList(),
                 ),
-              if (_logic.geoJsonParser.polylines.isNotEmpty && _logic.showBoundaries)
+              if (_logic.geoJsonParser.polylines.isNotEmpty &&
+                  _logic.showBoundaries)
                 PolylineLayer(
                   polylines: _logic.geoJsonParser.polylines.map((polyline) {
                     return Polyline(
@@ -225,7 +252,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                     );
                   }).toList(),
                 ),
-              
+
               // Треки перемещений всех активных сотрудников за сегодня (как в 2GIS)
               if (!_logic.isHistoryMode)
                 PolylineLayer(
@@ -260,8 +287,13 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                       width: 25,
                       height: 25,
                       child: Container(
-                        decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 2))),
-                        child: const Icon(Icons.play_arrow, color: Colors.white, size: 15),
+                        decoration: const BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                            border: Border.fromBorderSide(
+                                BorderSide(color: Colors.white, width: 2))),
+                        child: const Icon(Icons.play_arrow,
+                            color: Colors.white, size: 15),
                       ),
                     ),
                     // Финиш (Красный)
@@ -270,8 +302,13 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                       width: 25,
                       height: 25,
                       child: Container(
-                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 2))),
-                        child: const Icon(Icons.stop, color: Colors.white, size: 15),
+                        decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                            border: Border.fromBorderSide(
+                                BorderSide(color: Colors.white, width: 2))),
+                        child: const Icon(Icons.stop,
+                            color: Colors.white, size: 15),
                       ),
                     ),
                   ],
@@ -286,7 +323,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                     width: 70,
                     height: 70,
                     child: GestureDetector(
-                      onTap: () => _showHistory(emp),
+                      onTap: () => _logic.zoomToEmployee(emp),
+                      onLongPress: () => _showHistory(emp),
                       child: _buildModernMarker(emp, isOnline),
                     ),
                   );
@@ -311,10 +349,15 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                               ? CachedNetworkImage(
                                   imageUrl: _logic.currentUserAvatarUrl!,
                                   fit: BoxFit.cover,
-                                  placeholder: (context, url) => const CircularProgressIndicator(strokeWidth: 2),
-                                  errorWidget: (_, __, ___) => const Icon(Icons.my_location, color: Colors.blue),
+                                  placeholder: (context, url) =>
+                                      const CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                  errorWidget: (_, __, ___) => const Icon(
+                                      Icons.my_location,
+                                      color: Colors.blue),
                                 )
-                              : const Icon(Icons.my_location, color: Colors.blue),
+                              : const Icon(Icons.my_location,
+                                  color: Colors.blue),
                         ),
                       ),
                     ),
@@ -353,47 +396,78 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
             child: _buildDateSelector(),
           ),
           DraggableScrollableSheet(
+            controller: _sheetController,
             initialChildSize: 0.20,
             minChildSize: 0.15,
             maxChildSize: 0.75,
+            snap: true,
+            snapSizes: const [0.15, 0.40, 0.75],
             builder: (context, scrollController) {
               return LayoutBuilder(
                 builder: (context, constraints) {
                   final showHeader = constraints.maxHeight > 80;
                   return Container(
                     decoration: BoxDecoration(
-                      color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                      color:
+                          isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(28)),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20),
+                        BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 20),
                       ],
                     ),
                     child: Column(
                       children: [
-                        const SizedBox(height: 12),
-                        Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2))),
-                        if (showHeader) ...[
-                          const SizedBox(height: 8),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  _logic.isHistoryMode
-                                      ? 'Архив смен (${_logic.historyShifts.length})'
-                                      : 'Сотрудники (${_logic.employeeLocations.length})',
-                                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                        GestureDetector(
+                          onTap: _toggleSheet,
+                          behavior: HitTestBehavior.opaque,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(height: 12),
+                              Container(
+                                width: 40,
+                                height: 5,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[400],
+                                  borderRadius: BorderRadius.circular(2.5),
                                 ),
-                                if (!_logic.isHistoryMode)
-                                  TextButton(
-                                    onPressed: _logic.fetchEmployeeLocations,
-                                    child: const Text('Обновить', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                              ),
+                              if (showHeader) ...[
+                                const SizedBox(height: 8),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _logic.isHistoryMode
+                                            ? 'Архив смен (${_logic.historyShifts.length})'
+                                            : 'Сотрудники (${_logic.employeeLocations.length})',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 16),
+                                      ),
+                                      if (!_logic.isHistoryMode)
+                                        TextButton(
+                                          onPressed:
+                                              _logic.fetchEmployeeLocations,
+                                          child: const Text('Обновить',
+                                              style: TextStyle(
+                                                  color: Colors.green,
+                                                  fontWeight: FontWeight.bold)),
+                                        ),
+                                    ],
                                   ),
+                                ),
                               ],
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                         Expanded(
                           child: _logic.isHistoryMode
                               ? _buildHistoryList(scrollController, isDarkMode)
@@ -408,8 +482,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
           ),
 
           // Shift Details UI (Overlay)
-          if (_logic.selectedShift != null)
-            _buildShiftDetailPanel(isDarkMode),
+          if (_logic.selectedShift != null) _buildShiftDetailPanel(isDarkMode),
         ],
       ),
     );
@@ -426,15 +499,25 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+          Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                  color: Colors.white, shape: BoxShape.circle)),
           const SizedBox(width: 8),
-          const Text('LIVE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
+          const Text('LIVE',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                  letterSpacing: 1)),
         ],
       ),
     );
   }
 
-  Widget _buildMapControl({required IconData icon, required VoidCallback onTap}) {
+  Widget _buildMapControl(
+      {required IconData icon, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -442,7 +525,9 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2)],
+          boxShadow: [
+            BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2)
+          ],
         ),
         child: Icon(icon, color: Colors.green[800], size: 24),
       ),
@@ -459,7 +544,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[50],
+            color:
+                isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[50],
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
@@ -470,7 +556,9 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(emp.name ?? 'ID ${emp.userId}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(emp.name ?? 'ID ${emp.userId}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
                   ],
                 ),
               ),
@@ -480,13 +568,24 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                   if (emp.battery != null)
                     Row(
                       children: [
-                        Icon(emp.battery! > 20 ? Icons.battery_full : Icons.battery_alert, size: 14, color: emp.battery! > 20 ? Colors.green : Colors.red),
+                        Icon(
+                            emp.battery! > 20
+                                ? Icons.battery_full
+                                : Icons.battery_alert,
+                            size: 14,
+                            color:
+                                emp.battery! > 20 ? Colors.green : Colors.red),
                         const SizedBox(width: 4),
-                        Text('${emp.battery!.toInt()}%', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text('${emp.battery!.toInt()}%',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
                       ],
                     ),
                   IconButton(
-                    icon: Icon(Icons.history, color: _logic.selectedEmployeeId == emp.userId ? Colors.orange : Colors.grey),
+                    icon: Icon(Icons.history,
+                        color: _logic.selectedEmployeeId == emp.userId
+                            ? Colors.orange
+                            : Colors.grey),
                     onPressed: () => _showHistory(emp),
                     constraints: const BoxConstraints(),
                     padding: EdgeInsets.zero,
@@ -503,9 +602,9 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   Widget _buildDateSelector() {
     final now = DateTime.now();
     final isToday = _logic.selectedDate.year == now.year &&
-                   _logic.selectedDate.month == now.month &&
-                   _logic.selectedDate.day == now.day;
-    
+        _logic.selectedDate.month == now.month &&
+        _logic.selectedDate.day == now.day;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -516,7 +615,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.calendar_today, size: 16, color: isToday ? Colors.green : Colors.orange),
+          Icon(Icons.calendar_today,
+              size: 16, color: isToday ? Colors.green : Colors.orange),
           const SizedBox(width: 8),
           GestureDetector(
             onTap: () async {
@@ -529,7 +629,9 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
               if (date != null) _logic.setDate(date);
             },
             child: Text(
-              isToday ? 'Сегодня' : DateFormat('dd.MM.yyyy').format(_logic.selectedDate),
+              isToday
+                  ? 'Сегодня'
+                  : DateFormat('dd.MM.yyyy').format(_logic.selectedDate),
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: isToday ? Colors.green : Colors.orange[800],
@@ -559,14 +661,16 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       padding: const EdgeInsets.only(top: 10, bottom: 20),
       itemCount: _logic.employeeLocations.length,
       itemBuilder: (context, index) {
-        return _buildEmployeeListItem(_logic.employeeLocations[index], isDarkMode);
+        return _buildEmployeeListItem(
+            _logic.employeeLocations[index], isDarkMode);
       },
     );
   }
 
   Widget _buildHistoryList(ScrollController scrollController, bool isDarkMode) {
     if (_logic.isHistoryLoading) {
-      return const Center(child: CircularProgressIndicator(color: Colors.orange));
+      return const Center(
+          child: CircularProgressIndicator(color: Colors.orange));
     }
     if (_logic.historyShifts.isEmpty) {
       return const Center(child: Text('За этот день смен не найдено'));
@@ -578,7 +682,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       itemBuilder: (context, index) {
         final shift = _logic.historyShifts[index];
         final isSelected = _logic.selectedShift?.id == shift.id;
-        
+
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: InkWell(
@@ -587,29 +691,36 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isSelected 
-                    ? Colors.orange.withOpacity(0.1) 
-                    : (isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[50]),
+                color: isSelected
+                    ? Colors.orange.withOpacity(0.1)
+                    : (isDarkMode
+                        ? Colors.white.withOpacity(0.05)
+                        : Colors.grey[50]),
                 borderRadius: BorderRadius.circular(20),
-                border: isSelected ? Border.all(color: Colors.orange.withOpacity(0.3)) : null,
+                border: isSelected
+                    ? Border.all(color: Colors.orange.withOpacity(0.3))
+                    : null,
               ),
               child: Row(
                 children: [
-                   _buildShiftSelfieMini(shift.selfie),
-                   const SizedBox(width: 16),
-                   Expanded(
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         Text(shift.username, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                         Text(
-                           '${DateFormat('HH:mm').format(shift.startTime ?? DateTime.now())} - ${shift.endTime != null ? DateFormat('HH:mm').format(shift.endTime!) : "..."}',
-                           style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                         ),
-                       ],
-                     ),
-                   ),
-                   const Icon(Icons.chevron_right, color: Colors.grey),
+                  _buildShiftSelfieMini(shift.selfie),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(shift.username,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(
+                          '${DateFormat('HH:mm').format(shift.startTime ?? DateTime.now())} - ${shift.endTime != null ? DateFormat('HH:mm').format(shift.endTime!) : "..."}',
+                          style:
+                              TextStyle(color: Colors.grey[600], fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.grey),
                 ],
               ),
             ),
@@ -630,7 +741,9 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
         decoration: BoxDecoration(
           color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 15, spreadRadius: 2)],
+          boxShadow: [
+            BoxShadow(color: Colors.black26, blurRadius: 15, spreadRadius: 2)
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -649,13 +762,18 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(shift.username, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                      Text(shift.username,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900, fontSize: 18)),
                       const SizedBox(height: 4),
-                      Text('${shift.position} • ${shift.zone}', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                      Text('${shift.position} • ${shift.zone}',
+                          style:
+                              TextStyle(color: Colors.grey[400], fontSize: 13)),
                       const SizedBox(height: 4),
                       Text(
                         'Смена: ${DateFormat('HH:mm').format(shift.startTime ?? DateTime.now())} - ${shift.endTime != null ? DateFormat('HH:mm').format(shift.endTime!) : "В процессе"}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                     ],
                   ),
@@ -681,7 +799,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       return Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(
+            color: Colors.grey[300], borderRadius: BorderRadius.circular(12)),
         child: const Icon(Icons.person, color: Colors.white),
       );
     }
@@ -699,7 +818,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
         color: Colors.grey[300],
         borderRadius: BorderRadius.circular(12),
         image: DecorationImage(
-          image: CachedNetworkImageProvider(url), 
+          image: CachedNetworkImageProvider(url),
           fit: BoxFit.cover,
         ),
       ),
@@ -708,7 +827,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
 
   void _showFullImage(String? selfie) {
     if (selfie == null || selfie.isEmpty) return;
-    
+
     String url = selfie;
     if (!url.startsWith('http')) {
       if (url.startsWith('/')) url = url.substring(1);
@@ -724,10 +843,12 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
             Center(
               child: InteractiveViewer(
                 child: CachedNetworkImage(
-                  imageUrl: url, 
+                  imageUrl: url,
                   fit: BoxFit.contain,
-                  placeholder: (context, url) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                  errorWidget: (context, url, error) => const Icon(Icons.error, color: Colors.white),
+                  placeholder: (context, url) => const Center(
+                      child: CircularProgressIndicator(color: Colors.white)),
+                  errorWidget: (context, url, error) =>
+                      const Icon(Icons.error, color: Colors.white),
                 ),
               ),
             ),
@@ -748,16 +869,19 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   void _showLayerSettings(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Container(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Настройки слоев', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
+              const Text('Настройки слоев',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
               const SizedBox(height: 24),
-              _buildLayerToggle('Ограниченные зоны', _logic.showRestrictedZones, (v) {
+              _buildLayerToggle('Ограниченные зоны', _logic.showRestrictedZones,
+                  (v) {
                 _logic.toggleLayer('restricted');
                 setModalState(() {});
                 setState(() {});
@@ -797,7 +921,8 @@ class _PulseMarker extends StatefulWidget {
   State<_PulseMarker> createState() => _PulseMarkerState();
 }
 
-class _PulseMarkerState extends State<_PulseMarker> with SingleTickerProviderStateMixin {
+class _PulseMarkerState extends State<_PulseMarker>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override

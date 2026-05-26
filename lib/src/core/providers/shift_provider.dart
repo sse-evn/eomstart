@@ -1,14 +1,17 @@
 // lib/providers/shift_provider.dart
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' show e;
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:micro_mobility_app/src/features/app/models/active_shift.dart' as model;
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:micro_mobility_app/src/features/app/models/active_shift.dart'
+    as model;
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../features/app/models/shift_data.dart';
 import '../services/api_service.dart';
 import '../services/geo_tracking_service.dart'
@@ -30,7 +33,7 @@ class ShiftProvider with ChangeNotifier {
   bool _isEndingSlot = false;
   bool _isStartingSlot = false;
   final Completer<void> _initCompleter = Completer<void>();
-  
+
   // Future to wait for initialization
   Future<void> get initialized => _initCompleter.future;
   Map<String, dynamic>? _botStatsData;
@@ -89,7 +92,9 @@ class ShiftProvider with ChangeNotifier {
         debugPrint('❌ Ошибка мониторинга сети: $e');
       },
     );
-  }  Future<void> _saveToCache() async {
+  }
+
+  Future<void> _saveToCache() async {
     try {
       final data = {
         'shifts': _shiftHistory.map((s) => s.toJson()).toList(),
@@ -127,8 +132,10 @@ class ShiftProvider with ChangeNotifier {
       _botStatsData = data['botStatsData'] as Map<String, dynamic>?;
       _profile = data['profile'] as Map<String, dynamic>?;
       _hasLoadedProfile = data['hasLoadedProfile'] as bool? ?? false;
-      if (data.containsKey('lastReportTime') && data['lastReportTime'] != null) {
-        _lastReportTime = DateTime.parse(data['lastReportTime'] as String).toLocal();
+      if (data.containsKey('lastReportTime') &&
+          data['lastReportTime'] != null) {
+        _lastReportTime =
+            DateTime.parse(data['lastReportTime'] as String).toLocal();
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
@@ -143,6 +150,7 @@ class ShiftProvider with ChangeNotifier {
 
   void updateLastReportTime(DateTime time) {
     _lastReportTime = time;
+    _prefs.setString('last_report_sent_time', time.toIso8601String());
     _saveToCache();
     notifyListeners();
   }
@@ -184,6 +192,10 @@ class ShiftProvider with ChangeNotifier {
     try {
       _token ??= await _storage.read(key: 'jwt_token');
       await loadFromCache();
+      final lastReportStr = _prefs.getString('last_report_sent_time');
+      if (lastReportStr != null) {
+        _lastReportTime = DateTime.tryParse(lastReportStr)?.toLocal();
+      }
       if (_isOnline && _token != null) {
         // При инициализации всегда пытаемся обновить профиль и смены
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -200,16 +212,18 @@ class ShiftProvider with ChangeNotifier {
 
   Future<model.ActiveShift?> getActiveShift() async {
     if (_token == null || _isLoadingActiveShift) return _activeShift;
-    
+
     // Проверка на истечение времени слота (локальная)
-    if (_activeShift != null && BreakTimeUtils.isSlotExpired(
-      _activeShift!.slotTimeRange,
-      shiftStartTime: _activeShift!.startTime,
-    )) {
-       debugPrint('ShiftProvider: Локальное обнаружение истечения слота. Сбрасываем.');
-       _activeShift = null;
-       notifyListeners();
-       return null;
+    if (_activeShift != null &&
+        BreakTimeUtils.isSlotExpired(
+          _activeShift!.slotTimeRange,
+          shiftStartTime: _activeShift!.startTime,
+        )) {
+      debugPrint(
+          'ShiftProvider: Локальное обнаружение истечения слота. Сбрасываем.');
+      _activeShift = null;
+      notifyListeners();
+      return null;
     }
 
     if (_lastActiveShiftFetchTime != null) {
@@ -232,10 +246,11 @@ class ShiftProvider with ChangeNotifier {
           response.slotTimeRange,
           shiftStartTime: response.startTime,
         )) {
-           debugPrint('ShiftProvider: Получена смена с истекшим слотом. Игнорируем.');
-           _activeShift = null;
+          debugPrint(
+              'ShiftProvider: Получена смена с истекшим слотом. Игнорируем.');
+          _activeShift = null;
         } else {
-           _activeShift = response;
+          _activeShift = response;
         }
       }
 
@@ -444,8 +459,7 @@ class ShiftProvider with ChangeNotifier {
       await getActiveShift();
 
       final bool isTrackingRunning = await isBackgroundTrackingRunning();
-      final bool hasActiveShift =
-          _activeShift != null;
+      final bool hasActiveShift = _activeShift != null;
 
       if (hasActiveShift && !isTrackingRunning) {
         debugPrint(
@@ -524,7 +538,7 @@ class ShiftProvider with ChangeNotifier {
       notifyListeners();
       debugPrint('✅ Профиль успешно загружен.');
       return profile;
-        } catch (e) {
+    } catch (e) {
       debugPrint('❌ Ошибка загрузки профиля: $e');
       final storedToken = await _storage.read(key: 'jwt_token');
       if (storedToken == null) {

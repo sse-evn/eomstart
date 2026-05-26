@@ -74,7 +74,7 @@ FutureOr<bool> onStart(ServiceInstance service) async {
   });
 
   // Запускаем таймер сбора данных
-  _backgroundTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+  _backgroundTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
     await _collectAndAttemptToSendGeoData(timer);
     if (service is AndroidServiceInstance) {
       service.setForegroundNotificationInfo(
@@ -136,13 +136,13 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
           showBackgroundLocationIndicator: true,
           pauseLocationUpdatesAutomatically: false,
           activityType: ActivityType.otherNavigation,
-          timeLimit: const Duration(seconds: 4),
+          timeLimit: const Duration(seconds: 8),
         );
       } else {
         locationSettings = const LocationSettings(
           accuracy: LocationAccuracy.best,
           distanceFilter: 0,
-          timeLimit: Duration(seconds: 6),
+          timeLimit: Duration(seconds: 10),
         );
       }
 
@@ -150,12 +150,24 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
         locationSettings: locationSettings,
       );
     } catch (e) {
-      _log("Ошибка получения позиции: $e. Пробуем последнюю известную...");
-      final lastPos = await Geolocator.getLastKnownPosition();
-      if (lastPos != null) {
-        position = lastPos;
-      } else {
-        return;
+      _log("Ошибка получения лучшей позиции: $e. Пробуем сбалансированную точность...");
+      try {
+        final fallbackSettings = LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          distanceFilter: 0,
+          timeLimit: const Duration(seconds: 5),
+        );
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: fallbackSettings,
+        );
+      } catch (fallbackError) {
+        _log("Ошибка fallback-позиции: $fallbackError. Пробуем последнюю известную...");
+        final lastPos = await Geolocator.getLastKnownPosition();
+        if (lastPos != null) {
+          position = lastPos;
+        } else {
+          return;
+        }
       }
     }
 
