@@ -89,9 +89,7 @@ class ShiftProvider with ChangeNotifier {
         debugPrint('❌ Ошибка мониторинга сети: $e');
       },
     );
-  }
-
-  Future<void> _saveToCache() async {
+  }  Future<void> _saveToCache() async {
     try {
       final data = {
         'shifts': _shiftHistory.map((s) => s.toJson()).toList(),
@@ -100,6 +98,7 @@ class ShiftProvider with ChangeNotifier {
         'botStatsData': _botStatsData,
         'profile': _profile,
         'hasLoadedProfile': _hasLoadedProfile,
+        'lastReportTime': _lastReportTime?.toIso8601String(),
         'timestamp': DateTime.now().toIso8601String(),
       };
       await _prefs.setString(_shiftsCacheKey, jsonEncode(data));
@@ -128,12 +127,24 @@ class ShiftProvider with ChangeNotifier {
       _botStatsData = data['botStatsData'] as Map<String, dynamic>?;
       _profile = data['profile'] as Map<String, dynamic>?;
       _hasLoadedProfile = data['hasLoadedProfile'] as bool? ?? false;
+      if (data.containsKey('lastReportTime') && data['lastReportTime'] != null) {
+        _lastReportTime = DateTime.parse(data['lastReportTime'] as String).toLocal();
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
     } catch (e) {
       debugPrint('❌ Ошибка загрузки из кэша: $e');
     }
+  }
+
+  DateTime? _lastReportTime;
+  DateTime? get lastReportTime => _lastReportTime;
+
+  void updateLastReportTime(DateTime time) {
+    _lastReportTime = time;
+    _saveToCache();
+    notifyListeners();
   }
 
   model.ActiveShift? get activeShift => _activeShift;

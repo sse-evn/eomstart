@@ -25,6 +25,7 @@ class EmployeeMapLogic {
   final FlutterSecureStorage storage = const FlutterSecureStorage();
   final ApiService _apiService = ApiService();
   List<EmployeeLocation> employeeLocations = [];
+  Map<String, List<LatLng>> activeEmployeesPaths = {};
   String? currentUserAvatarUrl;
 
   // История
@@ -301,11 +302,65 @@ class EmployeeMapLogic {
           })
           .whereType<EmployeeLocation>()
           .toList();
+
+      // Дорисовываем новые точки в локальные пути активных сотрудников
+      for (var emp in employeeLocations) {
+        final userId = emp.userId;
+        final path = activeEmployeesPaths[userId] ?? [];
+        if (path.isEmpty) {
+          activeEmployeesPaths[userId] = [emp.position];
+        } else {
+          final lastPoint = path.last;
+          if (lastPoint.latitude != emp.position.latitude || lastPoint.longitude != emp.position.longitude) {
+            final updatedPath = List<LatLng>.from(path)..add(emp.position);
+            activeEmployeesPaths[userId] = updatedPath;
+          }
+        }
+      }
+
       _notify();
     } catch (e) {
       debugPrint('Ошибка загрузки позиций сотрудников: $e');
       employeeLocations = [];
       _notify();
+    }
+  }
+
+  Future<void> fetchActiveEmployeesPaths() async {
+    if (_disposed) return;
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) return;
+
+      final range = _getDefaultRange();
+      final fromStr = _formatDateWithTimezone(range.start);
+      final toStr = _formatDateWithTimezone(range.end);
+
+      for (var emp in employeeLocations) {
+        final userId = emp.userId;
+        try {
+          final points = await _apiService.getLocationHistory(token, userId, fromStr, toStr);
+          if (points.isNotEmpty) {
+            final gpsPoints = points
+                .map((item) {
+                  if (item is! Map<String, dynamic>) return null;
+                  final lat = (item['lat'] as num?)?.toDouble();
+                  final lon = (item['lon'] as num?)?.toDouble();
+                  if (lat == null || lon == null) return null;
+                  return LatLng(lat, lon);
+                })
+                .whereType<LatLng>()
+                .toList();
+
+            activeEmployeesPaths[userId] = _smoothPolyline(gpsPoints);
+          }
+        } catch (e) {
+          debugPrint('Ошибка предзагрузки пути для $userId: $e');
+        }
+      }
+      _notify();
+    } catch (e) {
+      debugPrint('Ошибка предзагрузки путей активных сотрудников: $e');
     }
   }
 
@@ -352,7 +407,6 @@ class EmployeeMapLogic {
       final ended = await _apiService.getEndedShifts(token);
       
       // 2. Загружаем активные смены (на случай если мы смотрим "сегодня", но через историю)
-      // Хотя обычно для сегодня есть LIVE, но для полноты картины:
       final response = await http.get(
         Uri.parse('${AppConfig.apiBaseUrl}/admin/active-shifts'),
         headers: {'Authorization': 'Bearer $token'},
@@ -552,6 +606,7 @@ class EmployeeMapLogic {
     await _loadUserNameCache();
     await _loadAndParseGeoJson();
     await fetchEmployeeLocations();
+    await fetchActiveEmployeesPaths(); // Загружаем пути сотрудников с начала дня
     if (!_disposed) {
       isLoading = false;
       _notify();

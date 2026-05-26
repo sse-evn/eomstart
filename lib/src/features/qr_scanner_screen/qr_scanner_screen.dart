@@ -662,6 +662,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         ? telegramId
         : int.tryParse(telegramId?.toString() ?? '');
 
+    shiftProvider.updateLastReportTime(DateTime.now());
     _showMessage('🚀 Отчёт отправляется в фоне...');
 
     // Trigger upload

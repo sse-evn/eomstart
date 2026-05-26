@@ -7,6 +7,7 @@ import 'package:micro_mobility_app/src/features/app/models/location.dart';
 import 'package:micro_mobility_app/src/core/utils/map_app_constants.dart'
     show AppConstants;
 import 'package:micro_mobility_app/src/features/admin/tabs/map_employee_map/employee_map_logic.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class EmployeeMapTab extends StatefulWidget {
   const EmployeeMapTab({super.key});
@@ -92,6 +93,23 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     );
   }
 
+  Color _getColorForUser(String userId) {
+    final int hash = userId.hashCode;
+    final List<Color> colors = [
+      Colors.red,
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.teal,
+      Colors.pink,
+      Colors.indigo,
+      Colors.amber,
+      Colors.cyan,
+    ];
+    return colors[hash.abs() % colors.length];
+  }
+
   Widget _buildModernMarker(EmployeeLocation emp, bool isOnline) {
     return Stack(
       alignment: Alignment.center,
@@ -102,7 +120,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
           height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2.5),
+            border: Border.all(color: isOnline ? Colors.white : Colors.grey, width: 2.5),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.2),
@@ -113,10 +131,11 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
           ),
           child: ClipOval(
             child: emp.avatarUrl != null
-                ? Image.network(
-                    emp.avatarUrl!,
+                ? CachedNetworkImage(
+                    imageUrl: emp.avatarUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _buildFallbackAvatar(battery: emp.battery, label: emp.name),
+                    placeholder: (context, url) => const CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+                    errorWidget: (_, __, ___) => _buildFallbackAvatar(battery: emp.battery, label: emp.name),
                   )
                 : _buildFallbackAvatar(battery: emp.battery, label: emp.name),
           ),
@@ -206,6 +225,22 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                     );
                   }).toList(),
                 ),
+              
+              // Треки перемещений всех активных сотрудников за сегодня (как в 2GIS)
+              if (!_logic.isHistoryMode)
+                PolylineLayer(
+                  polylines: _logic.activeEmployeesPaths.entries.map((entry) {
+                    final userId = entry.key;
+                    final points = entry.value;
+                    final color = _getColorForUser(userId);
+                    return Polyline(
+                      points: points,
+                      color: color.withOpacity(0.6),
+                      strokeWidth: 4.0,
+                    );
+                  }).toList(),
+                ),
+
               if (_logic.selectedEmployeeHistory.isNotEmpty)
                 PolylineLayer(
                   polylines: [
@@ -273,7 +308,12 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                         ),
                         child: ClipOval(
                           child: _logic.currentUserAvatarUrl != null
-                              ? Image.network(_logic.currentUserAvatarUrl!, fit: BoxFit.cover)
+                              ? CachedNetworkImage(
+                                  imageUrl: _logic.currentUserAvatarUrl!,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => const CircularProgressIndicator(strokeWidth: 2),
+                                  errorWidget: (_, __, ___) => const Icon(Icons.my_location, color: Colors.blue),
+                                )
                               : const Icon(Icons.my_location, color: Colors.blue),
                         ),
                       ),
@@ -409,36 +449,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     );
   }
 
-  Widget _buildHistoryPanel(bool isDarkMode) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDarkMode ? Colors.black87 : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.orange.withOpacity(0.5)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.history, color: Colors.orange),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(_logic.selectedEmployeeName ?? 'История', style: const TextStyle(fontWeight: FontWeight.bold)),
-                if (_logic.selectedHistoryRange != null)
-                   Text('${_logic.selectedHistoryRange!.start.day}.${_logic.selectedHistoryRange!.start.month} - ${_logic.selectedHistoryRange!.end.day}.${_logic.selectedHistoryRange!.end.month}', 
-                        style: TextStyle(fontSize: 11, color: Colors.grey[400])),
-              ],
-            ),
-          ),
-          IconButton(icon: const Icon(Icons.close, size: 20), onPressed: _logic.clearHistory),
-        ],
-      ),
-    );
-  }
-
   Widget _buildEmployeeListItem(EmployeeLocation emp, bool isDarkMode) {
     final isOnline = _logic.isEmployeeOnline(emp.timestamp);
     return Padding(
@@ -461,8 +471,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(emp.name ?? 'ID ${emp.userId}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text(isOnline ? 'В сети' : 'Оффлайн (более 5 мин)', 
-                         style: TextStyle(color: isOnline ? Colors.green : Colors.grey, fontSize: 12)),
                   ],
                 ),
               ),
@@ -680,8 +688,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
 
     String url = selfie;
     if (!url.startsWith('http')) {
-      // Если путь уже содержит uploads/, убираем его перед добавлением mediaBaseUrl или просто используем mediaBaseUrl
-      // На бэкенде обычно хранится путь вида "uploads/selfies/..."
       if (url.startsWith('/')) url = url.substring(1);
       url = '${AppConfig.backendHost}/$url';
     }
@@ -692,7 +698,10 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       decoration: BoxDecoration(
         color: Colors.grey[300],
         borderRadius: BorderRadius.circular(12),
-        image: DecorationImage(image: NetworkImage(url), fit: BoxFit.cover),
+        image: DecorationImage(
+          image: CachedNetworkImageProvider(url), 
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }
@@ -714,7 +723,12 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
           children: [
             Center(
               child: InteractiveViewer(
-                child: Image.network(url, fit: BoxFit.contain),
+                child: CachedNetworkImage(
+                  imageUrl: url, 
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                  errorWidget: (context, url, error) => const Icon(Icons.error, color: Colors.white),
+                ),
               ),
             ),
             Positioned(
@@ -807,11 +821,11 @@ class _PulseMarkerState extends State<_PulseMarker> with SingleTickerProviderSta
       animation: _controller,
       builder: (context, child) {
         return Container(
-          width: 60 * _controller.value,
-          height: 60 * _controller.value,
+          width: 44 + (24 * _controller.value),
+          height: 44 + (24 * _controller.value),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.green.withOpacity(1 - _controller.value),
+            color: Colors.green.withOpacity(1.0 - _controller.value),
           ),
         );
       },

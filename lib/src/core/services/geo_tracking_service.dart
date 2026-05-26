@@ -2,14 +2,16 @@
 
 import 'dart:async';
 import 'dart:convert';
+
+import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../config/app_config.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../config/app_config.dart';
 
 void _log(String message, {Object? error, StackTrace? stackTrace}) {
   debugPrint('BG-GeoService: $message');
@@ -59,7 +61,8 @@ FutureOr<bool> onStart(ServiceInstance service) async {
     );
   }
 
-  _log("Получен shiftId: $_activeShiftId, Token: ${_bgAuthToken != null ? 'OK' : 'MISSING'}");
+  _log(
+      "Получен shiftId: $_activeShiftId, Token: ${_bgAuthToken != null ? 'OK' : 'MISSING'}");
 
   service.on('stopTracking').listen((event) {
     _log("Получен сигнал stopTracking");
@@ -71,16 +74,16 @@ FutureOr<bool> onStart(ServiceInstance service) async {
   });
 
   // Запускаем таймер сбора данных
-  _backgroundTimer = Timer.periodic(
-      const Duration(seconds: 5), (timer) async {
-         await _collectAndAttemptToSendGeoData(timer);
-         if (service is AndroidServiceInstance) {
-           service.setForegroundNotificationInfo(
-             title: "Микромобильность",
-             content: "Геопозиция обновлена: ${DateTime.now().hour}:${DateTime.now().minute}:${DateTime.now().second}",
-           );
-         }
-      });
+  _backgroundTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+    await _collectAndAttemptToSendGeoData(timer);
+    if (service is AndroidServiceInstance) {
+      service.setForegroundNotificationInfo(
+        title: "Микромобильность",
+        content:
+            "Геопозиция обновлена: ${DateTime.now().hour}:${DateTime.now().minute}:${DateTime.now().second}",
+      );
+    }
+  });
 
   await prefs.setBool(_SHARED_PREFS_BG_RUNNING_KEY, true);
   _log("Сервис запущен для смены $_activeShiftId");
@@ -95,8 +98,10 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
     final prefs = await SharedPreferences.getInstance();
     final currentActiveShiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
 
-    if (currentActiveShiftId == null || (currentActiveShiftId != _activeShiftId)) {
-      _log("ShiftID изменился или отсутствует ($currentActiveShiftId vs $_activeShiftId) — останавливаем таймер.");
+    if (currentActiveShiftId == null ||
+        (currentActiveShiftId != _activeShiftId)) {
+      _log(
+          "ShiftID изменился или отсутствует ($currentActiveShiftId vs $_activeShiftId) — останавливаем таймер.");
       timer.cancel();
       _activeShiftId = null;
       return;
@@ -122,12 +127,27 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
     int batteryLevel;
 
     try {
-      position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
+      final LocationSettings locationSettings;
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        locationSettings = AppleSettings(
           accuracy: LocationAccuracy.best,
-          distanceFilter: 0, // Собираем даже малые перемещения для "четкости"
-          timeLimit: Duration(seconds: 4),
-        ),
+          distanceFilter: 0,
+          allowBackgroundLocationUpdates: true,
+          showBackgroundLocationIndicator: true,
+          pauseLocationUpdatesAutomatically: false,
+          activityType: ActivityType.otherNavigation,
+          timeLimit: const Duration(seconds: 4),
+        );
+      } else {
+        locationSettings = const LocationSettings(
+          accuracy: LocationAccuracy.best,
+          distanceFilter: 0,
+          timeLimit: Duration(seconds: 6),
+        );
+      }
+
+      position = await Geolocator.getCurrentPosition(
+        locationSettings: locationSettings,
       );
     } catch (e) {
       _log("Ошибка получения позиции: $e. Пробуем последнюю известную...");
@@ -177,8 +197,8 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
 Future<void> _sendSingleGeoDataToServer(String geoDataJson) async {
   final token = _bgAuthToken;
   if (token == null) {
-     _log("Ошибка: Токен отсутствует в фоновом режиме.");
-     throw Exception('JWT missing in background');
+    _log("Ошибка: Токен отсутствует в фоновом режиме.");
+    throw Exception('JWT missing in background');
   }
 
   final res = await http.post(
@@ -226,8 +246,6 @@ Future<void> startBackgroundTracking({required int shiftId}) async {
   if (isRunning && currentShift != shiftId) await stopBackgroundTracking();
 
   final service = FlutterBackgroundService();
-  
-  
   final token = await _storage.read(key: 'jwt_token');
 
   // Сохраняем shiftId, токен и помечаем, что трекинг включён

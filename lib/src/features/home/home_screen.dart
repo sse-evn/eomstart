@@ -215,6 +215,10 @@ class _DashboardHomeState extends State<DashboardHome> {
                             const SlotCard(),
                             const SizedBox(height: 24),
                             const DashboardInterestingThings(),
+                            if (provider.lastReportTime != null) ...[
+                              const SizedBox(height: 24),
+                              _buildLastReportCard(context, provider.lastReportTime!),
+                            ],
                             const SizedBox(height: 32),
                           ],
                         ),
@@ -274,6 +278,66 @@ class _DashboardHomeState extends State<DashboardHome> {
             ),
           ),
           const Icon(Icons.timer_outlined, color: Colors.white, size: 18),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLastReportCard(BuildContext context, DateTime lastReportTime) {
+    final t = lastReportTime;
+    final timeStr =
+        "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}";
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.green.withOpacity(0.15),
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.done_all_rounded,
+              color: Colors.green,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Отчёт доставлен',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Последняя отправка: в $timeStr',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
