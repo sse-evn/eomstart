@@ -374,6 +374,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     if (upper.startsWith('WSH') || upper.startsWith('WHOOSH')) return 'WHOOSH';
     if (upper.startsWith('JET')) return 'JET';
     if (upper.startsWith('YANDEX')) return 'YANDEX';
+
+    // Автодетекция по формату номера
+    if (RegExp(r'^\d{4}$').hasMatch(upper)) return 'BOLT';
+    if (RegExp(r'^[A-Z]{2}\d{4}$').hasMatch(upper)) return 'WHOOSH';
+    if (RegExp(r'^Y\d{5}$').hasMatch(upper)) return 'YANDEX';
+    if (RegExp(r'^\d{6}$').hasMatch(upper)) return 'JET';
+
     return null;
   }
 
@@ -417,7 +424,11 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         _competitorCounts.updateAll((key, value) => 0);
         _scanStatus = 'Ожидание сканирования...';
         _scanStatusColor = Colors.blueAccent;
+        _isQrScannerOpen = false;
       });
+      try {
+        await cameraController.stop();
+      } catch (_) {}
       _saveScannedNumbers();
       _showMessage('Форма успешно очищена');
     }
@@ -633,6 +644,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   Future<void> _sendReport() async {
+    final shiftProvider = context.read<ShiftProvider>();
+    
     final hasCounts = _competitorCounts.values.any((v) => v > 0);
     if (_scannedNumbers.isEmpty && !hasCounts) {
       _showMessage('Сначала отсканируйте или добавьте хотя бы один самокат');
@@ -644,11 +657,15 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       return;
     }
 
+    if (_isQrScannerOpen) {
+      try {
+        await cameraController.stop();
+      } catch (_) {}
+    }
+
     setState(() {
       _sending = true;
     });
-
-    final shiftProvider = context.read<ShiftProvider>();
     final profile = shiftProvider.profile ?? {};
 
     final firstName = profile['firstName'] ?? profile['first_name'];
@@ -687,6 +704,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       _competitorCounts.updateAll((key, value) => 0);
     });
     _saveScannedNumbers();
+
+    if (_isQrScannerOpen) {
+      try {
+        await cameraController.start();
+      } catch (_) {}
+    }
   }
 
   Future<void> _performBackgroundUpload({
@@ -800,6 +823,20 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     );
   }
 
+  Future<void> _toggleQrScanner() async {
+    final nextState = !_isQrScannerOpen;
+    setState(() {
+      _isQrScannerOpen = nextState;
+    });
+    try {
+      if (nextState) {
+        await cameraController.start();
+      } else {
+        await cameraController.stop();
+      }
+    } catch (_) {}
+  }
+
   Widget _actionRowWidget() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -807,11 +844,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: () {
-                setState(() {
-                  _isQrScannerOpen = !_isQrScannerOpen;
-                });
-              },
+              onPressed: _toggleQrScanner,
               icon: Icon(
                 _isQrScannerOpen
                     ? Icons.qr_code_rounded
@@ -906,24 +939,46 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       'Jet': 0,
       'Whoosh': 0,
       'Bolt': 0,
+      'Other': 0,
     };
-    int ownCount = 0;
     
     for (final num in _scannedNumbers) {
+      final clean = num.trim();
+      final upper = clean.toUpperCase();
+      
       bool matched = false;
-      for (final brand in summary.keys) {
-        if (num.toLowerCase().startsWith('[${brand.toLowerCase()}]')) {
+      for (final brand in ['Yandex', 'Jet', 'Whoosh', 'Bolt']) {
+        if (upper.startsWith('[${brand.toUpperCase()}]')) {
           summary[brand] = (summary[brand] ?? 0) + 1;
           matched = true;
           break;
         }
       }
+      
       if (!matched) {
-        ownCount++;
+        // Очистим от возможных скобок для детекции по формату
+        String rawNum = upper;
+        if (upper.startsWith('[')) {
+          final closeIdx = upper.indexOf(']');
+          if (closeIdx != -1) {
+            rawNum = upper.substring(closeIdx + 1).trim();
+          }
+        }
+        
+        if (RegExp(r'^\d{4}$').hasMatch(rawNum)) {
+          summary['Bolt'] = (summary['Bolt'] ?? 0) + 1;
+        } else if (RegExp(r'^[A-Z]{2}\d{4}$').hasMatch(rawNum)) {
+          summary['Whoosh'] = (summary['Whoosh'] ?? 0) + 1;
+        } else if (RegExp(r'^Y\d{5}$').hasMatch(rawNum)) {
+          summary['Yandex'] = (summary['Yandex'] ?? 0) + 1;
+        } else if (RegExp(r'^\d{6}$').hasMatch(rawNum)) {
+          summary['Jet'] = (summary['Jet'] ?? 0) + 1;
+        } else {
+          summary['Other'] = (summary['Other'] ?? 0) + 1;
+        }
       }
     }
     
-    summary['Jet'] = (summary['Jet'] ?? 0) + ownCount;
     return summary;
   }
 

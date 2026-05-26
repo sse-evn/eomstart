@@ -103,7 +103,9 @@ class ApiService {
           await _storage.delete(key: 'refresh_token');
         }
       } else {
-        debugPrint('❌ Failed to refresh token. User needs to log in again.');
+        debugPrint('❌ Failed to refresh token. User needs to log in again. Clearing tokens.');
+        await _storage.delete(key: 'jwt_token');
+        await _storage.delete(key: 'refresh_token');
       }
     }
     return response;
@@ -125,6 +127,15 @@ class ApiService {
         final retryRequest = await requestBuilder(newToken);
         final retryStreamedResponse = await retryRequest.send();
         response = await http.Response.fromStream(retryStreamedResponse);
+        if (response.statusCode == 401) {
+          debugPrint('❌ Multipart retry with new token also failed (401). Clearing tokens.');
+          await _storage.delete(key: 'jwt_token');
+          await _storage.delete(key: 'refresh_token');
+        }
+      } else {
+        debugPrint('❌ Multipart: Failed to refresh token. Clearing tokens.');
+        await _storage.delete(key: 'jwt_token');
+        await _storage.delete(key: 'refresh_token');
       }
     }
     return response;

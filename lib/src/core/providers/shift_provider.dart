@@ -352,6 +352,7 @@ class ShiftProvider with ChangeNotifier {
       );
       debugPrint('✅ Смена начата');
       await loadShifts();
+      await loadProfile(force: true);
 
       await syncGeoTrackingWithShiftState();
     } catch (e) {
@@ -383,6 +384,7 @@ class ShiftProvider with ChangeNotifier {
       _activeShift = null;
       _currentUsername = null;
       await loadShifts();
+      await loadProfile(force: true);
 
       await syncGeoTrackingWithShiftState();
     } catch (e) {

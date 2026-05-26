@@ -25,6 +25,7 @@ class PromoApiService {
     List<int> fileBytes, {
     required String brand,
     required String validUntil,
+    String? subtype,
   }) async {
     final token = await _getToken();
     if (token == null) {
@@ -50,6 +51,9 @@ class PromoApiService {
 
     request.fields['brand'] = brand;
     request.fields['valid_until'] = validUntil;
+    if (subtype != null && subtype.isNotEmpty) {
+      request.fields['subtype'] = subtype;
+    }
 
     final response = await request.send();
     final body = await response.stream.bytesToString();
@@ -74,10 +78,19 @@ class PromoApiService {
   }
 
   Future<void> uploadPromoFromGoogleSheet(String sheetUrl,
-      {required String brand, required String validUntil}) async {
+      {required String brand, required String validUntil, String? subtype}) async {
     final token = await _getToken();
     if (token == null) {
       throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+
+    final bodyMap = {
+      'google_sheet_url': sheetUrl,
+      'brand': brand,
+      'valid_until': validUntil,
+    };
+    if (subtype != null && subtype.isNotEmpty) {
+      bodyMap['subtype'] = subtype;
     }
 
     final response = await http.post(
@@ -86,11 +99,7 @@ class PromoApiService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json; charset=utf-8',
       },
-      body: jsonEncode({
-        'google_sheet_url': sheetUrl,
-        'brand': brand,
-        'valid_until': validUntil,
-      }),
+      body: jsonEncode(bodyMap),
     );
 
     if (response.statusCode == 200) {
@@ -318,5 +327,119 @@ class PromoApiService {
     } catch (_) {
       return null;
     }
+  }
+
+  // ───── Bolt Accounts ─────
+
+  Future<List<dynamic>> getBoltAccounts() async {
+    final token = await _getToken();
+    if (token == null) throw PromoApiServiceException('Не авторизован', statusCode: 401);
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/bolt-accounts'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes)) as List;
+    }
+    throw PromoApiServiceException('Ошибка загрузки', statusCode: response.statusCode);
+  }
+
+  Future<void> createBoltAccount(String login, String password, {String description = ''}) async {
+    final token = await _getToken();
+    if (token == null) throw PromoApiServiceException('Не авторизован', statusCode: 401);
+
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/bolt-accounts'),
+      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      body: jsonEncode({'login': login, 'password': password, 'description': description}),
+    );
+
+    if (response.statusCode != 201) {
+      final error = _tryParseJson(utf8.decode(response.bodyBytes))?['error'] ?? 'Ошибка';
+      throw PromoApiServiceException(error, statusCode: response.statusCode);
+    }
+  }
+
+  Future<void> updateBoltAccount(int id, {String? login, String? password, String? description, bool? isActive}) async {
+    final token = await _getToken();
+    if (token == null) throw PromoApiServiceException('Не авторизован', statusCode: 401);
+
+    final body = <String, dynamic>{};
+    if (login != null) body['login'] = login;
+    if (password != null) body['password'] = password;
+    if (description != null) body['description'] = description;
+    if (isActive != null) body['is_active'] = isActive;
+
+    final response = await http.put(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/bolt-accounts/$id'),
+      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode != 200) {
+      throw PromoApiServiceException('Ошибка обновления', statusCode: response.statusCode);
+    }
+  }
+
+  Future<void> deleteBoltAccount(int id) async {
+    final token = await _getToken();
+    if (token == null) throw PromoApiServiceException('Не авторизован', statusCode: 401);
+
+    final response = await http.delete(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/bolt-accounts/$id'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode != 200) {
+      throw PromoApiServiceException('Ошибка удаления', statusCode: response.statusCode);
+    }
+  }
+
+  Future<void> bulkAssignBoltAccount(int accountId, List<int> userIds) async {
+    final token = await _getToken();
+    if (token == null) throw PromoApiServiceException('Не авторизован', statusCode: 401);
+
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/bolt-accounts/$accountId/bulk-assign'),
+      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      body: jsonEncode({'user_ids': userIds}),
+    );
+
+    if (response.statusCode != 200) {
+      throw PromoApiServiceException('Ошибка назначения', statusCode: response.statusCode);
+    }
+  }
+
+  Future<void> unassignBoltAccount(int accountId, int userId) async {
+    final token = await _getToken();
+    if (token == null) throw PromoApiServiceException('Не авторизован', statusCode: 401);
+
+    final response = await http.delete(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/bolt-accounts/$accountId/unassign/$userId'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode != 200) {
+      throw PromoApiServiceException('Ошибка снятия назначения', statusCode: response.statusCode);
+    }
+  }
+
+  Future<Map<String, dynamic>?> getMyBoltAccount() async {
+    final token = await _getToken();
+    if (token == null) throw PromoApiServiceException('Не авторизован', statusCode: 401);
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/bolt-account'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final body = utf8.decode(response.bodyBytes);
+      if (body == 'null' || body.trim().isEmpty) return null;
+      return jsonDecode(body) as Map<String, dynamic>;
+    }
+    return null;
   }
 }

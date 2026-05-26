@@ -34,6 +34,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     'WHOOSH': false,
     'BOLT': false,
   };
+  Map<String, dynamic>? _boltAccount;
 
   @override
   void initState() {
@@ -93,6 +94,14 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     _syncWithProfile();
     await _checkShiftStatus();
     await _loadActiveBrand();
+    await _loadBoltAccount();
+  }
+
+  Future<void> _loadBoltAccount() async {
+    try {
+      final account = await _promoService.getMyBoltAccount();
+      if (mounted) setState(() => _boltAccount = account);
+    } catch (_) {}
   }
 
   void _syncWithProfile() {
@@ -268,6 +277,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
           await Provider.of<ShiftProvider>(context, listen: false).loadProfile();
           _syncWithProfile();
           await _loadActiveBrand();
+          await _loadBoltAccount();
         },
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -277,6 +287,11 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
             ...['JET', 'YANDEX', 'WHOOSH', 'BOLT'].map((brand) {
               final isClaimed = _hasClaimedToday[brand] ?? false;
               final hasActiveBrand = _activeBrand != null && _activeBrand!.isNotEmpty;
+              
+              // Bolt — отдельная логика (аккаунты, не промокоды)
+              if (brand == 'BOLT') {
+                return _buildBoltAccountCard(isDark);
+              }
               
               // 1. Если админ не указал бренд, и мы его не брали - скрываем
               if (!hasActiveBrand && !isClaimed) {
@@ -419,7 +434,12 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
                   ),
                   const SizedBox(height: 12),
-                  ...codes.map((code) => _buildProminentCodeRow(code, brandColor, isDark)).toList(),
+                  if (brand == 'YANDEX' && codes.length >= 2) ...[
+                    _buildLabeledCodeRow(codes[0], '🔴 Бесплатный старт', Colors.red, isDark),
+                    const SizedBox(height: 4),
+                    _buildLabeledCodeRow(codes[1], '🟢 Бесплатные минуты', Colors.green, isDark),
+                  ] else
+                    ...codes.map((code) => _buildProminentCodeRow(code, brandColor, isDark)),
                   const SizedBox(height: 8),
                   const Text(
                     'Действует до конца смены',
@@ -492,6 +512,62 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     );
   }
 
+  Widget _buildLabeledCodeRow(String code, String label, Color color, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white10 : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.5), width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  code,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.copy_rounded, color: color, size: 28),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: code));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Промокод $code скопирован!'),
+                      backgroundColor: color,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _getBrandColor(String brand) {
     switch (brand) {
       case 'JET': return Colors.purple;
@@ -510,5 +586,162 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
       case 'BOLT': return Icons.bolt;
       default: return Icons.help_outline;
     }
+  }
+
+  Widget _buildBoltAccountCard(bool isDark) {
+    final hasAccount = _boltAccount != null;
+    const brandColor = Color(0xFF32BB78);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: hasAccount
+            ? brandColor.withOpacity(isDark ? 0.15 : 0.05)
+            : Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasAccount ? brandColor : Colors.transparent,
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: brandColor.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.bolt, color: brandColor, size: 28),
+            ),
+            title: const Text(
+              'BOLT',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+            ),
+            subtitle: Text(
+              hasAccount ? 'АККАУНТ НАЗНАЧЕН' : 'Аккаунт не назначен',
+              style: TextStyle(
+                color: hasAccount ? Colors.green : Colors.grey,
+                fontWeight: hasAccount ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+            trailing: hasAccount
+                ? const Icon(Icons.check_circle, color: Colors.green, size: 32)
+                : const Icon(Icons.lock_outline, size: 24, color: Colors.grey),
+          ),
+          if (hasAccount) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                children: [
+                  const Divider(height: 24),
+                  const Text(
+                    'ДАННЫЕ ДЛЯ ВХОДА:',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
+                  ),
+                  const SizedBox(height: 12),
+                  // Login
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white10 : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: brandColor.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person_outline, color: brandColor, size: 20),
+                        const SizedBox(width: 10),
+                        const Text('Логин: ', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                        Expanded(
+                          child: Text(
+                            _boltAccount!['login'] ?? '',
+                            style: const TextStyle(fontFamily: 'monospace', fontSize: 18, fontWeight: FontWeight.w900, color: brandColor, letterSpacing: 1),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy_rounded, color: brandColor, size: 22),
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: _boltAccount!['login'] ?? ''));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Логин скопирован'), backgroundColor: brandColor, behavior: SnackBarBehavior.floating),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Password
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white10 : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: brandColor.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_outline, color: brandColor, size: 20),
+                        const SizedBox(width: 10),
+                        const Text('Пароль: ', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                        Expanded(
+                          child: Text(
+                            _boltAccount!['password'] ?? '',
+                            style: const TextStyle(fontFamily: 'monospace', fontSize: 18, fontWeight: FontWeight.w900, color: brandColor, letterSpacing: 1),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy_rounded, color: brandColor, size: 22),
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: _boltAccount!['password'] ?? ''));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Пароль скопирован'), backgroundColor: brandColor, behavior: SnackBarBehavior.floating),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_boltAccount!['description'] != null && (_boltAccount!['description'] as String).isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _boltAccount!['description'],
+                      style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ] else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
+              child: const Center(
+                child: Text(
+                  'Обратитесь к администратору',
+                  style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

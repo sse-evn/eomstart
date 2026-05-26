@@ -3,15 +3,64 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:micro_mobility_app/src/core/services/promo_api_service.dart';
+import 'package:micro_mobility_app/src/features/admin/bolt_accounts_admin_screen.dart';
 
-class AdminPromoScreen extends StatelessWidget {
+class AdminPromoScreen extends StatefulWidget {
   const AdminPromoScreen({super.key});
 
   @override
+  State<AdminPromoScreen> createState() => _AdminPromoScreenState();
+}
+
+class _AdminPromoScreenState extends State<AdminPromoScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const PromoManagementContent();
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    return Column(
+      children: [
+        Material(
+          color: primaryColor,
+          child: TabBar(
+            controller: _tabController,
+            tabs: const [
+              Tab(text: 'Промокоды', icon: Icon(Icons.local_offer, size: 18)),
+              Tab(text: 'Bolt Аккаунты', icon: Icon(Icons.bolt, size: 18)),
+            ],
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            indicator: const UnderlineTabIndicator(
+              borderSide: BorderSide(color: Colors.white, width: 2.0),
+            ),
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: const [
+              PromoManagementContent(),
+              BoltAccountsAdminScreen(),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
+
 
 class PromoManagementContent extends StatefulWidget {
   const PromoManagementContent({super.key});
@@ -169,68 +218,91 @@ Future<void> _uploadExcel() async {
   );
   if (result == null) return;
 
-  // Диалог должен вернуть Map<String, String>
+  String? dialogBrand;
+  String? dialogSubtype;
+  DateTime? dialogDate;
+
   final selectedData = await showDialog<Map<String, String>>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Выберите бренд и дату'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          DropdownButtonFormField<String>(
-            initialValue: _selectedBrandForUpload,
-            items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
-                .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                .toList(),
-            onChanged: (v) => setState(() => _selectedBrandForUpload = v),
-            decoration: const InputDecoration(labelText: 'Бренд промокодов'),
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setDialogState) => AlertDialog(
+        title: const Text('Выберите бренд и дату'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              value: dialogBrand,
+              items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
+                  .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                  .toList(),
+              onChanged: (v) => setDialogState(() {
+                dialogBrand = v;
+                dialogSubtype = null; // Сбрасываем при смене бренда
+              }),
+              decoration: const InputDecoration(labelText: 'Бренд промокодов'),
+            ),
+            if (dialogBrand == 'YANDEX') ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: dialogSubtype,
+                items: const [
+                  DropdownMenuItem(value: 'start', child: Text('🔴 Бесплатный старт')),
+                  DropdownMenuItem(value: 'minutes', child: Text('🟢 Бесплатные минуты')),
+                ],
+                onChanged: (v) => setDialogState(() => dialogSubtype = v),
+                decoration: const InputDecoration(labelText: 'Тип промокода'),
+              ),
+            ],
+            const SizedBox(height: 12),
+            TextFormField(
+              readOnly: true,
+              onTap: () async {
+                final pickedDate = await showDatePicker(
+                  context: ctx,
+                  initialDate: DateTime.now().add(const Duration(days: 7)),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime(2030),
+                );
+                if (pickedDate != null) {
+                  setDialogState(() => dialogDate = pickedDate);
+                }
+              },
+              decoration: InputDecoration(
+                labelText: 'Дата окончания действия',
+                hintText: dialogDate == null
+                    ? 'Выберите дату'
+                    : dialogDate!.toLocal().toString().split(' ')[0],
+                suffixIcon: const Icon(Icons.calendar_today),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            readOnly: true,
-            onTap: () async {
-              final pickedDate = await showDatePicker(
-                context: context,
-                initialDate: DateTime.now().add(const Duration(days: 7)),
-                firstDate: DateTime.now(),
-                lastDate: DateTime(2030),
-              );
-              if (pickedDate != null) {
-                setState(() {
-                  _selectedValidUntil = pickedDate;
+          ElevatedButton(
+            onPressed: () {
+              if (dialogBrand != null && dialogDate != null) {
+                // Для YANDEX обязательно выбрать subtype
+                if (dialogBrand == 'YANDEX' && dialogSubtype == null) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Выберите тип промокода для YANDEX'), backgroundColor: Colors.orange),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx, {
+                  'brand': dialogBrand!,
+                  'validUntil': dialogDate!.toIso8601String().split('T')[0],
+                  if (dialogSubtype != null) 'subtype': dialogSubtype!,
                 });
               }
             },
-            decoration: InputDecoration(
-              labelText: 'Дата окончания действия',
-              hintText: _selectedValidUntil == null
-                  ? 'Выберите дату'
-                  : _selectedValidUntil!.toLocal().toString().split(' ')[0],
-              suffixIcon: const Icon(Icons.calendar_today),
-            ),
+            child: const Text('Подтвердить'),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Отмена'),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            if (_selectedBrandForUpload != null &&
-                _selectedValidUntil != null) {
-              Navigator.pop(ctx, {
-                'brand': _selectedBrandForUpload!,
-                'validUntil': _selectedValidUntil!
-                    .toIso8601String()
-                    .split('T')[0], // YYYY-MM-DD
-              });
-            }
-          },
-          child: const Text('Подтвердить'),
-        ),
-      ],
     ),
   );
 
@@ -246,12 +318,15 @@ Future<void> _uploadExcel() async {
       bytes,
       brand: selectedData['brand']!,
       validUntil: selectedData['validUntil']!,
+      subtype: selectedData['subtype'],
     );
 
     if (mounted) {
+      final subtypeLabel = selectedData['subtype'] == 'start' ? ' (старт)' : 
+                           selectedData['subtype'] == 'minutes' ? ' (минуты)' : '';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Промокоды загружены и обработаны!'),
+        SnackBar(
+          content: Text('Промокоды ${selectedData['brand']}$subtypeLabel загружены!'),
           backgroundColor: Colors.green,
         ),
       );
@@ -290,73 +365,100 @@ Future<void> _uploadExcel() async {
 
   Future<void> _uploadFromGoogleSheet() async {
     final controller = TextEditingController();
+    String? dialogBrand;
+    String? dialogSubtype;
+    DateTime? dialogDate;
 
     final urlData = await showDialog<Map<String, String>>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Загрузка из Google Таблицы'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  labelText: 'Ссылка на таблицу',
-                  hintText: 'https://docs.google.com/spreadsheets/d/...',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Загрузка из Google Таблицы'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    labelText: 'Ссылка на таблицу',
+                    hintText: 'https://docs.google.com/spreadsheets/d/...',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedBrandForUpload,
-                items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
-                    .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedBrandForUpload = v),
-                decoration: const InputDecoration(labelText: 'Бренд'),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                readOnly: true,
-                onTap: () async {
-                  final pickedDate = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime.now().add(const Duration(days: 7)),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime(2030),
-                  );
-                  if (pickedDate != null) {
-                    setState(() => _selectedValidUntil = pickedDate);
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: dialogBrand,
+                  items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
+                      .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                      .toList(),
+                  onChanged: (v) => setDialogState(() {
+                    dialogBrand = v;
+                    dialogSubtype = null;
+                  }),
+                  decoration: const InputDecoration(labelText: 'Бренд'),
+                ),
+                if (dialogBrand == 'YANDEX') ...[
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: dialogSubtype,
+                    items: const [
+                      DropdownMenuItem(value: 'start', child: Text('🔴 Бесплатный старт')),
+                      DropdownMenuItem(value: 'minutes', child: Text('🟢 Бесплатные минуты')),
+                    ],
+                    onChanged: (v) => setDialogState(() => dialogSubtype = v),
+                    decoration: const InputDecoration(labelText: 'Тип промокода'),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                TextFormField(
+                  readOnly: true,
+                  onTap: () async {
+                    final pickedDate = await showDatePicker(
+                      context: ctx,
+                      initialDate: DateTime.now().add(const Duration(days: 7)),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime(2030),
+                    );
+                    if (pickedDate != null) {
+                      setDialogState(() => dialogDate = pickedDate);
+                    }
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Дата окончания',
+                    hintText: dialogDate == null
+                        ? 'Выберите дату'
+                        : dialogDate!.toLocal().toString().split(' ')[0],
+                    suffixIcon: const Icon(Icons.calendar_today),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+            ElevatedButton(
+              onPressed: () {
+                if (controller.text.isNotEmpty &&
+                    dialogBrand != null &&
+                    dialogDate != null) {
+                  if (dialogBrand == 'YANDEX' && dialogSubtype == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('Выберите тип промокода для YANDEX'), backgroundColor: Colors.orange),
+                    );
+                    return;
                   }
-                },
-                decoration: InputDecoration(
-                  labelText: 'Дата окончания',
-                  hintText: _selectedValidUntil == null
-                      ? 'Выберите дату'
-                      : _selectedValidUntil!.toLocal().toString().split(' ')[0],
-                  suffixIcon: const Icon(Icons.calendar_today),
-                ),
-              ),
-            ],
-          ),
+                  Navigator.pop(ctx, {
+                    'url': controller.text.trim(),
+                    'brand': dialogBrand!,
+                    'validUntil': dialogDate!.toIso8601String().split('T')[0],
+                    if (dialogSubtype != null) 'subtype': dialogSubtype!,
+                  });
+                }
+              },
+              child: const Text('Загрузить'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
-          ElevatedButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty &&
-                  _selectedBrandForUpload != null &&
-                  _selectedValidUntil != null) {
-                Navigator.pop(ctx, {
-                  'url': controller.text.trim(),
-                  'brand': _selectedBrandForUpload!,
-                  'validUntil': _selectedValidUntil!.toIso8601String().split('T')[0],
-                });
-              }
-            },
-            child: const Text('Загрузить'),
-          ),
-        ],
       ),
     );
 
@@ -368,6 +470,7 @@ Future<void> _uploadExcel() async {
         urlData['url']!,
         brand: urlData['brand']!,
         validUntil: urlData['validUntil']!,
+        subtype: urlData['subtype'],
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -752,6 +855,10 @@ Future<void> _uploadExcel() async {
   Widget _buildDetailedStats(bool isDarkMode) {
     final summaryRaw = _stats?['summary'];
     final summary = summaryRaw is Map ? Map<String, int>.from(summaryRaw) : {'JET': 0, 'YANDEX': 0, 'WHOOSH': 0, 'BOLT': 0};
+
+    final yandexStart = summary['YANDEX_START'] ?? 0;
+    final yandexMinutes = summary['YANDEX_MINUTES'] ?? 0;
+    final hasYandexSubtypes = yandexStart > 0 || yandexMinutes > 0;
     
     return Container(
       decoration: BoxDecoration(
@@ -768,6 +875,19 @@ Future<void> _uploadExcel() async {
                 _buildStatRow('JET', summary['JET'] ?? 0, _brandFormats['JET'] ?? 'GT9-XXXXXX', isDarkMode),
                 const Divider(height: 24),
                 _buildStatRow('YANDEX', summary['YANDEX'] ?? 0, _brandFormats['YANDEX'] ?? 'ocf/ocm + цифры', isDarkMode),
+                if (hasYandexSubtypes) ...[
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 46),
+                    child: Column(
+                      children: [
+                        _buildSubtypeRow('🔴 Старт', yandexStart, Colors.red),
+                        const SizedBox(height: 4),
+                        _buildSubtypeRow('🟢 Минуты', yandexMinutes, Colors.green),
+                      ],
+                    ),
+                  ),
+                ],
                 const Divider(height: 24),
                 _buildStatRow('WHOOSH', summary['WHOOSH'] ?? 0, _brandFormats['WHOOSH'] ?? 'WSH_XXXXXX', isDarkMode),
                 const Divider(height: 24),
@@ -777,6 +897,23 @@ Future<void> _uploadExcel() async {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSubtypeRow(String label, int count, Color color) {
+    return Row(
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: count > 0 ? color.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text('$count', style: TextStyle(color: count > 0 ? color : Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+        ),
+      ],
     );
   }
 

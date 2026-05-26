@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/src/core/config/app_config.dart';
-import 'package:micro_mobility_app/src/features/admin/promo_codes_admin_screen.dart'
-    show AdminPromoCodesScreen, AdminPromoScreen;
+import 'package:micro_mobility_app/src/features/admin/promo_codes_admin_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/shift_history_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/shift_monitoring_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/admin_map_screens.dart';
