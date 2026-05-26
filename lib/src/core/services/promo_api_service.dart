@@ -199,6 +199,29 @@ class PromoApiService {
     }
   }
 
+  Future<List<dynamic>> getAllAdminUsers() async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/users'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes)) as List;
+    } else if (response.statusCode == 401) {
+      throw PromoApiServiceException('Сессия истекла', statusCode: 401);
+    } else if (response.statusCode == 403) {
+      throw PromoApiServiceException('Доступ запрещён', statusCode: 403);
+    } else {
+      throw PromoApiServiceException('Ошибка загрузки данных пользователей',
+          statusCode: response.statusCode);
+    }
+  }
+
   Future<void> setActivePromoBrand(String brand, {int days = 10}) async {
     final token = await _getToken();
     if (token == null) {

@@ -6,7 +6,8 @@ class BoltAccountsAdminScreen extends StatefulWidget {
   const BoltAccountsAdminScreen({super.key});
 
   @override
-  State<BoltAccountsAdminScreen> createState() => _BoltAccountsAdminScreenState();
+  State<BoltAccountsAdminScreen> createState() =>
+      _BoltAccountsAdminScreenState();
 }
 
 class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
@@ -27,7 +28,7 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
       final accounts = await _service.getBoltAccounts();
       List<dynamic> users = [];
       try {
-        users = await _service.getClaimedPromos(); // Uses admin/users endpoint
+        users = await _service.getAllAdminUsers();
       } catch (_) {}
       if (mounted) {
         setState(() {
@@ -58,15 +59,27 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: loginCtrl, decoration: const InputDecoration(labelText: 'Логин', prefixIcon: Icon(Icons.person_outline))),
+            TextField(
+                controller: loginCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'Логин',
+                    prefixIcon: Icon(Icons.person_outline))),
             const SizedBox(height: 12),
-            TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Пароль', prefixIcon: Icon(Icons.lock_outline))),
+            TextField(
+                controller: passCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'Пароль', prefixIcon: Icon(Icons.lock_outline))),
             const SizedBox(height: 12),
-            TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Описание (опционально)', prefixIcon: Icon(Icons.note_outlined))),
+            TextField(
+                controller: descCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'Описание (опционально)',
+                    prefixIcon: Icon(Icons.note_outlined))),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
           ElevatedButton(
             onPressed: () {
               if (loginCtrl.text.isNotEmpty && passCtrl.text.isNotEmpty) {
@@ -82,14 +95,17 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
 
     if (result == true) {
       try {
-        await _service.createBoltAccount(loginCtrl.text, passCtrl.text, description: descCtrl.text);
+        await _service.createBoltAccount(loginCtrl.text, passCtrl.text,
+            description: descCtrl.text);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Аккаунт создан'), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Аккаунт создан'), backgroundColor: Colors.green));
         }
         _loadData();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Ошибка: $e'), backgroundColor: Colors.red));
         }
       }
     }
@@ -107,45 +123,67 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: loginCtrl, decoration: const InputDecoration(labelText: 'Логин', prefixIcon: Icon(Icons.person_outline))),
+            TextField(
+                controller: loginCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'Логин',
+                    prefixIcon: Icon(Icons.person_outline))),
             const SizedBox(height: 12),
-            TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Пароль', prefixIcon: Icon(Icons.lock_outline))),
+            TextField(
+                controller: passCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'Пароль', prefixIcon: Icon(Icons.lock_outline))),
             const SizedBox(height: 12),
-            TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Описание', prefixIcon: Icon(Icons.note_outlined))),
+            TextField(
+                controller: descCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'Описание',
+                    prefixIcon: Icon(Icons.note_outlined))),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (c) => AlertDialog(
-                  title: const Text('Удалить аккаунт?'),
-                  content: Text('Аккаунт "${account['login']}" будет удалён.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(c), child: const Text('Нет')),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(c, true),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                      child: const Text('Удалить', style: TextStyle(color: Colors.white)),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      title: const Text('Удалить аккаунт?'),
+                      content: Text('Аккаунт "${account['login']}" будет удалён.'),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(c),
+                            child: const Text('Нет')),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(c, true),
+                          style:
+                              ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                          child: const Text('Удалить',
+                              style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              );
-              if (confirm == true) {
-                await _service.deleteBoltAccount(account['id']);
-                _loadData();
-              }
-            },
-            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
-          ),
-          const Spacer(),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('Сохранить', style: TextStyle(color: Colors.white)),
+                  );
+                  if (confirm == true) {
+                    await _service.deleteBoltAccount(account['id']);
+                    _loadData();
+                  }
+                },
+                child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+              ),
+              const Spacer(),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                child:
+                    const Text('Сохранить', style: TextStyle(color: Colors.white)),
+              ),
+            ],
           ),
         ],
       ),
@@ -160,12 +198,14 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
           description: descCtrl.text,
         );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Обновлено'), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Обновлено'), backgroundColor: Colors.green));
         }
         _loadData();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Ошибка: $e'), backgroundColor: Colors.red));
         }
       }
     }
@@ -176,10 +216,10 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
     final assignedTo = (account['assigned_to'] as List?) ?? [];
     final assignedUserIds = assignedTo.map((a) => a['user_id'] as int).toSet();
 
-    // All users
+    // All users (scouts)
     final allUsers = _allUsers.where((u) {
       final role = (u['role'] as String?) ?? '';
-      return role == 'user' || role == 'coordinator';
+      return role == 'scout';
     }).toList();
 
     final selectedIds = Set<int>.from(assignedUserIds);
@@ -199,7 +239,8 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
                       'Выбрано: ${selectedIds.length} сотрудников',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.green),
                     ),
                   ),
                   Row(
@@ -218,7 +259,8 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                       ),
                       Expanded(
                         child: TextButton(
-                          onPressed: () => setDialogState(() => selectedIds.clear()),
+                          onPressed: () =>
+                              setDialogState(() => selectedIds.clear()),
                           child: const Text('Снять всех'),
                         ),
                       ),
@@ -240,7 +282,9 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                           dense: true,
                           activeColor: Colors.green,
                           title: Text(
-                            name.isNotEmpty ? '$name (@$username)' : '@$username',
+                            name.isNotEmpty
+                                ? '$name (@$username)'
+                                : '@$username',
                             style: const TextStyle(fontSize: 14),
                           ),
                           onChanged: (v) {
@@ -260,7 +304,9 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Отмена')),
               ElevatedButton(
                 onPressed: () async {
                   Navigator.pop(ctx);
@@ -275,22 +321,29 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                     }
                     // Bulk assign selected
                     if (selectedIds.isNotEmpty) {
-                      await _service.bulkAssignBoltAccount(account['id'], selectedIds.toList());
+                      await _service.bulkAssignBoltAccount(
+                          account['id'], selectedIds.toList());
                     }
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Назначено ${selectedIds.length} сотрудникам'), backgroundColor: Colors.green),
+                        SnackBar(
+                            content: Text(
+                                'Назначено ${selectedIds.length} сотрудникам'),
+                            backgroundColor: Colors.green),
                       );
                     }
                     _loadData();
                   } catch (e) {
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Ошибка: $e'),
+                          backgroundColor: Colors.red));
                     }
                   }
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                child: const Text('Применить', style: TextStyle(color: Colors.white)),
+                child: const Text('Применить',
+                    style: TextStyle(color: Colors.white)),
               ),
             ],
           );
@@ -327,8 +380,12 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Bolt Аккаунты', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-                    Text('${_accounts.length} аккаунтов', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                    const Text('Bolt Аккаунты',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 16)),
+                    Text('${_accounts.length} аккаунтов',
+                        style:
+                            TextStyle(color: Colors.grey[500], fontSize: 12)),
                   ],
                 ),
               ),
@@ -339,7 +396,8 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ],
@@ -355,8 +413,10 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                     children: [
                       Icon(Icons.bolt, size: 48, color: Colors.grey),
                       SizedBox(height: 12),
-                      Text('Нет аккаунтов', style: TextStyle(color: Colors.grey, fontSize: 16)),
-                      Text('Нажмите "Добавить" для создания', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      Text('Нет аккаунтов',
+                          style: TextStyle(color: Colors.grey, fontSize: 16)),
+                      Text('Нажмите "Добавить" для создания',
+                          style: TextStyle(color: Colors.grey, fontSize: 13)),
                     ],
                   ),
                 )
@@ -365,7 +425,8 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                   child: ListView.builder(
                     padding: const EdgeInsets.all(12),
                     itemCount: _accounts.length,
-                    itemBuilder: (_, i) => _buildAccountCard(_accounts[i], isDark),
+                    itemBuilder: (_, i) =>
+                        _buildAccountCard(_accounts[i], isDark),
                   ),
                 ),
         ),
@@ -412,7 +473,8 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                       color: Colors.green.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.bolt, color: Colors.green, size: 24),
+                    child:
+                        const Icon(Icons.bolt, color: Colors.green, size: 24),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -421,38 +483,64 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                       children: [
                         Row(
                           children: [
-                            Text(account['login'] ?? '', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                            Text(account['login'] ?? '',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w900, fontSize: 16)),
                             const SizedBox(width: 8),
                             if (!isActive)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                                child: const Text('OFF', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                    color: Colors.red.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6)),
+                                child: const Text('OFF',
+                                    style: TextStyle(
+                                        color: Colors.red,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold)),
                               ),
                           ],
                         ),
                         const SizedBox(height: 2),
                         Row(
                           children: [
-                            const Icon(Icons.lock_outline, size: 14, color: Colors.grey),
+                            const Icon(Icons.lock_outline,
+                                size: 14, color: Colors.grey),
                             const SizedBox(width: 4),
-                            Text(account['password'] ?? '', style: TextStyle(color: Colors.grey[500], fontSize: 13, fontFamily: 'monospace')),
+                            Text(account['password'] ?? '',
+                                style: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontSize: 13,
+                                    fontFamily: 'monospace')),
                             const SizedBox(width: 8),
                             InkWell(
                               onTap: () {
-                                Clipboard.setData(ClipboardData(text: '${account['login']}\n${account['password']}'));
+                                Clipboard.setData(ClipboardData(
+                                    text:
+                                        '${account['login']}\n${account['password']}'));
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Логин и пароль скопированы'), backgroundColor: Colors.green, duration: Duration(seconds: 1)),
+                                  const SnackBar(
+                                      content:
+                                          Text('Логин и пароль скопированы'),
+                                      backgroundColor: Colors.green,
+                                      duration: Duration(seconds: 1)),
                                 );
                               },
-                              child: const Icon(Icons.copy, size: 14, color: Colors.green),
+                              child: const Icon(Icons.copy,
+                                  size: 14, color: Colors.green),
                             ),
                           ],
                         ),
-                        if (account['description'] != null && (account['description'] as String).isNotEmpty)
+                        if (account['description'] != null &&
+                            (account['description'] as String).isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
-                            child: Text(account['description'], style: TextStyle(color: Colors.grey[400], fontSize: 12, fontStyle: FontStyle.italic)),
+                            child: Text(account['description'],
+                                style: TextStyle(
+                                    color: Colors.grey[400],
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic)),
                           ),
                       ],
                     ),
@@ -469,21 +557,26 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
               color: isDark ? Colors.white.withOpacity(0.02) : Colors.grey[50],
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(16)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(Icons.people_outline, size: 16, color: Colors.grey[600]),
+                    Icon(Icons.people_outline,
+                        size: 16, color: Colors.grey[600]),
                     const SizedBox(width: 6),
                     Text(
-                      assignedTo.isEmpty ? 'Не назначен' : '${assignedTo.length} сотрудников',
+                      assignedTo.isEmpty
+                          ? 'Не назначен'
+                          : '${assignedTo.length} сотрудников',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: assignedTo.isEmpty ? Colors.orange : Colors.green,
+                        color:
+                            assignedTo.isEmpty ? Colors.orange : Colors.green,
                       ),
                     ),
                     const Spacer(),
@@ -491,7 +584,8 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                       onTap: () => _showBulkAssignDialog(account),
                       borderRadius: BorderRadius.circular(8),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.green.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
@@ -499,9 +593,14 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.person_add_alt, size: 14, color: Colors.green),
+                            Icon(Icons.person_add_alt,
+                                size: 14, color: Colors.green),
                             SizedBox(width: 4),
-                            Text('Назначить', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green)),
+                            Text('Назначить',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green)),
                           ],
                         ),
                       ),
@@ -518,13 +617,19 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                       final username = (user['username'] ?? '').toString();
                       final displayName = name.isNotEmpty ? name : '@$username';
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: Colors.green.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.green.withOpacity(0.2)),
+                          border:
+                              Border.all(color: Colors.green.withOpacity(0.2)),
                         ),
-                        child: Text(displayName, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.green)),
+                        child: Text(displayName,
+                            style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green)),
                       );
                     }).toList(),
                   ),

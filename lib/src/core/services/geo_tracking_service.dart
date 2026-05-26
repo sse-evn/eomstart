@@ -9,6 +9,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
@@ -24,6 +25,7 @@ const String _SHARED_PREFS_BG_RUNNING_KEY = 'is_bg_geo_tracking_running';
 const String _SHARED_PREFS_TOKEN_KEY = 'bg_geo_auth_token';
 
 Timer? _backgroundTimer;
+StreamSubscription<Position>? _positionStreamSubscription;
 int? _activeShiftId;
 String? _bgAuthToken;
 final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -68,10 +70,28 @@ FutureOr<bool> onStart(ServiceInstance service) async {
     _log("Получен сигнал stopTracking");
     _backgroundTimer?.cancel();
     _backgroundTimer = null;
+    _positionStreamSubscription?.cancel();
+    _positionStreamSubscription = null;
     _activeShiftId = null;
     _serviceIsActuallyRunning = false;
     service.stopSelf();
   });
+
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    _log("Инициализация iOS Location Stream...");
+    _positionStreamSubscription = Geolocator.getPositionStream(
+      locationSettings: AppleSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 10,
+        allowBackgroundLocationUpdates: true,
+        showBackgroundLocationIndicator: true,
+        pauseLocationUpdatesAutomatically: false,
+        activityType: ActivityType.otherNavigation,
+      ),
+    ).listen((position) {
+      _handleSinglePositionReceived(position);
+    });
+  }
 
   // Запускаем таймер сбора данных
   _backgroundTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
@@ -206,6 +226,48 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
   }
 }
 
+Future<void> _handleSinglePositionReceived(Position position) async {
+  _log("Получена позиция из iOS Stream: ${position.latitude}, ${position.longitude}");
+  if (position.latitude == 0.0 || position.longitude == 0.0) return;
+
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final currentActiveShiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
+    if (currentActiveShiftId == null) return;
+
+    final freshToken = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
+    if (freshToken != null) _bgAuthToken = freshToken;
+
+    int batteryLevel;
+    try {
+      batteryLevel = await Battery().batteryLevel;
+    } catch (_) {
+      batteryLevel = 0;
+    }
+
+    final geoDataJson = jsonEncode({
+      'lat': position.latitude,
+      'lon': position.longitude,
+      'speed': position.speed,
+      'accuracy': position.accuracy,
+      'battery': batteryLevel,
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'event': 'tracking',
+      'shift_id': currentActiveShiftId,
+    });
+
+    _log("iOS Stream Отправляем: $geoDataJson");
+    try {
+      await _sendSingleGeoDataToServer(geoDataJson);
+    } catch (e) {
+      _log("❌ iOS Stream Ошибка отправки: $e, сохраняем в буфер...");
+      await _bufferFailedData(geoDataJson, currentActiveShiftId);
+    }
+  } catch (e) {
+    _log("Критическая ошибка в iOS Stream сборе: $e");
+  }
+}
+
 Future<void> _sendSingleGeoDataToServer(String geoDataJson) async {
   final token = _bgAuthToken;
   if (token == null) {
@@ -247,6 +309,30 @@ Future<void> _bufferFailedData(String geoDataJson, int? shiftId) async {
 
 Future<void> startBackgroundTracking({required int shiftId}) async {
   _log("startBackgroundTracking($shiftId)");
+
+  // 1. Проверяем и запрашиваем "Always" (Всегда разрешать) геопозицию для стабильного трекинга в фоне
+  try {
+    var alwaysStatus = await Permission.locationAlways.status;
+    if (!alwaysStatus.isGranted) {
+      _log("Always location permission not granted, requesting...");
+      alwaysStatus = await Permission.locationAlways.request();
+    }
+  } catch (e) {
+    _log("Ошибка при запросе locationAlways: $e");
+  }
+
+  // 2. Для Android запрашиваем отключение ограничений батареи
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    try {
+      var batteryStatus = await Permission.ignoreBatteryOptimizations.status;
+      if (!batteryStatus.isGranted) {
+        _log("IgnoreBatteryOptimizations not granted, requesting...");
+        await Permission.ignoreBatteryOptimizations.request();
+      }
+    } catch (e) {
+      _log("Ошибка при запросе ignoreBatteryOptimizations: $e");
+    }
+  }
 
   final prefs = await SharedPreferences.getInstance();
   final isRunning = prefs.getBool(_SHARED_PREFS_BG_RUNNING_KEY) ?? false;
