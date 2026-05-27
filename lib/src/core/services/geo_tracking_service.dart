@@ -311,31 +311,37 @@ Future<void> _bufferFailedData(String geoDataJson, int? shiftId) async {
 Future<bool> startBackgroundTracking({required int shiftId}) async {
   _log("startBackgroundTracking($shiftId)");
 
-  // 1. Проверяем и запрашиваем геопозицию для стабильного трекинга в фоне
-  bool isAllowed(PermissionStatus s) => 
-      s == PermissionStatus.granted || 
-      s == PermissionStatus.limited || 
-      s == PermissionStatus.provisional;
-
+  // 1. Проверяем и запрашиваем геопозицию через Geolocator (он работает надежнее на iOS)
   try {
-    var status = await Permission.location.status;
-    if (!isAllowed(status)) {
-      _log("Location when in use not granted ($status), requesting...");
-      status = await Permission.location.request();
-      if (!isAllowed(status)) {
-        _log("Location denied after request ($status).");
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      _log("Location services are disabled.");
+      return false;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      _log("Location denied, requesting...");
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        _log("Location denied after request.");
         return false;
       }
     }
     
+    if (permission == LocationPermission.deniedForever) {
+      _log("Location permanently denied.");
+      return false;
+    }
+
+    // Попытка запросить Always доступ, если это возможно, но не критично для запуска
     var alwaysStatus = await Permission.locationAlways.status;
-    if (!isAllowed(alwaysStatus)) {
-      _log("Always location permission not granted ($alwaysStatus), requesting...");
+    if (alwaysStatus.isDenied) {
       await Permission.locationAlways.request();
     }
   } catch (e) {
     _log("Ошибка при запросе разрешений геолокации: $e");
-    // Не прерываем запуск, позволим Geolocator разобраться самому
+    // Не прерываем запуск, позволим Geolocator внутри фонового процесса разобраться самому
   }
 
   // 2. Для Android запрашиваем отключение ограничений батареи
