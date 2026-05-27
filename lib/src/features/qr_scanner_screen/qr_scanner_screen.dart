@@ -181,7 +181,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       return;
     }
 
-    final detectedBrand = _detectBrandFromLink(rawCode) ?? _detectBrandFromText(rawCode);
+    final detectedBrand =
+        _detectBrandFromLink(rawCode) ?? _detectBrandFromText(rawCode);
     if (detectedBrand != null) {
       String cleanVal = cleanedNumber;
       final upper = rawCode.toUpperCase().trim();
@@ -196,9 +197,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       } else if (detectedBrand == 'YANDEX' && upper.startsWith('YANDEX')) {
         cleanVal = rawCode.substring(6).trim();
       }
-      
+
       if (cleanVal.isEmpty) cleanVal = cleanedNumber;
-      
+
       _registerScooterForBrand(detectedBrand, cleanVal);
       return;
     }
@@ -316,7 +317,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
   void _registerScooterForBrand(String brand, String number) {
     final fullLabel = '[$brand] $number';
-    if (_scannedNumbers.contains(fullLabel) || _scannedNumbers.contains(number)) {
+    if (_scannedNumbers.contains(fullLabel) ||
+        _scannedNumbers.contains(number)) {
       _showMessage('Этот самокат уже добавлен!');
       return;
     }
@@ -353,7 +355,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   String? _detectBrandFromLink(String link) {
-    if (link.contains('whoosh.app.link') || link.contains('wsh.bike') || link.contains('wsh.app.link')) {
+    if (link.contains('whoosh.app.link') ||
+        link.contains('wsh.bike') ||
+        link.contains('wsh.app.link')) {
       return 'WHOOSH';
     }
     if (link.contains('scooters.taxify.eu')) {
@@ -362,7 +366,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     if (link.contains('go.yandex') || link.contains('yandex')) {
       return 'YANDEX';
     }
-    if (link.contains('ure.su') || link.contains('lite.app.link') || link.contains('jet')) {
+    if (link.contains('ure.su') ||
+        link.contains('lite.app.link') ||
+        link.contains('jet')) {
       return 'JET';
     }
     return null;
@@ -400,7 +406,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Сбросить форму?'),
-          content: const Text('Все введённые данные, список самокатов, конкурентов и фотографии будут удалены.'),
+          content: const Text(
+              'Все введённые данные, список самокатов, конкурентов и фотографии будут удалены.'),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -408,7 +415,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Сбросить', style: TextStyle(color: Colors.red)),
+              child:
+                  const Text('Сбросить', style: TextStyle(color: Colors.red)),
             ),
           ],
         );
@@ -557,7 +565,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final original = img.decodeImage(bytes);
     if (original == null) return imageFile;
 
-    final oriented = img.bakeOrientation(original);
+    var oriented = img.bakeOrientation(original);
+    // Если фотография горизонтальная (альбомная), поворачиваем её на 90 градусов,
+    // чтобы она ВСЕГДА сохранялась в вертикальном (портретном) формате.
+    // Это исключает переворот головы у проверяющего администратора!
+    if (oriented.width > oriented.height) {
+      oriented = img.copyRotate(oriented, angle: 90);
+    }
     final resized = img.copyResize(oriented, width: 1280);
 
     // Dynamic map overlay strictly on the bottom-left corner and larger
@@ -635,17 +649,19 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
   void _showMessage(String text) {
     if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(text),
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 1000),
       ),
     );
   }
 
   Future<void> _sendReport() async {
     final shiftProvider = context.read<ShiftProvider>();
-    
+
     final hasCounts = _competitorCounts.values.any((v) => v > 0);
     if (_scannedNumbers.isEmpty && !hasCounts) {
       _showMessage('Сначала отсканируйте или добавьте хотя бы один самокат');
@@ -655,12 +671,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     if (_photos.isEmpty) {
       _showMessage('Добавьте хотя бы одно фото');
       return;
-    }
-
-    if (_isQrScannerOpen) {
-      try {
-        await cameraController.stop();
-      } catch (_) {}
     }
 
     setState(() {
@@ -704,12 +714,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       _competitorCounts.updateAll((key, value) => 0);
     });
     _saveScannedNumbers();
-
-    if (_isQrScannerOpen) {
-      try {
-        await cameraController.start();
-      } catch (_) {}
-    }
   }
 
   Future<void> _performBackgroundUpload({
@@ -900,6 +904,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             child: MobileScanner(
               controller: cameraController,
               onDetect: (capture) {
+                if (_sending || _isProcessing) return;
                 for (final barcode in capture.barcodes) {
                   if (barcode.rawValue != null &&
                       barcode.rawValue != _lastScannedCode) {
@@ -941,11 +946,11 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       'Bolt': 0,
       'Other': 0,
     };
-    
+
     for (final num in _scannedNumbers) {
       final clean = num.trim();
       final upper = clean.toUpperCase();
-      
+
       bool matched = false;
       for (final brand in ['Yandex', 'Jet', 'Whoosh', 'Bolt']) {
         if (upper.startsWith('[${brand.toUpperCase()}]')) {
@@ -954,7 +959,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           break;
         }
       }
-      
+
       if (!matched) {
         // Очистим от возможных скобок для детекции по формату
         String rawNum = upper;
@@ -964,7 +969,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             rawNum = upper.substring(closeIdx + 1).trim();
           }
         }
-        
+
         if (RegExp(r'^\d{4}$').hasMatch(rawNum)) {
           summary['Bolt'] = (summary['Bolt'] ?? 0) + 1;
         } else if (RegExp(r'^[A-Z]{2}\d{4}$').hasMatch(rawNum)) {
@@ -978,7 +983,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         }
       }
     }
-    
+
     return summary;
   }
 
@@ -1007,7 +1012,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       decoration: BoxDecoration(
         color: isDark ? Colors.grey[900] : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
+        border:
+            Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1022,7 +1028,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   children: [
                     const Text(
                       'Список самокатов',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     if (parts.isNotEmpty) ...[
                       const SizedBox(height: 6),
@@ -1031,7 +1038,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.greenAccent[400] : Colors.green[700],
+                          color: isDark
+                              ? Colors.greenAccent[400]
+                              : Colors.green[700],
                         ),
                       ),
                     ],
@@ -1043,7 +1052,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.delete_rounded, size: 16, color: Colors.redAccent),
+                    Icon(Icons.delete_rounded,
+                        size: 16, color: Colors.redAccent),
                     SizedBox(width: 4),
                     Text(
                       'Очистить',
@@ -1067,7 +1077,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                 final index = entry.key;
                 final number = entry.value;
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: isDark ? Colors.grey[800] : Colors.green[50],
                     borderRadius: BorderRadius.circular(8),
@@ -1078,7 +1089,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.electric_scooter_rounded, size: 14, color: isDark ? Colors.white70 : Colors.green[700]),
+                      Icon(Icons.electric_scooter_rounded,
+                          size: 14,
+                          color: isDark ? Colors.white70 : Colors.green[700]),
                       const SizedBox(width: 6),
                       Text(
                         number,
@@ -1109,13 +1122,15 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             child: ElevatedButton.icon(
               onPressed: _copyAllNumbers,
               icon: const Icon(Icons.copy_rounded, size: 16),
-              label: const Text('Копировать список', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+              label: const Text('Копировать список',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: isDark ? Colors.grey[800] : Colors.green[50],
                 foregroundColor: isDark ? Colors.white : Colors.green[700],
                 elevation: 0,
                 minimumSize: const Size(double.infinity, 38),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
@@ -1134,7 +1149,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       decoration: BoxDecoration(
         color: isDark ? Colors.grey[900] : Colors.grey[100],
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
+        border:
+            Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1152,7 +1168,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.delete_sweep_rounded, size: 16, color: Colors.redAccent),
+                      Icon(Icons.delete_sweep_rounded,
+                          size: 16, color: Colors.redAccent),
                       SizedBox(width: 4),
                       Text(
                         'Сбросить',
@@ -1170,17 +1187,21 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              if (keys.isNotEmpty) Expanded(child: _buildCompetitorCard(keys[0], isDark)),
+              if (keys.isNotEmpty)
+                Expanded(child: _buildCompetitorCard(keys[0], isDark)),
               if (keys.length > 1) const SizedBox(width: 10),
-              if (keys.length > 1) Expanded(child: _buildCompetitorCard(keys[1], isDark)),
+              if (keys.length > 1)
+                Expanded(child: _buildCompetitorCard(keys[1], isDark)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              if (keys.length > 2) Expanded(child: _buildCompetitorCard(keys[2], isDark)),
+              if (keys.length > 2)
+                Expanded(child: _buildCompetitorCard(keys[2], isDark)),
               if (keys.length > 3) const SizedBox(width: 10),
-              if (keys.length > 3) Expanded(child: _buildCompetitorCard(keys[3], isDark)),
+              if (keys.length > 3)
+                Expanded(child: _buildCompetitorCard(keys[3], isDark)),
             ],
           ),
         ],

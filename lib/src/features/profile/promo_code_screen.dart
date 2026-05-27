@@ -590,17 +590,18 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   Widget _buildBoltAccountCard(bool isDark) {
     final hasAccount = _boltAccount != null;
+    final isLocked = hasAccount && (_boltAccount!['is_locked'] == true || _isShiftActive != true);
     const brandColor = Color(0xFF32BB78);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: hasAccount
+        color: (hasAccount && !isLocked)
             ? brandColor.withOpacity(isDark ? 0.15 : 0.05)
             : Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: hasAccount ? brandColor : Colors.transparent,
+          color: (hasAccount && !isLocked) ? brandColor : Colors.transparent,
           width: 2,
         ),
         boxShadow: [
@@ -628,17 +629,21 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
             subtitle: Text(
-              hasAccount ? 'АККАУНТ НАЗНАЧЕН' : 'Аккаунт не назначен',
+              isLocked 
+                  ? 'АККАУНТ НАЗНАЧЕН (СКРЫТ)' 
+                  : (hasAccount ? 'АККАУНТ НАЗНАЧЕН' : 'Аккаунт не назначен'),
               style: TextStyle(
-                color: hasAccount ? Colors.green : Colors.grey,
+                color: hasAccount ? (isLocked ? Colors.orange : Colors.green) : Colors.grey,
                 fontWeight: hasAccount ? FontWeight.bold : FontWeight.normal,
               ),
             ),
             trailing: hasAccount
-                ? const Icon(Icons.check_circle, color: Colors.green, size: 32)
+                ? (isLocked 
+                    ? const Icon(Icons.lock_clock, color: Colors.orange, size: 32)
+                    : const Icon(Icons.check_circle, color: Colors.green, size: 32))
                 : const Icon(Icons.lock_outline, size: 24, color: Colors.grey),
           ),
-          if (hasAccount) ...[
+          if (hasAccount && !isLocked) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Column(
@@ -722,7 +727,25 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                 ],
               ),
             ),
-          ] else
+          ] else if (isLocked)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
+              child: const Center(
+                child: Text(
+                  'СНАЧАЛА ОТКРОЙТЕ СМЕНУ',
+                  style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+            )
+          else
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 10),

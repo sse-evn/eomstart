@@ -118,14 +118,15 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
     final prefs = await SharedPreferences.getInstance();
     final currentActiveShiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
 
-    if (currentActiveShiftId == null ||
-        (currentActiveShiftId != _activeShiftId)) {
-      _log(
-          "ShiftID изменился или отсутствует ($currentActiveShiftId vs $_activeShiftId) — останавливаем таймер.");
+    if (currentActiveShiftId == null) {
+      _log("ShiftID отсутствует — останавливаем таймер.");
       timer.cancel();
       _activeShiftId = null;
       return;
     }
+
+    // Всегда синхронизируем локальный ID с актуальным из SharedPreferences
+    _activeShiftId = currentActiveShiftId;
 
     // Обновляем токен из хранилища на случай, если он поменялся (refresh)
     final freshToken = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
@@ -393,5 +394,14 @@ Future<void> stopBackgroundTracking() async {
 
 Future<bool> isBackgroundTrackingRunning() async {
   final prefs = await SharedPreferences.getInstance();
-  return prefs.getBool(_SHARED_PREFS_BG_RUNNING_KEY) ?? false;
+  final hasRunningFlag = prefs.getBool(_SHARED_PREFS_BG_RUNNING_KEY) ?? false;
+  if (!hasRunningFlag) return false;
+
+  try {
+    final isServiceRunning = await FlutterBackgroundService().isRunning();
+    return isServiceRunning;
+  } catch (e) {
+    _log("Ошибка при проверке реального статуса сервиса: $e");
+    return false;
+  }
 }

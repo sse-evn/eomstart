@@ -21,7 +21,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // Импортируем функции трекинга (предполагается, что они экспортированы)
 import '../../core/services/geo_tracking_service.dart'
-    show startBackgroundTracking, stopBackgroundTracking;
+    show startBackgroundTracking, stopBackgroundTracking, isBackgroundTrackingRunning;
 
 const String _SHARED_PREFS_BG_RUNNING_KEY = 'is_bg_geo_tracking_running';
 
@@ -74,8 +74,7 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
     }
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final isRunning = prefs.getBool(_SHARED_PREFS_BG_RUNNING_KEY) ?? false;
+      final isRunning = await isBackgroundTrackingRunning();
 
       if (mounted) {
         setState(() {

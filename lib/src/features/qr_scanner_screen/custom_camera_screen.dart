@@ -24,17 +24,20 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
   List<CameraDescription> _cameras = [];
   bool _isCameraInitialized = false;
   FlashMode _flashMode = FlashMode.off;
+  double _minZoomLevel = 1.0;
+  double _maxZoomLevel = 1.0;
+  double _currentZoomLevel = 1.0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (widget.overlayType == CameraOverlayType.landscape) {
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
-    }
+    // Разрешаем все ориентации на экране камеры, чтобы можно было удобно снимать в любой ориентации
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _initCamera();
   }
 
@@ -61,7 +64,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
 
       final controller = CameraController(
         selectedCamera,
-        ResolutionPreset.medium,
+        ResolutionPreset.high, // Увеличили качество до High (1080p) для идеальной четкости
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.jpeg,
       );
@@ -73,6 +76,15 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
         return;
       }
 
+      double minZoom = 1.0;
+      double maxZoom = 1.0;
+      try {
+        minZoom = await controller.getMinZoomLevel();
+        maxZoom = await controller.getMaxZoomLevel();
+      } catch (e) {
+        debugPrint('Error getting zoom levels: $e');
+      }
+
       try {
         await controller.setFlashMode(_flashMode);
       } catch (e) {
@@ -81,18 +93,22 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
 
       try {
         if (widget.overlayType == CameraOverlayType.landscape) {
-          await controller.lockCaptureOrientation(DeviceOrientation.landscapeLeft);
+          // Разблокируем ориентацию съемки, чтобы снимок сохранялся в соответствии с тем, как пользователь держит телефон (и вертикально, и горизонтально)
+          await controller.unlockCaptureOrientation();
         } else if (widget.overlayType == CameraOverlayType.helmetSelfie) {
           await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
         }
       } catch (e) {
-        debugPrint('Error locking capture orientation: $e');
+        debugPrint('Error locking/unlocking capture orientation: $e');
       }
 
       if (mounted) {
         setState(() {
           _controller = controller;
           _isCameraInitialized = true;
+          _minZoomLevel = minZoom;
+          _maxZoomLevel = maxZoom;
+          _currentZoomLevel = 1.0; // По умолчанию всегда начинаем с 1x (стандартная линза)
         });
       }
     } catch (e) {
@@ -104,12 +120,10 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
   void dispose() {
     _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
-    if (widget.overlayType == CameraOverlayType.landscape) {
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-      ]);
-    }
+    // Возвращаем принудительную портретную ориентацию для остального приложения
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
     // Null out first so any incoming callbacks after dispose() are ignored
     final c = _controller;
     _controller = null;
@@ -159,6 +173,38 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
     }
   }
 
+  Future<void> _toggleZoom() async {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    
+    try {
+      double targetZoom = 1.0;
+      if (_currentZoomLevel == 1.0) {
+        // Если устройство поддерживает сверхширокий угол (например, 0.5x), переключаемся на минимальный зум
+        if (_minZoomLevel < 1.0) {
+          targetZoom = _minZoomLevel;
+        } else {
+          // Если 0.5x нет, переключаемся на 2.0x (зум приближения)
+          targetZoom = _maxZoomLevel >= 2.0 ? 2.0 : _maxZoomLevel;
+        }
+      } else if (_currentZoomLevel < 1.0) {
+        // Мы в режиме 0.5x, возвращаемся в обычный 1.0x
+        targetZoom = 1.0;
+      } else {
+        // Мы в режиме 2.0x, возвращаемся в обычный 1.0x
+        targetZoom = 1.0;
+      }
+      
+      await _controller!.setZoomLevel(targetZoom);
+      if (mounted) {
+        setState(() {
+          _currentZoomLevel = targetZoom;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error toggling zoom: $e');
+    }
+  }
+
   Future<void> _takePicture() async {
     if (!_controller!.value.isInitialized || _controller!.value.isTakingPicture) {
       return;
@@ -189,30 +235,16 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
         child: Stack(
           children: [
             Positioned.fill(
-              child: ClipRect(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final screenRatio = constraints.maxWidth / constraints.maxHeight;
-                    final cameraRatio = _controller!.value.aspectRatio;
-                    double scale = screenRatio / cameraRatio;
-                    if (scale < 1.0) {
-                      scale = 1.0 / scale;
-                    }
-
-                    return Transform.scale(
-                      scale: scale,
-                      child: Center(
-                        child: CameraPreview(_controller!),
-                      ),
-                    );
-                  },
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: MediaQuery.of(context).orientation == Orientation.portrait
+                      ? 1 / _controller!.value.aspectRatio
+                      : _controller!.value.aspectRatio,
+                  child: CameraPreview(_controller!),
                 ),
               ),
             ),
-            if (widget.overlayType == CameraOverlayType.landscape)
-              Positioned.fill(
-                child: CustomPaint(painter: LandscapeOverlayPainter()),
-              ),
+
             if (widget.overlayType == CameraOverlayType.helmetSelfie)
               Positioned.fill(
                 child: Opacity(
@@ -237,7 +269,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
                   ),
                   child: Text(
                     widget.overlayType == CameraOverlayType.landscape 
-                        ? 'Поверните телефон горизонтально\nдля отчета'
+                        ? 'Сделайте фото самоката для отчета'
                         : 'Сделайте селфи в каске/шлеме',
                     style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
@@ -269,6 +301,37 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
                   size: 30,
                 ),
                 onPressed: _toggleFlash,
+              ),
+            ),
+            // Кнопка переключения зума (0.5x / 1.0x / 2.0x)
+            Positioned(
+              bottom: 130,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: GestureDetector(
+                  onTap: _toggleZoom,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white24, width: 1.5),
+                    ),
+                    child: Text(
+                      _currentZoomLevel < 1.0 
+                          ? '0.5x' 
+                          : _currentZoomLevel == 1.0 
+                              ? '1.0x' 
+                              : '${_currentZoomLevel.toStringAsFixed(1)}x',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             // Кнопка съемки

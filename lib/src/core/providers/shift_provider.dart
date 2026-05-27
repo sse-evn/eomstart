@@ -12,13 +12,14 @@ import 'package:micro_mobility_app/src/features/app/models/active_shift.dart'
     as model;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 import '../../features/app/models/shift_data.dart';
 import '../services/api_service.dart';
 import '../services/geo_tracking_service.dart'
     show
         startBackgroundTracking,
         stopBackgroundTracking,
-        syncBufferedData,
         isBackgroundTrackingRunning;
 import '../utils/time_utils.dart';
 
@@ -462,20 +463,33 @@ class ShiftProvider with ChangeNotifier {
 
       final bool isTrackingRunning = await isBackgroundTrackingRunning();
       final bool hasActiveShift = _activeShift != null;
+      final int? bgShiftId = _prefs.getInt('active_shift_id_for_bg_service');
 
-      if (hasActiveShift && !isTrackingRunning) {
-        debugPrint(
-            'SyncGeoTracking: Запуск трекинга для активной смены ${_activeShift!.id}');
-        await _prefs.setInt('active_shift_id_for_bg_service', _activeShift!.id);
-        await startBackgroundTracking(shiftId: _activeShift!.id);
-      } else if (!hasActiveShift && isTrackingRunning) {
-        debugPrint(
-            'SyncGeoTracking: Остановка трекинга, так как нет активной смены.');
-        await stopBackgroundTracking();
-        await _prefs.remove('active_shift_id_for_bg_service');
+      if (hasActiveShift) {
+        final currentShiftId = _activeShift!.id;
+        // Если трекинг не запущен или запущен для другого ID смены — принудительно перезапускаем
+        if (!isTrackingRunning || bgShiftId != currentShiftId) {
+          debugPrint(
+              'SyncGeoTracking: Запуск/перезапуск трекинга для активной смены $currentShiftId (предыдущая в фоне: $bgShiftId)');
+          await _prefs.setInt('active_shift_id_for_bg_service', currentShiftId);
+          await startBackgroundTracking(shiftId: currentShiftId);
+        } else {
+          debugPrint(
+              'SyncGeoTracking: Трекинг уже активно работает для смены $currentShiftId');
+        }
+
+        // Проактивно синхронизируем отложенный офлайн-буфер при наличии активной смены
+        syncBufferedData();
       } else {
-        debugPrint(
-            'SyncGeoTracking: Состояние трекинга и смены согласовано. Трекинг запущен: $isTrackingRunning, Активная смена: $hasActiveShift');
+        if (isTrackingRunning) {
+          debugPrint(
+              'SyncGeoTracking: Остановка трекинга, так как нет активной смены.');
+          await stopBackgroundTracking();
+          await _prefs.remove('active_shift_id_for_bg_service');
+        } else {
+          debugPrint(
+              'SyncGeoTracking: Смена неактивна, трекинг выключен.');
+        }
       }
     } catch (e) {
       debugPrint('Ошибка синхронизации геотрекинга: $e');
@@ -563,9 +577,58 @@ class ShiftProvider with ChangeNotifier {
   }
 
   Future<void> syncBufferedData() async {
+    if (_token == null || _activeShift == null) {
+      debugPrint('syncBufferedData: Нет активной смены или токена для отправки.');
+      return;
+    }
+
+    final int shiftId = _activeShift!.id;
+    final String bufferKey = 'geo_buffer_$shiftId';
+
     try {
-      // TODO: реализовать синхронизацию буфера
-      debugPrint('syncBufferedData() called — but not implemented');
+      final List<String> bufferStrings = _prefs.getStringList(bufferKey) ?? [];
+      if (bufferStrings.isEmpty) {
+        debugPrint('syncBufferedData: Буфер геоданных пуст.');
+        return;
+      }
+
+      debugPrint('syncBufferedData: Синхронизируем ${bufferStrings.length} гео-точек из буфера...');
+
+      final List<dynamic> dataList = bufferStrings
+          .map((s) {
+            try {
+              return jsonDecode(s);
+            } catch (e) {
+              return null;
+            }
+          })
+          .where((item) => item != null)
+          .toList();
+
+      if (dataList.isEmpty) {
+        await _prefs.remove(bufferKey);
+        return;
+      }
+
+      // Отправляем все точки пачкой в одном запросе
+      final url = Uri.parse(AppConfig.geoTrackUrl);
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $_token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'data': dataList,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint('✅ syncBufferedData: Успешно отправлено ${dataList.length} точек из офлайн-буфера!');
+        await _prefs.remove(bufferKey);
+      } else {
+        debugPrint('❌ syncBufferedData: Ошибка сервера ${response.statusCode}');
+      }
     } catch (e) {
       debugPrint('Ошибка syncBufferedData: $e');
     }
