@@ -107,7 +107,8 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
 
     try {
       if (newValue) {
-        int? activeShiftId = context.read<ShiftProvider>().activeShift?.id;
+        final activeShift = await context.read<ShiftProvider>().getActiveShift();
+        int? activeShiftId = activeShift?.id;
         if (activeShiftId != null && activeShiftId > 0) {
           await startBackgroundTracking(shiftId: activeShiftId);
         } else {

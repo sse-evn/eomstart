@@ -1,6 +1,7 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:micro_mobility_app/src/core/services/promo_api_service.dart';
 import 'package:micro_mobility_app/src/features/admin/bolt_accounts_admin_screen.dart';
@@ -12,7 +13,8 @@ class AdminPromoScreen extends StatefulWidget {
   State<AdminPromoScreen> createState() => _AdminPromoScreenState();
 }
 
-class _AdminPromoScreenState extends State<AdminPromoScreen> with SingleTickerProviderStateMixin {
+class _AdminPromoScreenState extends State<AdminPromoScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
@@ -61,7 +63,6 @@ class _AdminPromoScreenState extends State<AdminPromoScreen> with SingleTickerPr
   }
 }
 
-
 class PromoManagementContent extends StatefulWidget {
   const PromoManagementContent({super.key});
 
@@ -78,7 +79,6 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   String? _selectedBrand;
   DateTime? _endDate;
   DateTime? _selectedValidUntil; // Дата окончания, выбранная для загрузки файла
-
 
   // --- НОВАЯ ПЕРЕМЕННАЯ ---
   String? _selectedBrandForUpload; // Бренд, выбранный для загрузки файла
@@ -161,7 +161,8 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   void _showBrandFormatsDialog() {
     final controllers = <String, TextEditingController>{};
     for (var brand in ['JET', 'YANDEX', 'WHOOSH', 'BOLT']) {
-      controllers[brand] = TextEditingController(text: _brandFormats[brand] ?? '');
+      controllers[brand] =
+          TextEditingController(text: _brandFormats[brand] ?? '');
     }
 
     showDialog(
@@ -170,34 +171,41 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
         title: const Text('Типы промокодов'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          children: controllers.entries.map((e) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: TextField(
-              controller: e.value,
-              decoration: InputDecoration(
-                labelText: 'Формат для ${e.key}',
-                border: const OutlineInputBorder(),
-              ),
-            ),
-          )).toList(),
+          children: controllers.entries
+              .map((e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextField(
+                      controller: e.value,
+                      decoration: InputDecoration(
+                        labelText: 'Формат для ${e.key}',
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                  ))
+              .toList(),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
               setState(() => _isLoading = true);
               try {
                 for (var brand in controllers.keys) {
-                  await _service.updateBrandFormat(brand, controllers[brand]!.text);
+                  await _service.updateBrandFormat(
+                      brand, controllers[brand]!.text);
                 }
                 await _loadBrandFormats();
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Форматы обновлены')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Форматы обновлены')));
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('Ошибка: $e'),
+                      backgroundColor: Colors.red));
                 }
               } finally {
                 if (mounted) setState(() => _isLoading = false);
@@ -210,152 +218,160 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     );
   }
 
+  Future<void> _uploadExcel() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'xls', 'csv'],
+    );
+    if (result == null) return;
 
-Future<void> _uploadExcel() async {
-  final result = await FilePicker.platform.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: ['xlsx', 'xls', 'csv'],
-  );
-  if (result == null) return;
+    String? dialogBrand;
+    String? dialogSubtype;
+    DateTime? dialogDate;
 
-  String? dialogBrand;
-  String? dialogSubtype;
-  DateTime? dialogDate;
-
-  final selectedData = await showDialog<Map<String, String>>(
-    context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setDialogState) => AlertDialog(
-        title: const Text('Выберите бренд и дату'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<String>(
-              value: dialogBrand,
-              items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
-                  .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                  .toList(),
-              onChanged: (v) => setDialogState(() {
-                dialogBrand = v;
-                dialogSubtype = null; // Сбрасываем при смене бренда
-              }),
-              decoration: const InputDecoration(labelText: 'Бренд промокодов'),
-            ),
-            if (dialogBrand == 'YANDEX') ...[
+    final selectedData = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Выберите бренд и дату'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: dialogBrand,
+                items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
+                    .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                    .toList(),
+                onChanged: (v) => setDialogState(() {
+                  dialogBrand = v;
+                  dialogSubtype = null; // Сбрасываем при смене бренда
+                }),
+                decoration:
+                    const InputDecoration(labelText: 'Бренд промокодов'),
+              ),
+              if (dialogBrand == 'YANDEX') ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String?>(
+                  value: dialogSubtype,
+                  items: const [
+                    DropdownMenuItem(
+                        value: null,
+                        child: Text('⚡️ Автоопределение (Смешанный файл)')),
+                    DropdownMenuItem(
+                        value: 'start', child: Text('🔴 Бесплатный старт ')),
+                    DropdownMenuItem(
+                        value: 'minutes', child: Text('🟢 Бесплатные минуты ')),
+                  ],
+                  onChanged: (v) => setDialogState(() => dialogSubtype = v),
+                  decoration: const InputDecoration(labelText: 'Тип промокода'),
+                ),
+              ],
               const SizedBox(height: 12),
-              DropdownButtonFormField<String?>(
-                value: dialogSubtype,
-                items: const [
-                  DropdownMenuItem(value: null, child: Text('⚡️ Автоопределение (Смешанный файл)')),
-                  DropdownMenuItem(value: 'start', child: Text('🔴 Бесплатный старт (начинается с 2)')),
-                  DropdownMenuItem(value: 'minutes', child: Text('🟢 Бесплатные минуты (начинается с 3)')),
-                ],
-                onChanged: (v) => setDialogState(() => dialogSubtype = v),
-                decoration: const InputDecoration(labelText: 'Тип промокода'),
+              TextFormField(
+                readOnly: true,
+                onTap: () async {
+                  final pickedDate = await showDatePicker(
+                    context: ctx,
+                    initialDate: DateTime.now().add(const Duration(days: 7)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2030),
+                  );
+                  if (pickedDate != null) {
+                    setDialogState(() => dialogDate = pickedDate);
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Дата окончания действия',
+                  hintText: dialogDate == null
+                      ? 'Выберите дату'
+                      : dialogDate!.toLocal().toString().split(' ')[0],
+                  suffixIcon: const Icon(Icons.calendar_today),
+                ),
               ),
             ],
-            const SizedBox(height: 12),
-            TextFormField(
-              readOnly: true,
-              onTap: () async {
-                final pickedDate = await showDatePicker(
-                  context: ctx,
-                  initialDate: DateTime.now().add(const Duration(days: 7)),
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime(2030),
-                );
-                if (pickedDate != null) {
-                  setDialogState(() => dialogDate = pickedDate);
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (dialogBrand != null && dialogDate != null) {
+                  Navigator.pop(ctx, {
+                    'brand': dialogBrand!,
+                    'validUntil': dialogDate!.toIso8601String().split('T')[0],
+                    if (dialogSubtype != null) 'subtype': dialogSubtype!,
+                  });
                 }
               },
-              decoration: InputDecoration(
-                labelText: 'Дата окончания действия',
-                hintText: dialogDate == null
-                    ? 'Выберите дату'
-                    : dialogDate!.toLocal().toString().split(' ')[0],
-                suffixIcon: const Icon(Icons.calendar_today),
-              ),
+              child: const Text('Подтвердить'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (dialogBrand != null && dialogDate != null) {
-                Navigator.pop(ctx, {
-                  'brand': dialogBrand!,
-                  'validUntil': dialogDate!.toIso8601String().split('T')[0],
-                  if (dialogSubtype != null) 'subtype': dialogSubtype!,
-                });
-              }
-            },
-            child: const Text('Подтвердить'),
-          ),
-        ],
       ),
-    ),
-  );
-
-  if (selectedData == null) return;
-
-  final file = File(result.files.single.path!);
-  final bytes = await file.readAsBytes();
-
-  setState(() => _isLoading = true);
-
-  try {
-    await _service.uploadPromoFile(
-      bytes,
-      brand: selectedData['brand']!,
-      validUntil: selectedData['validUntil']!,
-      subtype: selectedData['subtype'],
     );
 
-    if (mounted) {
-      final subtypeLabel = selectedData['subtype'] == 'start' ? ' (старт)' : 
-                           selectedData['subtype'] == 'minutes' ? ' (минуты)' : '';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Промокоды ${selectedData['brand']}$subtypeLabel загружены!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      _loadAllData();
-    }
-  } on PromoApiServiceException catch (e) {
-    if (!mounted) return;
+    if (selectedData == null) return;
 
-    if (e.statusCode == 401) {
-      _handleUnauthorized();
-    } else if (e.statusCode == 403) {
-      _handleForbidden();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ошибка загрузки файла: ${e.message}'),
-          backgroundColor: Colors.red,
-        ),
+    final file = File(result.files.single.path!);
+    final bytes = await file.readAsBytes();
+
+    setState(() => _isLoading = true);
+
+    try {
+      await _service.uploadPromoFile(
+        bytes,
+        brand: selectedData['brand']!,
+        validUntil: selectedData['validUntil']!,
+        subtype: selectedData['subtype'],
       );
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ошибка: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  } finally {
-    if (mounted) {
-      setState(() => _isLoading = false);
+
+      if (mounted) {
+        final subtypeLabel = selectedData['subtype'] == 'start'
+            ? ' (старт)'
+            : selectedData['subtype'] == 'minutes'
+                ? ' (минуты)'
+                : '';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Промокоды ${selectedData['brand']}$subtypeLabel загружены!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadAllData();
+      }
+    } on PromoApiServiceException catch (e) {
+      if (!mounted) return;
+
+      if (e.statusCode == 401) {
+        _handleUnauthorized();
+      } else if (e.statusCode == 403) {
+        _handleForbidden();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка загрузки файла: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
-}
 
   Future<void> _uploadFromGoogleSheet() async {
     final controller = TextEditingController();
@@ -396,12 +412,19 @@ Future<void> _uploadExcel() async {
                   DropdownButtonFormField<String?>(
                     value: dialogSubtype,
                     items: const [
-                      DropdownMenuItem(value: null, child: Text('⚡️ Автоопределение (Смешанный файл)')),
-                      DropdownMenuItem(value: 'start', child: Text('🔴 Бесплатный старт (начинается с 2)')),
-                      DropdownMenuItem(value: 'minutes', child: Text('🟢 Бесплатные минуты (начинается с 3)')),
+                      DropdownMenuItem(
+                          value: null,
+                          child: Text('⚡️ Автоопределение (Смешанный файл)')),
+                      DropdownMenuItem(
+                          value: 'start',
+                          child: Text('🔴 Бесплатный старт (начинается с 2)')),
+                      DropdownMenuItem(
+                          value: 'minutes',
+                          child: Text('🟢 Бесплатные минуты (начинается с 3)')),
                     ],
                     onChanged: (v) => setDialogState(() => dialogSubtype = v),
-                    decoration: const InputDecoration(labelText: 'Тип промокода'),
+                    decoration:
+                        const InputDecoration(labelText: 'Тип промокода'),
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -430,7 +453,9 @@ Future<void> _uploadExcel() async {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Отмена')),
             ElevatedButton(
               onPressed: () {
                 if (controller.text.isNotEmpty &&
@@ -478,7 +503,9 @@ Future<void> _uploadExcel() async {
           _handleForbidden();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка: ${e.message}'), backgroundColor: Colors.red),
+            SnackBar(
+                content: Text('Ошибка: ${e.message}'),
+                backgroundColor: Colors.red),
           );
         }
       }
@@ -495,16 +522,22 @@ Future<void> _uploadExcel() async {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Очистка промокодов ⚠️', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          title: const Text('Очистка промокодов ⚠️',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Будут удалены ТОЛЬКО НЕВЫДАННЫЕ промокоды.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const Text('Будут удалены ТОЛЬКО НЕВЫДАННЫЕ промокоды.',
+                  style: TextStyle(fontSize: 13, color: Colors.grey)),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: dialogBrand,
                 items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
-                    .map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontWeight: FontWeight.bold))))
+                    .map((b) => DropdownMenuItem(
+                        value: b,
+                        child: Text(b,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold))))
                     .toList(),
                 onChanged: (v) => setDialogState(() => dialogBrand = v),
                 decoration: const InputDecoration(
@@ -534,7 +567,8 @@ Future<void> _uploadExcel() async {
                   suffixIcon: dialogDate != null
                       ? IconButton(
                           icon: const Icon(Icons.clear),
-                          onPressed: () => setDialogState(() => dialogDate = null),
+                          onPressed: () =>
+                              setDialogState(() => dialogDate = null),
                         )
                       : const Icon(Icons.calendar_today),
                   border: const OutlineInputBorder(),
@@ -556,7 +590,8 @@ Future<void> _uploadExcel() async {
                 if (dialogBrand != null) {
                   Navigator.pop(ctx, {
                     'brand': dialogBrand!,
-                    if (dialogDate != null) 'validUntil': dialogDate!.toIso8601String().split('T')[0],
+                    if (dialogDate != null)
+                      'validUntil': dialogDate!.toIso8601String().split('T')[0],
                   });
                 }
               },
@@ -579,7 +614,8 @@ Future<void> _uploadExcel() async {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Успешно удалено невыданных промокодов: $deletedCount'),
+            content:
+                Text('Успешно удалено невыданных промокодов: $deletedCount'),
             backgroundColor: Colors.green,
           ),
         );
@@ -674,7 +710,7 @@ Future<void> _uploadExcel() async {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: _isLoading
@@ -684,40 +720,44 @@ Future<void> _uploadExcel() async {
               displacement: 20,
               color: Colors.green,
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 physics: const BouncingScrollPhysics(),
                 children: [
-                  _buildSectionHeader('Текущее состояние', Icons.dashboard_customize_outlined),
+                  _buildSectionHeader(
+                      'Текущее состояние', Icons.dashboard_customize_outlined),
                   _buildActiveBrandCard(isDarkMode),
-                  
-                  const SizedBox(height: 24),
-                  _buildSectionHeader('Активация ограничений', Icons.bolt_outlined),
-                  _buildActivationForm(isDarkMode),
-                  
-                  const SizedBox(height: 24),
-                  _buildSectionHeader('Пополнение базы', Icons.cloud_upload_outlined),
-                  _buildUploadActions(isDarkMode),
-                  
                   const SizedBox(height: 24),
                   _buildSectionHeader(
-                    'Статистика остатков', 
+                      'Активация ограничений', Icons.bolt_outlined),
+                  _buildActivationForm(isDarkMode),
+                  const SizedBox(height: 24),
+                  _buildSectionHeader(
+                      'Пополнение базы', Icons.cloud_upload_outlined),
+                  _buildUploadActions(isDarkMode),
+                  const SizedBox(height: 24),
+                  _buildSectionHeader(
+                    'Статистика остатков',
                     Icons.analytics_outlined,
                     trailing: IconButton(
-                      icon: const Icon(Icons.settings_outlined, size: 18, color: Colors.grey),
+                      icon: const Icon(Icons.settings_outlined,
+                          size: 18, color: Colors.grey),
                       onPressed: _showBrandFormatsDialog,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
                   ),
                   if (_stats == null)
-                    const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
+                    const Center(
+                        child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: CircularProgressIndicator()))
                   else
                     _buildDetailedStats(isDarkMode),
-                  
                   const SizedBox(height: 24),
-                  _buildSectionHeader('История выдачи', Icons.history_edu_outlined),
+                  _buildSectionHeader(
+                      'История выдачи', Icons.history_edu_outlined),
                   _buildClaimedPromosSection(isDarkMode),
-                  
                   const SizedBox(height: 40),
                 ],
               ),
@@ -732,7 +772,13 @@ Future<void> _uploadExcel() async {
         children: [
           Icon(icon, size: 20, color: Colors.green),
           const SizedBox(width: 10),
-          Expanded(child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.5, color: Colors.grey))),
+          Expanded(
+              child: Text(title,
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                      color: Colors.grey))),
           if (trailing != null) trailing,
         ],
       ),
@@ -744,20 +790,26 @@ Future<void> _uploadExcel() async {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.green.withOpacity(0.05),
+          color: isDarkMode
+              ? Colors.white.withOpacity(0.05)
+              : Colors.green.withOpacity(0.05),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.green.withOpacity(0.2)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.check_circle_outline, color: Colors.green, size: 28),
+            const Icon(Icons.check_circle_outline,
+                color: Colors.green, size: 28),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Все бренды доступны', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text('Ограничения по брендам сейчас не установлены', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                  const Text('Все бренды доступны',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text('Ограничения по брендам сейчас не установлены',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 13)),
                 ],
               ),
             ),
@@ -786,7 +838,8 @@ Future<void> _uploadExcel() async {
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: brandColor.withOpacity(0.2), shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                    color: brandColor.withOpacity(0.2), shape: BoxShape.circle),
                 child: Icon(_getBrandIcon(brand), color: brandColor, size: 26),
               ),
               const SizedBox(width: 16),
@@ -794,8 +847,12 @@ Future<void> _uploadExcel() async {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Активен только $brand', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                    Text('Действует до ${_activeBrand!['expires_at']}', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                    Text('Активен только $brand',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 18)),
+                    Text('Действует до ${_activeBrand!['expires_at']}',
+                        style:
+                            TextStyle(color: Colors.grey[400], fontSize: 13)),
                   ],
                 ),
               ),
@@ -803,7 +860,8 @@ Future<void> _uploadExcel() async {
                 onPressed: _clearActiveBrand,
                 icon: Container(
                   padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                      color: Colors.red, shape: BoxShape.circle),
                   child: const Icon(Icons.close, color: Colors.white, size: 16),
                 ),
               ),
@@ -820,20 +878,30 @@ Future<void> _uploadExcel() async {
       decoration: BoxDecoration(
         color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[200]!),
+        border: Border.all(
+            color:
+                isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[200]!),
       ),
       child: Column(
         children: [
           DropdownButtonFormField<String>(
             value: _selectedBrand,
-            items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT'].map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
+            items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
+                .map((b) => DropdownMenuItem(
+                    value: b,
+                    child: Text(b,
+                        style: const TextStyle(fontWeight: FontWeight.bold))))
+                .toList(),
             onChanged: (v) => setState(() => _selectedBrand = v),
             decoration: InputDecoration(
               labelText: 'Выберите бренд',
               prefixIcon: const Icon(Icons.branding_watermark_outlined),
               filled: true,
-              fillColor: isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey[50],
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              fillColor:
+                  isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey[50],
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none),
             ),
           ),
           const SizedBox(height: 16),
@@ -850,25 +918,34 @@ Future<void> _uploadExcel() async {
             },
             decoration: InputDecoration(
               labelText: 'Дата окончания',
-              hintText: _endDate == null ? 'Выберите дату' : DateFormat('dd.MM.yyyy').format(_endDate!),
+              hintText: _endDate == null
+                  ? 'Выберите дату'
+                  : DateFormat('dd.MM.yyyy').format(_endDate!),
               prefixIcon: const Icon(Icons.calendar_today_outlined),
               filled: true,
-              fillColor: isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey[50],
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              fillColor:
+                  isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey[50],
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none),
             ),
           ),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _selectedBrand != null && _endDate != null ? _activateBrand : null,
+              onPressed: _selectedBrand != null && _endDate != null
+                  ? _activateBrand
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
               ),
-              child: const Text('Установить ограничение', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('Установить ограничение',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -892,9 +969,14 @@ Future<void> _uploadExcel() async {
               ),
               child: const Column(
                 children: [
-                  Icon(Icons.description_outlined, color: Colors.green, size: 32),
+                  Icon(Icons.description_outlined,
+                      color: Colors.green, size: 32),
                   SizedBox(height: 12),
-                  Text('Excel / CSV', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 11)),
+                  Text('Excel / CSV',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                          fontSize: 11)),
                 ],
               ),
             ),
@@ -916,7 +998,11 @@ Future<void> _uploadExcel() async {
                 children: [
                   Icon(Icons.grid_on_outlined, color: Colors.blue, size: 32),
                   SizedBox(height: 12),
-                  Text('Google Sheets', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 11)),
+                  Text('Google Sheets',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                          fontSize: 11)),
                 ],
               ),
             ),
@@ -936,9 +1022,14 @@ Future<void> _uploadExcel() async {
               ),
               child: const Column(
                 children: [
-                  Icon(Icons.delete_sweep_outlined, color: Colors.red, size: 32),
+                  Icon(Icons.delete_sweep_outlined,
+                      color: Colors.red, size: 32),
                   SizedBox(height: 12),
-                  Text('Очистить', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 11)),
+                  Text('Очистить',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                          fontSize: 11)),
                 ],
               ),
             ),
@@ -950,15 +1041,18 @@ Future<void> _uploadExcel() async {
 
   Widget _buildClaimedPromosSection(bool isDarkMode) {
     if (_claimedPromos == null) {
-      return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
+      return const Center(
+          child: Padding(
+              padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
     }
-    
+
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+            color:
+                isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100],
             borderRadius: BorderRadius.circular(16),
           ),
           child: TextField(
@@ -979,17 +1073,21 @@ Future<void> _uploadExcel() async {
 
   Widget _buildDetailedStats(bool isDarkMode) {
     final summaryRaw = _stats?['summary'];
-    final summary = summaryRaw is Map ? Map<String, int>.from(summaryRaw) : {'JET': 0, 'YANDEX': 0, 'WHOOSH': 0, 'BOLT': 0};
+    final summary = summaryRaw is Map
+        ? Map<String, int>.from(summaryRaw)
+        : {'JET': 0, 'YANDEX': 0, 'WHOOSH': 0, 'BOLT': 0};
 
     final yandexStart = summary['YANDEX_START'] ?? 0;
     final yandexMinutes = summary['YANDEX_MINUTES'] ?? 0;
     final hasYandexSubtypes = yandexStart > 0 || yandexMinutes > 0;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[200]!),
+        border: Border.all(
+            color:
+                isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[200]!),
       ),
       child: Column(
         children: [
@@ -997,9 +1095,11 @@ Future<void> _uploadExcel() async {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                _buildStatRow('JET', summary['JET'] ?? 0, _brandFormats['JET'] ?? 'GT9-XXXXXX', isDarkMode),
+                _buildStatRow('JET', summary['JET'] ?? 0,
+                    _brandFormats['JET'] ?? 'GT9-XXXXXX', isDarkMode),
                 const Divider(height: 24),
-                _buildStatRow('YANDEX', summary['YANDEX'] ?? 0, _brandFormats['YANDEX'] ?? 'ocf/ocm + цифры', isDarkMode),
+                _buildStatRow('YANDEX', summary['YANDEX'] ?? 0,
+                    _brandFormats['YANDEX'] ?? 'ocf/ocm + цифры', isDarkMode),
                 if (hasYandexSubtypes) ...[
                   const SizedBox(height: 8),
                   Padding(
@@ -1008,15 +1108,18 @@ Future<void> _uploadExcel() async {
                       children: [
                         _buildSubtypeRow('🔴 Старт', yandexStart, Colors.red),
                         const SizedBox(height: 4),
-                        _buildSubtypeRow('🟢 Минуты', yandexMinutes, Colors.green),
+                        _buildSubtypeRow(
+                            '🟢 Минуты', yandexMinutes, Colors.green),
                       ],
                     ),
                   ),
                 ],
                 const Divider(height: 24),
-                _buildStatRow('WHOOSH', summary['WHOOSH'] ?? 0, _brandFormats['WHOOSH'] ?? 'WSH_XXXXXX', isDarkMode),
+                _buildStatRow('WHOOSH', summary['WHOOSH'] ?? 0,
+                    _brandFormats['WHOOSH'] ?? 'WSH_XXXXXX', isDarkMode),
                 const Divider(height: 24),
-                _buildStatRow('BOLT', summary['BOLT'] ?? 0, _brandFormats['BOLT'] ?? 'BOLTXXXXXX', isDarkMode),
+                _buildStatRow('BOLT', summary['BOLT'] ?? 0,
+                    _brandFormats['BOLT'] ?? 'BOLTXXXXXX', isDarkMode),
               ],
             ),
           ),
@@ -1028,27 +1131,38 @@ Future<void> _uploadExcel() async {
   Widget _buildSubtypeRow(String label, int count, Color color) {
     return Row(
       children: [
-        Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+        Text(label,
+            style: TextStyle(
+                fontSize: 12, color: color, fontWeight: FontWeight.w600)),
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: count > 0 ? color.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+            color: count > 0
+                ? color.withOpacity(0.1)
+                : Colors.red.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Text('$count', style: TextStyle(color: count > 0 ? color : Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+          child: Text('$count',
+              style: TextStyle(
+                  color: count > 0 ? color : Colors.red,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12)),
         ),
       ],
     );
   }
 
-  Widget _buildStatRow(String brand, int count, String format, bool isDarkMode) {
+  Widget _buildStatRow(
+      String brand, int count, String format, bool isDarkMode) {
     final color = _getBrandColor(brand);
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12)),
           child: Icon(_getBrandIcon(brand), color: color, size: 20),
         ),
         const SizedBox(width: 16),
@@ -1056,23 +1170,27 @@ Future<void> _uploadExcel() async {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(brand, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
-              Text(format, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+              Text(brand,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w900, fontSize: 15)),
+              Text(format,
+                  style: TextStyle(color: Colors.grey[500], fontSize: 11)),
             ],
           ),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: count > 0 ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+            color: count > 0
+                ? Colors.green.withOpacity(0.1)
+                : Colors.red.withOpacity(0.1),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Text('$count', 
-            style: TextStyle(
-              color: count > 0 ? Colors.green : Colors.red, 
-              fontWeight: FontWeight.bold, 
-              fontSize: 14
-            )),
+          child: Text('$count',
+              style: TextStyle(
+                  color: count > 0 ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14)),
         ),
       ],
     );
@@ -1083,17 +1201,25 @@ Future<void> _uploadExcel() async {
     final filteredUsers = <Map<String, dynamic>>[];
     final promos = _claimedPromos ?? [];
     for (final item in promos) {
-      if (item is Map<String, dynamic> && item['promo_codes'] != null && (item['promo_codes'] as Map).isNotEmpty) {
+      if (item is Map<String, dynamic> &&
+          item['promo_codes'] != null &&
+          (item['promo_codes'] as Map).isNotEmpty) {
         final username = (item['username'] as String?)?.toLowerCase() ?? '';
         final firstName = (item['first_name'] as String?)?.toLowerCase() ?? '';
-        if (_searchQuery.isEmpty || username.contains(_searchQuery) || firstName.contains(_searchQuery)) {
+        if (_searchQuery.isEmpty ||
+            username.contains(_searchQuery) ||
+            firstName.contains(_searchQuery)) {
           filteredUsers.add(item);
         }
       }
     }
 
     if (filteredUsers.isEmpty && _searchQuery.isNotEmpty) {
-      return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text('Ничего не найдено', style: TextStyle(color: Colors.grey))));
+      return const Center(
+          child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('Ничего не найдено',
+                  style: TextStyle(color: Colors.grey))));
     }
 
     final groupedByDate = <String, List<Map<String, dynamic>>>{};
@@ -1106,7 +1232,8 @@ Future<void> _uploadExcel() async {
       }
     }
 
-    final sortedDates = groupedByDate.keys.toList()..sort((a, b) => b.compareTo(a));
+    final sortedDates = groupedByDate.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
 
     return Column(
       children: [
@@ -1115,10 +1242,17 @@ Future<void> _uploadExcel() async {
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             child: Row(
               children: [
-                const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
+                const Icon(Icons.calendar_today_outlined,
+                    size: 14, color: Colors.grey),
                 const SizedBox(width: 8),
-                Text(DateFormat('dd MMMM yyyy', 'ru_RU').format(DateTime.parse(dateKey)), 
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.grey, letterSpacing: 0.5)),
+                Text(
+                    DateFormat('dd MMMM yyyy', 'ru_RU')
+                        .format(DateTime.parse(dateKey)),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        color: Colors.grey,
+                        letterSpacing: 0.5)),
               ],
             ),
           ),
@@ -1137,7 +1271,10 @@ Future<void> _uploadExcel() async {
       decoration: BoxDecoration(
         color: isDarkMode ? Colors.white.withOpacity(0.03) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100]!),
+        border: Border.all(
+            color: isDarkMode
+                ? Colors.white.withOpacity(0.05)
+                : Colors.grey[100]!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1146,23 +1283,32 @@ Future<void> _uploadExcel() async {
             children: [
               const Icon(Icons.person_outline, size: 16, color: Colors.green),
               const SizedBox(width: 8),
-              Text('${user['username'] ?? 'User'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              if (user['first_name'] != null) Text(' • ${user['first_name']}', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+              Text('${user['username'] ?? 'User'}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15)),
+              if (user['first_name'] != null)
+                Text(' • ${user['first_name']}',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13)),
             ],
           ),
           const SizedBox(height: 12),
-          for (final entry in (user['promo_codes'] as Map<String, dynamic>).entries)
+          for (final entry
+              in (user['promo_codes'] as Map<String, dynamic>).entries)
             if (entry.value is List && (entry.value as List).isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Row(
                   children: [
-                    Icon(_getBrandIcon(entry.key), size: 14, color: _getBrandColor(entry.key)),
+                    Icon(_getBrandIcon(entry.key),
+                        size: 14, color: _getBrandColor(entry.key)),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         '${(entry.value as List).join(", ")}',
-                        style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13),
+                        style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13),
                       ),
                     ),
                   ],
@@ -1175,21 +1321,31 @@ Future<void> _uploadExcel() async {
 
   Color _getBrandColor(String brand) {
     switch (brand.toUpperCase()) {
-      case 'JET': return Colors.yellow[700]!;
-      case 'YANDEX': return const Color(0xFFFFCC00);
-      case 'WHOOSH': return Colors.orange;
-      case 'BOLT': return Colors.green;
-      default: return Colors.blue;
+      case 'JET':
+        return Colors.yellow[700]!;
+      case 'YANDEX':
+        return const Color(0xFFFFCC00);
+      case 'WHOOSH':
+        return Colors.orange;
+      case 'BOLT':
+        return Colors.green;
+      default:
+        return Colors.blue;
     }
   }
 
   IconData _getBrandIcon(String brand) {
     switch (brand.toUpperCase()) {
-      case 'JET': return Icons.electric_scooter;
-      case 'YANDEX': return Icons.map;
-      case 'WHOOSH': return Icons.directions_bike;
-      case 'BOLT': return Icons.bolt;
-      default: return Icons.help_outline;
+      case 'JET':
+        return Icons.electric_scooter;
+      case 'YANDEX':
+        return Icons.map;
+      case 'WHOOSH':
+        return Icons.directions_bike;
+      case 'BOLT':
+        return Icons.bolt;
+      default:
+        return Icons.help_outline;
     }
   }
 }

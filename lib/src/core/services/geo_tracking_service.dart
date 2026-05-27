@@ -311,15 +311,37 @@ Future<void> _bufferFailedData(String geoDataJson, int? shiftId) async {
 Future<void> startBackgroundTracking({required int shiftId}) async {
   _log("startBackgroundTracking($shiftId)");
 
-  // 1. Проверяем и запрашиваем "Always" (Всегда разрешать) геопозицию для стабильного трекинга в фоне
+  // 1. Проверяем и запрашиваем геопозицию для стабильного трекинга в фоне
   try {
-    var alwaysStatus = await Permission.locationAlways.status;
-    if (!alwaysStatus.isGranted) {
-      _log("Always location permission not granted, requesting...");
-      alwaysStatus = await Permission.locationAlways.request();
+    var status = await Permission.location.status;
+    if (status.isPermanentlyDenied) {
+      _log("Location permanently denied. Opening settings...");
+      await openAppSettings();
+    } else if (!status.isGranted) {
+      _log("Location when in use not granted, requesting...");
+      status = await Permission.location.request();
+      if (status.isPermanentlyDenied) {
+        _log("Location permanently denied after request. Opening settings...");
+        await openAppSettings();
+      }
+    }
+    
+    if (status.isGranted) {
+      var alwaysStatus = await Permission.locationAlways.status;
+      if (alwaysStatus.isPermanentlyDenied) {
+        _log("Always location permanently denied. Opening settings...");
+        await openAppSettings();
+      } else if (!alwaysStatus.isGranted) {
+        _log("Always location permission not granted, requesting...");
+        alwaysStatus = await Permission.locationAlways.request();
+        if (alwaysStatus.isPermanentlyDenied) {
+          _log("Always location permanently denied after request. Opening settings...");
+          await openAppSettings();
+        }
+      }
     }
   } catch (e) {
-    _log("Ошибка при запросе locationAlways: $e");
+    _log("Ошибка при запросе разрешений геолокации: $e");
   }
 
   // 2. Для Android запрашиваем отключение ограничений батареи
@@ -396,6 +418,12 @@ Future<bool> isBackgroundTrackingRunning() async {
   final prefs = await SharedPreferences.getInstance();
   final hasRunningFlag = prefs.getBool(_SHARED_PREFS_BG_RUNNING_KEY) ?? false;
   if (!hasRunningFlag) return false;
+
+  // На iOS возвращаем статус на основе сохраненного флага предпочтений, так как 
+  // фоновые процессы iOS сильно ограничены и вызов .isRunning() часто возвращает false.
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    return true;
+  }
 
   try {
     final isServiceRunning = await FlutterBackgroundService().isRunning();
