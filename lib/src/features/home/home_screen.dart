@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:micro_mobility_app/src/features/home/widgets/slot_card.dart';
@@ -98,28 +99,37 @@ class _DashboardHomeState extends State<DashboardHome> {
   Future<void> _requestAllPermissionsForce() async {
     if (!mounted) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final alreadyRequested = prefs.getBool('permissions_requested_once') ?? false;
-
-    if (alreadyRequested) return;
-    await prefs.setBool('permissions_requested_once', true);
-
-    // Запрашиваем геопозицию
-    LocationPermission locPerm = await Geolocator.checkPermission();
-    if (locPerm == LocationPermission.denied) {
-      await Geolocator.requestPermission();
+    if (defaultTargetPlatform != TargetPlatform.android && 
+        defaultTargetPlatform != TargetPlatform.iOS) {
+      return;
     }
 
-    // Запрашиваем камеру
-    PermissionStatus camStatus = await Permission.camera.status;
-    if (camStatus.isDenied) {
-      await Permission.camera.request();
-    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final alreadyRequested = prefs.getBool('permissions_requested_once') ?? false;
 
-    // Запрашиваем уведомления
-    PermissionStatus notifStatus = await Permission.notification.status;
-    if (notifStatus.isDenied) {
-      await Permission.notification.request();
+      if (alreadyRequested) return;
+      await prefs.setBool('permissions_requested_once', true);
+
+      // Запрашиваем геопозицию
+      LocationPermission locPerm = await Geolocator.checkPermission();
+      if (locPerm == LocationPermission.denied) {
+        await Geolocator.requestPermission();
+      }
+
+      // Запрашиваем камеру
+      PermissionStatus camStatus = await Permission.camera.status;
+      if (camStatus.isDenied) {
+        await Permission.camera.request();
+      }
+
+      // Запрашиваем уведомления
+      PermissionStatus notifStatus = await Permission.notification.status;
+      if (notifStatus.isDenied) {
+        await Permission.notification.request();
+      }
+    } catch (e) {
+      debugPrint('Error requesting permissions: $e');
     }
   }
 

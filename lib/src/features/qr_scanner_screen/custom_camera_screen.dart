@@ -19,7 +19,8 @@ class CustomCameraScreen extends StatefulWidget {
   State<CustomCameraScreen> createState() => _CustomCameraScreenState();
 }
 
-class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBindingObserver {
+class _CustomCameraScreenState extends State<CustomCameraScreen>
+    with WidgetsBindingObserver {
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
   bool _isCameraInitialized = false;
@@ -57,7 +58,9 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
           orElse: () => _cameras.first,
         );
       } else {
-        final backCameras = _cameras.where((c) => c.lensDirection == CameraLensDirection.back).toList();
+        final backCameras = _cameras
+            .where((c) => c.lensDirection == CameraLensDirection.back)
+            .toList();
         if (_isUltraWideActive && backCameras.length > 1) {
           selectedCamera = backCameras[1];
         } else if (backCameras.isNotEmpty) {
@@ -69,7 +72,8 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
 
       final controller = CameraController(
         selectedCamera,
-        ResolutionPreset.high, // Увеличили качество до High (1080p) для идеальной четкости
+        ResolutionPreset
+            .high, // Увеличили качество до High (1080p) для идеальной четкости
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.jpeg,
       );
@@ -156,7 +160,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
 
   Future<void> _toggleFlash() async {
     if (_controller == null || !_controller!.value.isInitialized) return;
-    
+
     try {
       FlashMode newMode;
       if (_flashMode == FlashMode.off) {
@@ -166,7 +170,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
       } else {
         newMode = FlashMode.off;
       }
-      
+
       await _controller!.setFlashMode(newMode);
       if (mounted) {
         setState(() {
@@ -181,9 +185,12 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
   Future<void> _toggleZoom() async {
     if (_controller == null || !_controller!.value.isInitialized) return;
 
-    final backCameras = _cameras.where((c) => c.lensDirection == CameraLensDirection.back).toList();
+    final backCameras = _cameras
+        .where((c) => c.lensDirection == CameraLensDirection.back)
+        .toList();
 
-    if (widget.overlayType == CameraOverlayType.landscape && backCameras.length > 1) {
+    if (widget.overlayType == CameraOverlayType.landscape &&
+        backCameras.length > 1) {
       // У нас есть поддержка сверхширокоугольного объектива (0.5x) на уровне физических камер!
       setState(() {
         _isUltraWideActive = !_isUltraWideActive;
@@ -225,7 +232,8 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
   }
 
   Future<void> _takePicture() async {
-    if (!_controller!.value.isInitialized || _controller!.value.isTakingPicture) {
+    if (!_controller!.value.isInitialized ||
+        _controller!.value.isTakingPicture) {
       return;
     }
 
@@ -256,9 +264,10 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
             Positioned.fill(
               child: Center(
                 child: AspectRatio(
-                  aspectRatio: MediaQuery.of(context).orientation == Orientation.portrait
-                      ? 1 / _controller!.value.aspectRatio
-                      : _controller!.value.aspectRatio,
+                  aspectRatio:
+                      MediaQuery.of(context).orientation == Orientation.portrait
+                          ? 1 / _controller!.value.aspectRatio
+                          : _controller!.value.aspectRatio,
                   child: CameraPreview(_controller!),
                 ),
               ),
@@ -281,16 +290,20 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
               right: 0,
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    widget.overlayType == CameraOverlayType.landscape 
+                    widget.overlayType == CameraOverlayType.landscape
                         ? 'Сделайте фото самоката для отчета'
                         : 'Сделайте селфи в каске/шлеме',
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -301,7 +314,8 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
               top: 20,
               left: 20,
               child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
+                icon:
+                    const Icon(Icons.arrow_back, color: Colors.white, size: 30),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -311,12 +325,12 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
               right: 20,
               child: IconButton(
                 icon: Icon(
-                  _flashMode == FlashMode.off 
-                      ? Icons.flash_off 
-                      : _flashMode == FlashMode.always 
-                          ? Icons.flash_on 
-                          : Icons.highlight, 
-                  color: Colors.white, 
+                  _flashMode == FlashMode.off
+                      ? Icons.flash_off
+                      : _flashMode == FlashMode.always
+                          ? Icons.flash_on
+                          : Icons.highlight,
+                  color: Colors.white,
                   size: 30,
                 ),
                 onPressed: _toggleFlash,
@@ -331,17 +345,18 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
                 child: GestureDetector(
                   onTap: _toggleZoom,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.black54,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.white24, width: 1.5),
                     ),
                     child: Text(
-                      _currentZoomLevel < 1.0 
-                          ? '0.5x' 
-                          : _currentZoomLevel == 1.0 
-                              ? '1.0x' 
+                      _currentZoomLevel < 1.0
+                          ? '0.5x'
+                          : _currentZoomLevel == 1.0
+                              ? '1.0x'
                               : '${_currentZoomLevel.toStringAsFixed(1)}x',
                       style: const TextStyle(
                         color: Colors.white,
@@ -399,7 +414,7 @@ class LandscapeOverlayPainter extends CustomPainter {
 
     final isPortrait = size.height > size.width;
     double frameWidth, frameHeight;
-    
+
     // Рамка всегда должна быть альбомной (горизонтальной)
     if (isPortrait) {
       frameWidth = size.width * 0.85;
@@ -412,7 +427,7 @@ class LandscapeOverlayPainter extends CustomPainter {
     final left = (size.width - frameWidth) / 2;
     // Сдвигаем рамку чуть выше центра
     final top = (size.height - frameHeight) / 2.5;
-    
+
     final rect = Rect.fromLTWH(left, top, frameWidth, frameHeight);
 
     final path = Path()
@@ -426,8 +441,9 @@ class LandscapeOverlayPainter extends CustomPainter {
       ..color = Colors.green
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
-      
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(16)), borderPaint);
+
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(16)), borderPaint);
   }
 
   @override
@@ -458,7 +474,8 @@ class HelmetOverlayPainter extends CustomPainter {
     // Нижний край каски перекрывает верхнюю часть головы
     final helmetW = headW * 1.38;
     final helmetH = headW * 0.55; // высота купола (приплюснутый)
-    final helmetBottomY = headCY - headH * 0.30; // каска опускается на 30% головы
+    final helmetBottomY =
+        headCY - headH * 0.30; // каска опускается на 30% головы
     final helmetTopY = helmetBottomY - helmetH;
     final helmetRect = Rect.fromLTRB(
       cx - helmetW / 2,

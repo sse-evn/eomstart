@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:hive_flutter/hive_flutter.dart' show Hive, HiveX;
 import 'package:micro_mobility_app/src/features/app/app.dart';
@@ -80,21 +81,30 @@ final class AppRunner {
 
 /// 🔒 Запрос всех нужных разрешений (более тихий при старте)
 Future<void> _requestAllPermissions() async {
+  // На Linux, Windows, Web плагины разрешений могут падать (MissingPluginException)
+  if (defaultTargetPlatform != TargetPlatform.android && 
+      defaultTargetPlatform != TargetPlatform.iOS) {
+    return;
+  }
+
   // Не открываем настройки принудительно при каждом старте, 
   // так как это мешает пользователю просто открыть приложение.
   
   // Проверяем и запрашиваем права на доступ к геопозиции
-  LocationPermission permission = await Geolocator.checkPermission();
-  if (permission == LocationPermission.denied) {
-    // Запрашиваем только если еще не отказали наотрез
-    await Geolocator.requestPermission();
-  }
+  try {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      // Запрашиваем только если еще не отказали наотрез
+      await Geolocator.requestPermission();
+    }
 
-  // Запрашиваем также права на камеру и уведомления
-  // permission_handler.request() сам проверяет статус и не показывает диалог, если уже есть ответ
-  await [
-    Permission.camera,
-    Permission.notification,
-  ].request();
+    // Запрашиваем также права на камеру и уведомления
+    await [
+      Permission.camera,
+      Permission.notification,
+    ].request();
+  } catch (e) {
+    debugPrint('Permissions error: $e');
+  }
 }
 

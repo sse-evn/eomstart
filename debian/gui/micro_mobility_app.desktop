@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0.15
+Name=micro mobility app
+GenericName=micro mobility app
+Comment=EOM START
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=Flutter;
+Icon=micro_mobility_app

@@ -27,7 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  late final WebViewController _tgController;
+  WebViewController? _tgController;
   final _storage = const FlutterSecureStorage();
   final ApiService _apiService = ApiService();
   bool _isTelegramEnabled = false; 
@@ -118,37 +118,46 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _initTelegramWebView() {
-    late final PlatformWebViewControllerCreationParams params;
-    if (WebViewPlatform.instance is WebKitWebViewPlatform) {
-      params = WebKitWebViewControllerCreationParams(
-        allowsInlineMediaPlayback: true,
-        mediaTypesRequiringUserAction: const <PlaybackMediaTypes>{},
-      );
-    } else {
-      params = const PlatformWebViewControllerCreationParams();
+    try {
+      if (WebViewPlatform.instance == null) {
+        debugPrint('WebView is not supported on this platform.');
+        return;
+      }
+      
+      late final PlatformWebViewControllerCreationParams params;
+      if (WebViewPlatform.instance is WebKitWebViewPlatform) {
+        params = WebKitWebViewControllerCreationParams(
+          allowsInlineMediaPlayback: true,
+          mediaTypesRequiringUserAction: const <PlaybackMediaTypes>{},
+        );
+      } else {
+        params = const PlatformWebViewControllerCreationParams();
+      }
+      final controller = WebViewController.fromPlatformCreationParams(params);
+      controller
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onNavigationRequest: (request) async {
+              if (request.url
+                  .contains('${AppConfig.AppConfig.backendHost}/auth_callback')) {
+                await _handleTelegramAuth(request.url);
+                _closeTelegramDialog();
+                return NavigationDecision.prevent;
+              }
+              return NavigationDecision.navigate;
+            },
+          ),
+        )
+        ..loadRequest(Uri.parse(AppConfig.AppConfig.telegramLoginUrl));
+      if (controller.platform is AndroidWebViewController) {
+        (controller.platform as AndroidWebViewController)
+            .setMediaPlaybackRequiresUserGesture(false);
+      }
+      _tgController = controller;
+    } catch (e) {
+      debugPrint('Failed to initialize WebView: $e');
     }
-    final controller = WebViewController.fromPlatformCreationParams(params);
-    controller
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onNavigationRequest: (request) async {
-            if (request.url
-                .contains('${AppConfig.AppConfig.backendHost}/auth_callback')) {
-              await _handleTelegramAuth(request.url);
-              _closeTelegramDialog();
-              return NavigationDecision.prevent;
-            }
-            return NavigationDecision.navigate;
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(AppConfig.AppConfig.telegramLoginUrl));
-    if (controller.platform is AndroidWebViewController) {
-      (controller.platform as AndroidWebViewController)
-          .setMediaPlaybackRequiresUserGesture(false);
-    }
-    _tgController = controller;
   }
 
   Future<void> _checkTelegramStatus() async {
@@ -304,6 +313,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showTelegramAuthDialog() {
+    if (_tgController == null) {
+      _showError('Вход через Telegram не поддерживается на данном устройстве');
+      return;
+    }
     showDialog(
       context: context,
       barrierDismissible: !_isLoading,
@@ -336,7 +349,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               Expanded(
-                child: WebViewWidget(controller: _tgController),
+                child: WebViewWidget(controller: _tgController!),
               ),
               if (_isLoading)
                 const Padding(
