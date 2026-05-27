@@ -110,7 +110,18 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
         final activeShift = await context.read<ShiftProvider>().getActiveShift();
         int? activeShiftId = activeShift?.id;
         if (activeShiftId != null && activeShiftId > 0) {
-          await startBackgroundTracking(shiftId: activeShiftId);
+          final success = await startBackgroundTracking(shiftId: activeShiftId);
+          if (!success) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Для работы геотрекинга необходим доступ к геолокации. Пожалуйста, разрешите его в настройках.'),
+                  backgroundColor: Colors.orange,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          }
         } else {
           // Нельзя включить — нет смены
           if (mounted) {

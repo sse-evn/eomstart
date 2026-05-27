@@ -308,21 +308,21 @@ Future<void> _bufferFailedData(String geoDataJson, int? shiftId) async {
   await prefs.setStringList(key, current);
 }
 
-Future<void> startBackgroundTracking({required int shiftId}) async {
+Future<bool> startBackgroundTracking({required int shiftId}) async {
   _log("startBackgroundTracking($shiftId)");
 
   // 1. Проверяем и запрашиваем геопозицию для стабильного трекинга в фоне
   try {
     var status = await Permission.location.status;
     if (status.isPermanentlyDenied) {
-      _log("Location permanently denied. Opening settings...");
-      await openAppSettings();
+      _log("Location permanently denied.");
+      return false;
     } else if (!status.isGranted) {
       _log("Location when in use not granted, requesting...");
       status = await Permission.location.request();
-      if (status.isPermanentlyDenied) {
-        _log("Location permanently denied after request. Opening settings...");
-        await openAppSettings();
+      if (!status.isGranted) {
+        _log("Location denied after request.");
+        return false;
       }
     }
     
@@ -335,6 +335,7 @@ Future<void> startBackgroundTracking({required int shiftId}) async {
     }
   } catch (e) {
     _log("Ошибка при запросе разрешений геолокации: $e");
+    return false;
   }
 
   // 2. Для Android запрашиваем отключение ограничений батареи
@@ -356,7 +357,7 @@ Future<void> startBackgroundTracking({required int shiftId}) async {
 
   _log("isRunning=$isRunning, currentShift=$currentShift");
 
-  if (isRunning && currentShift == shiftId) return;
+  if (isRunning && currentShift == shiftId) return true;
   if (isRunning && currentShift != shiftId) await stopBackgroundTracking();
 
   final service = FlutterBackgroundService();
@@ -386,6 +387,7 @@ Future<void> startBackgroundTracking({required int shiftId}) async {
 
   await service.startService();
   _log("Фоновый сервис запущен.");
+  return true;
 }
 
 Future<void> stopBackgroundTracking() async {
