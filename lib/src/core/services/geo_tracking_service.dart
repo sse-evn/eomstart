@@ -328,16 +328,9 @@ Future<void> startBackgroundTracking({required int shiftId}) async {
     
     if (status.isGranted) {
       var alwaysStatus = await Permission.locationAlways.status;
-      if (alwaysStatus.isPermanentlyDenied) {
-        _log("Always location permanently denied. Opening settings...");
-        await openAppSettings();
-      } else if (!alwaysStatus.isGranted) {
+      if (!alwaysStatus.isGranted) {
         _log("Always location permission not granted, requesting...");
-        alwaysStatus = await Permission.locationAlways.request();
-        if (alwaysStatus.isPermanentlyDenied) {
-          _log("Always location permanently denied after request. Opening settings...");
-          await openAppSettings();
-        }
+        await Permission.locationAlways.request();
       }
     }
   } catch (e) {
