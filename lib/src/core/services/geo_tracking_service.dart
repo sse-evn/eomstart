@@ -312,30 +312,30 @@ Future<bool> startBackgroundTracking({required int shiftId}) async {
   _log("startBackgroundTracking($shiftId)");
 
   // 1. Проверяем и запрашиваем геопозицию для стабильного трекинга в фоне
+  bool isAllowed(PermissionStatus s) => 
+      s == PermissionStatus.granted || 
+      s == PermissionStatus.limited || 
+      s == PermissionStatus.provisional;
+
   try {
     var status = await Permission.location.status;
-    if (status.isPermanentlyDenied) {
-      _log("Location permanently denied.");
-      return false;
-    } else if (!status.isGranted) {
-      _log("Location when in use not granted, requesting...");
+    if (!isAllowed(status)) {
+      _log("Location when in use not granted ($status), requesting...");
       status = await Permission.location.request();
-      if (!status.isGranted) {
-        _log("Location denied after request.");
+      if (!isAllowed(status)) {
+        _log("Location denied after request ($status).");
         return false;
       }
     }
     
-    if (status.isGranted) {
-      var alwaysStatus = await Permission.locationAlways.status;
-      if (!alwaysStatus.isGranted) {
-        _log("Always location permission not granted, requesting...");
-        await Permission.locationAlways.request();
-      }
+    var alwaysStatus = await Permission.locationAlways.status;
+    if (!isAllowed(alwaysStatus)) {
+      _log("Always location permission not granted ($alwaysStatus), requesting...");
+      await Permission.locationAlways.request();
     }
   } catch (e) {
     _log("Ошибка при запросе разрешений геолокации: $e");
-    return false;
+    // Не прерываем запуск, позволим Geolocator разобраться самому
   }
 
   // 2. Для Android запрашиваем отключение ограничений батареи
