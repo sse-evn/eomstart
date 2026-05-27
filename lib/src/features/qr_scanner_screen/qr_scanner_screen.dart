@@ -170,8 +170,64 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     );
   }
 
+  String _normalizeBrand(String brand) {
+    final upper = brand.toUpperCase().trim();
+    if (upper == 'BOLT') return 'Bolt';
+    if (upper == 'WHOOSH' || upper == 'WSH') return 'Whoosh';
+    if (upper == 'JET') return 'Jet';
+    if (upper == 'YANDEX') return 'Yandex';
+    return brand;
+  }
+
   void _addScannedNumber(String rawCode) {
-    final cleanedNumber = _extractNumberFromLink(rawCode);
+    final trimmedInput = rawCode.trim();
+    if (trimmedInput.isEmpty) {
+      setState(() {
+        _scanStatus = 'Пустой ввод';
+        _scanStatusColor = Colors.red;
+      });
+      return;
+    }
+
+    // 1. Check Batch Quantity Pattern (e.g. "whoosh 5", "вуш 3", "w 10")
+    final batchRegExp = RegExp(
+      r'\b(whoosh|jet|bolt|yandex|вуш|джет|болт|яндекс|w|j|b|y)\s+(\d+)\b',
+      caseSensitive: false,
+    );
+    final batchMatch = batchRegExp.firstMatch(trimmedInput);
+    if (batchMatch != null) {
+      final serviceAlias = batchMatch.group(1)!.toLowerCase();
+      final quantity = int.tryParse(batchMatch.group(2)!) ?? 0;
+      
+      String? brand;
+      if (serviceAlias == 'yandex' || serviceAlias == 'яндекс' || serviceAlias == 'y') {
+        brand = 'Yandex';
+      } else if (serviceAlias == 'whoosh' || serviceAlias == 'вуш' || serviceAlias == 'w') {
+        brand = 'Whoosh';
+      } else if (serviceAlias == 'jet' || serviceAlias == 'джет' || serviceAlias == 'j') {
+        brand = 'Jet';
+      } else if (serviceAlias == 'bolt' || serviceAlias == 'болт' || serviceAlias == 'b') {
+        brand = 'Bolt';
+      }
+
+      if (brand != null && quantity > 0) {
+        final upperBrand = brand.toUpperCase();
+        final normKey = _normalizeBrand(brand);
+        setState(() {
+          for (int i = 0; i < quantity; i++) {
+            _scannedNumbers.insert(0, '[$upperBrand]');
+          }
+          _competitorCounts[normKey] = (_competitorCounts[normKey] ?? 0) + quantity;
+          _scanStatus = 'Добавлено $normKey: $quantity шт.';
+          _scanStatusColor = Colors.green;
+        });
+        _saveScannedNumbers();
+        return;
+      }
+    }
+
+    // 2. Extract number from link or text
+    final cleanedNumber = _extractNumberFromLink(trimmedInput);
 
     if (cleanedNumber.isEmpty) {
       setState(() {
@@ -181,26 +237,55 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       return;
     }
 
-    final detectedBrand =
-        _detectBrandFromLink(rawCode) ?? _detectBrandFromText(rawCode);
+    // Detect brand based on link first
+    String? detectedBrand = _detectBrandFromLink(trimmedInput);
+    String detectedCode = cleanedNumber;
+
+    if (detectedBrand == null) {
+      // 3. Apply the Python scooter patterns using word boundaries (\b)
+      final yandexMatch = RegExp(r'\bY\d{5}\b', caseSensitive: false).firstMatch(trimmedInput);
+      final wooshMatch = RegExp(r'\b([a-zA-Zа-яА-Я]{2}\d{4})\b').firstMatch(trimmedInput);
+      final jetMatch = RegExp(r'\b(\d{6}|\d{3}-\d{3})\b').firstMatch(trimmedInput);
+      final boltMatch = RegExp(r'\b(\d{4})\b').firstMatch(trimmedInput);
+
+      if (yandexMatch != null) {
+        detectedBrand = 'Yandex';
+        detectedCode = yandexMatch.group(0)!;
+      } else if (wooshMatch != null) {
+        detectedBrand = 'Whoosh';
+        detectedCode = wooshMatch.group(1) ?? wooshMatch.group(0)!;
+      } else if (jetMatch != null) {
+        detectedBrand = 'Jet';
+        detectedCode = jetMatch.group(1) ?? jetMatch.group(0)!;
+      } else if (boltMatch != null) {
+        detectedBrand = 'Bolt';
+        detectedCode = boltMatch.group(1) ?? boltMatch.group(0)!;
+      } else {
+        // Fallback to the original text detection to preserve old logic
+        detectedBrand = _detectBrandFromText(trimmedInput);
+      }
+    }
+
     if (detectedBrand != null) {
-      String cleanVal = cleanedNumber;
-      final upper = rawCode.toUpperCase().trim();
-      if (detectedBrand == 'BOLT' && upper.startsWith('BOLT')) {
-        cleanVal = rawCode.substring(4).trim();
-      } else if (detectedBrand == 'WHOOSH' && upper.startsWith('WHOOSH')) {
-        cleanVal = rawCode.substring(6).trim();
-      } else if (detectedBrand == 'WHOOSH' && upper.startsWith('WSH')) {
-        cleanVal = rawCode.substring(3).trim();
-      } else if (detectedBrand == 'JET' && upper.startsWith('JET')) {
-        cleanVal = rawCode.substring(3).trim();
-      } else if (detectedBrand == 'YANDEX' && upper.startsWith('YANDEX')) {
-        cleanVal = rawCode.substring(6).trim();
+      final normalizedBrand = _normalizeBrand(detectedBrand);
+      
+      String cleanVal = detectedCode;
+      final upper = trimmedInput.toUpperCase();
+      if (normalizedBrand == 'Bolt' && upper.startsWith('BOLT')) {
+        cleanVal = trimmedInput.substring(4).trim();
+      } else if (normalizedBrand == 'Whoosh' && upper.startsWith('WHOOSH')) {
+        cleanVal = trimmedInput.substring(6).trim();
+      } else if (normalizedBrand == 'Whoosh' && upper.startsWith('WSH')) {
+        cleanVal = trimmedInput.substring(3).trim();
+      } else if (normalizedBrand == 'Jet' && upper.startsWith('JET')) {
+        cleanVal = trimmedInput.substring(3).trim();
+      } else if (normalizedBrand == 'Yandex' && upper.startsWith('YANDEX')) {
+        cleanVal = trimmedInput.substring(6).trim();
       }
 
-      if (cleanVal.isEmpty) cleanVal = cleanedNumber;
+      if (cleanVal.isEmpty) cleanVal = detectedCode;
 
-      _registerScooterForBrand(detectedBrand, cleanVal);
+      _registerScooterForBrand(normalizedBrand, cleanVal);
       return;
     }
 
@@ -209,7 +294,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       setState(() {
         _targetBrandForScan = null;
       });
-      _registerScooterForBrand(brand, cleanedNumber);
+      _registerScooterForBrand(_normalizeBrand(brand), cleanedNumber);
       return;
     }
 
@@ -244,11 +329,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       if (item.startsWith('[')) {
         final closeBracket = item.indexOf(']');
         if (closeBracket != -1) {
-          final brand = item.substring(1, closeBracket);
-          if (_competitorCounts.containsKey(brand)) {
-            final current = _competitorCounts[brand] ?? 0;
+          final rawBrand = item.substring(1, closeBracket);
+          final normKey = _normalizeBrand(rawBrand);
+          if (_competitorCounts.containsKey(normKey)) {
+            final current = _competitorCounts[normKey] ?? 0;
             if (current > 0) {
-              _competitorCounts[brand] = current - 1;
+              _competitorCounts[normKey] = current - 1;
             }
           }
         }
@@ -316,7 +402,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   void _registerScooterForBrand(String brand, String number) {
-    final fullLabel = '[$brand] $number';
+    final normKey = _normalizeBrand(brand);
+    final upperBrand = normKey.toUpperCase();
+    final fullLabel = '[$upperBrand] $number';
     if (_scannedNumbers.contains(fullLabel) ||
         _scannedNumbers.contains(number)) {
       _showMessage('Этот самокат уже добавлен!');
@@ -325,15 +413,17 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
     setState(() {
       _scannedNumbers.insert(0, fullLabel);
-      _competitorCounts[brand] = (_competitorCounts[brand] ?? 0) + 1;
-      _scanStatus = 'Добавлен $brand: $number';
+      _competitorCounts[normKey] = (_competitorCounts[normKey] ?? 0) + 1;
+      _scanStatus = 'Добавлен $normKey: $number';
       _scanStatusColor = Colors.green;
     });
     _saveScannedNumbers();
   }
 
   void _removeLastScooterForBrand(String brand) {
-    final prefix = '[$brand]';
+    final normKey = _normalizeBrand(brand);
+    final upperBrand = normKey.toUpperCase();
+    final prefix = '[$upperBrand]';
     int indexToRemove = -1;
     for (int i = _scannedNumbers.length - 1; i >= 0; i--) {
       if (_scannedNumbers[i].startsWith(prefix)) {
@@ -346,9 +436,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       if (indexToRemove != -1) {
         _scannedNumbers.removeAt(indexToRemove);
       }
-      final currentCount = _competitorCounts[brand] ?? 0;
+      final currentCount = _competitorCounts[normKey] ?? 0;
       if (currentCount > 0) {
-        _competitorCounts[brand] = currentCount - 1;
+        _competitorCounts[normKey] = currentCount - 1;
       }
     });
     _saveScannedNumbers();
@@ -391,10 +481,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   void _incrementBrandWithQuickLabel(String brand) {
+    final normKey = _normalizeBrand(brand);
+    final upperBrand = normKey.toUpperCase();
     setState(() {
-      _scannedNumbers.insert(0, '[$brand]');
-      _competitorCounts[brand] = (_competitorCounts[brand] ?? 0) + 1;
-      _scanStatus = 'Добавлен $brand';
+      _scannedNumbers.insert(0, '[$upperBrand]');
+      _competitorCounts[normKey] = (_competitorCounts[normKey] ?? 0) + 1;
+      _scanStatus = 'Добавлен $normKey';
       _scanStatusColor = Colors.green;
     });
     _saveScannedNumbers();
@@ -566,12 +658,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     if (original == null) return imageFile;
 
     var oriented = img.bakeOrientation(original);
-    // Если фотография горизонтальная (альбомная), поворачиваем её на 90 градусов,
-    // чтобы она ВСЕГДА сохранялась в вертикальном (портретном) формате.
-    // Это исключает переворот головы у проверяющего администратора!
-    if (oriented.width > oriented.height) {
-      oriented = img.copyRotate(oriented, angle: 90);
-    }
+    // Сохраняем оригинальную ориентацию (альбомную или портретную),
+    // чтобы поддерживать оба формата.
     final resized = img.copyResize(oriented, width: 1280);
 
     // Dynamic map overlay strictly on the bottom-left corner and larger

@@ -27,6 +27,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
   double _minZoomLevel = 1.0;
   double _maxZoomLevel = 1.0;
   double _currentZoomLevel = 1.0;
+  bool _isUltraWideActive = false;
 
   @override
   void initState() {
@@ -56,10 +57,14 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
           orElse: () => _cameras.first,
         );
       } else {
-        selectedCamera = _cameras.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.back,
-          orElse: () => _cameras.first,
-        );
+        final backCameras = _cameras.where((c) => c.lensDirection == CameraLensDirection.back).toList();
+        if (_isUltraWideActive && backCameras.length > 1) {
+          selectedCamera = backCameras[1];
+        } else if (backCameras.isNotEmpty) {
+          selectedCamera = backCameras[0];
+        } else {
+          selectedCamera = _cameras.first;
+        }
       }
 
       final controller = CameraController(
@@ -108,7 +113,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
           _isCameraInitialized = true;
           _minZoomLevel = minZoom;
           _maxZoomLevel = maxZoom;
-          _currentZoomLevel = 1.0; // По умолчанию всегда начинаем с 1x (стандартная линза)
+          _currentZoomLevel = _isUltraWideActive ? 0.5 : 1.0;
         });
       }
     } catch (e) {
@@ -175,33 +180,47 @@ class _CustomCameraScreenState extends State<CustomCameraScreen> with WidgetsBin
 
   Future<void> _toggleZoom() async {
     if (_controller == null || !_controller!.value.isInitialized) return;
-    
-    try {
-      double targetZoom = 1.0;
-      if (_currentZoomLevel == 1.0) {
-        // Если устройство поддерживает сверхширокий угол (например, 0.5x), переключаемся на минимальный зум
-        if (_minZoomLevel < 1.0) {
-          targetZoom = _minZoomLevel;
+
+    final backCameras = _cameras.where((c) => c.lensDirection == CameraLensDirection.back).toList();
+
+    if (widget.overlayType == CameraOverlayType.landscape && backCameras.length > 1) {
+      // У нас есть поддержка сверхширокоугольного объектива (0.5x) на уровне физических камер!
+      setState(() {
+        _isUltraWideActive = !_isUltraWideActive;
+        _isCameraInitialized = false;
+      });
+
+      // Перезапускаем камеру с новым сенсором
+      final oldController = _controller;
+      _controller = null;
+      await oldController?.dispose();
+
+      await _initCamera();
+    } else {
+      // Обычный цифровой зум для устройств с одной камерой
+      try {
+        double targetZoom = 1.0;
+        if (_currentZoomLevel == 1.0) {
+          if (_minZoomLevel < 1.0) {
+            targetZoom = _minZoomLevel;
+          } else {
+            targetZoom = _maxZoomLevel >= 2.0 ? 2.0 : _maxZoomLevel;
+          }
+        } else if (_currentZoomLevel < 1.0) {
+          targetZoom = 1.0;
         } else {
-          // Если 0.5x нет, переключаемся на 2.0x (зум приближения)
-          targetZoom = _maxZoomLevel >= 2.0 ? 2.0 : _maxZoomLevel;
+          targetZoom = 1.0;
         }
-      } else if (_currentZoomLevel < 1.0) {
-        // Мы в режиме 0.5x, возвращаемся в обычный 1.0x
-        targetZoom = 1.0;
-      } else {
-        // Мы в режиме 2.0x, возвращаемся в обычный 1.0x
-        targetZoom = 1.0;
+
+        await _controller!.setZoomLevel(targetZoom);
+        if (mounted) {
+          setState(() {
+            _currentZoomLevel = targetZoom;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error toggling zoom: $e');
       }
-      
-      await _controller!.setZoomLevel(targetZoom);
-      if (mounted) {
-        setState(() {
-          _currentZoomLevel = targetZoom;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error toggling zoom: $e');
     }
   }
 
