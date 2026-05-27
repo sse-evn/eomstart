@@ -344,6 +344,39 @@ class PromoApiService {
     }
   }
 
+  Future<int> clearPromoCodes({required String brand, String? validUntil}) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+
+    final bodyMap = {
+      'brand': brand,
+      if (validUntil != null && validUntil.isNotEmpty) 'valid_until': validUntil,
+    };
+
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/clear'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: jsonEncode(bodyMap),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      return data['deleted_count'] ?? 0;
+    } else if (response.statusCode == 401) {
+      throw PromoApiServiceException('Сессия истекла', statusCode: 401);
+    } else if (response.statusCode == 403) {
+      throw PromoApiServiceException('Доступ запрещён', statusCode: 403);
+    } else {
+      final error = _tryParseJson(utf8.decode(response.bodyBytes))?['error'] ?? 'Неизвестная ошибка';
+      throw PromoApiServiceException('Ошибка очистки: $error', statusCode: response.statusCode);
+    }
+  }
+
   Map<String, dynamic>? _tryParseJson(String body) {
     try {
       return jsonDecode(body) as Map<String, dynamic>?;

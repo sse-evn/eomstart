@@ -487,6 +487,120 @@ Future<void> _uploadExcel() async {
     }
   }
 
+  Future<void> _clearPromoCodes() async {
+    String? dialogBrand;
+    DateTime? dialogDate;
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Очистка промокодов ⚠️', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Будут удалены ТОЛЬКО НЕВЫДАННЫЕ промокоды.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: dialogBrand,
+                items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
+                    .map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontWeight: FontWeight.bold))))
+                    .toList(),
+                onChanged: (v) => setDialogState(() => dialogBrand = v),
+                decoration: const InputDecoration(
+                  labelText: 'Бренд промокодов',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                readOnly: true,
+                onTap: () async {
+                  final pickedDate = await showDatePicker(
+                    context: ctx,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(2025),
+                    lastDate: DateTime(2030),
+                  );
+                  if (pickedDate != null) {
+                    setDialogState(() => dialogDate = pickedDate);
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Дата окончания (опционально)',
+                  hintText: dialogDate == null
+                      ? 'Удалить все даты'
+                      : dialogDate!.toLocal().toString().split(' ')[0],
+                  suffixIcon: dialogDate != null
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => setDialogState(() => dialogDate = null),
+                        )
+                      : const Icon(Icons.calendar_today),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                if (dialogBrand != null) {
+                  Navigator.pop(ctx, {
+                    'brand': dialogBrand!,
+                    if (dialogDate != null) 'validUntil': dialogDate!.toIso8601String().split('T')[0],
+                  });
+                }
+              },
+              child: const Text('Удалить'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == null) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final deletedCount = await _service.clearPromoCodes(
+        brand: result['brand']!,
+        validUntil: result['validUntil'],
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Успешно удалено невыданных промокодов: $deletedCount'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadAllData();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка очистки: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<void> _activateBrand() async {
     if (_selectedBrand == null || _endDate == null) return;
     final now = DateTime.now();
@@ -780,13 +894,13 @@ Future<void> _uploadExcel() async {
                 children: [
                   Icon(Icons.description_outlined, color: Colors.green, size: 32),
                   SizedBox(height: 12),
-                  Text('Excel / CSV', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                  Text('Excel / CSV', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 11)),
                 ],
               ),
             ),
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 12),
         Expanded(
           child: InkWell(
             onTap: _uploadFromGoogleSheet,
@@ -802,7 +916,29 @@ Future<void> _uploadExcel() async {
                 children: [
                   Icon(Icons.grid_on_outlined, color: Colors.blue, size: 32),
                   SizedBox(height: 12),
-                  Text('Google Sheets', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                  Text('Google Sheets', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 11)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: InkWell(
+            onTap: _clearPromoCodes,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: const Column(
+                children: [
+                  Icon(Icons.delete_sweep_outlined, color: Colors.red, size: 32),
+                  SizedBox(height: 12),
+                  Text('Очистить', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 11)),
                 ],
               ),
             ),
