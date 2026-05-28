@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:micro_mobility_app/src/core/services/promo_api_service.dart';
 import 'package:micro_mobility_app/src/features/admin/bolt_accounts_admin_screen.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 class AdminPromoScreen extends StatefulWidget {
   const AdminPromoScreen({super.key});
@@ -138,6 +140,67 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                   Text('Ошибка загрузки выданных промокодов: ${e.message}'),
               backgroundColor: Colors.orange),
         );
+      }
+    }
+  }
+
+  Future<void> _exportToCSV() async {
+    final promos = _claimedPromos ?? [];
+    if (promos.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нет данных для экспорта')),
+        );
+      }
+      return;
+    }
+
+    final buffer = StringBuffer();
+    // CSV Header (с BOM для корректного отображения кириллицы в Excel)
+    buffer.write('\uFEFF');
+    buffer.writeln('Дата,Время,Никнейм,Имя,Бренд,Промокоды');
+
+    for (final item in promos) {
+      if (item is Map<String, dynamic> &&
+          item['promo_codes'] != null &&
+          (item['promo_codes'] as Map).isNotEmpty) {
+        final dateStr = item['created_at'] as String? ?? '';
+        var date = '';
+        var time = '';
+        if (dateStr.isNotEmpty) {
+          final parsed = DateTime.tryParse(dateStr);
+          if (parsed != null) {
+            date = DateFormat('dd.MM.yyyy').format(parsed);
+            time = DateFormat('HH:mm').format(parsed);
+          } else {
+            date = dateStr.split('T')[0];
+          }
+        }
+        final username = item['username']?.toString() ?? '';
+        final firstName = item['first_name']?.toString() ?? '';
+
+        final codesMap = item['promo_codes'] as Map<String, dynamic>;
+        for (final entry in codesMap.entries) {
+          if (entry.value is List && (entry.value as List).isNotEmpty) {
+            final brand = entry.key;
+            final codes = (entry.value as List).join('; ');
+            buffer.writeln('$date,$time,$username,$firstName,$brand,$codes');
+          }
+        }
+      }
+    }
+
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/eom_promo_history.csv');
+      await file.writeAsString(buffer.toString(), flush: true);
+
+      await Share.shareXFiles([XFile(file.path)],
+          text: 'История выдачи промокодов EOM');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка экспорта: $e')));
       }
     }
   }
@@ -707,6 +770,171 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     );
   }
 
+  Future<void> _claimPromoManual() async {
+    String? selectedBrand;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Получить промокод вручную'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Промокод будет выдан вам в без смены.',
+                  style: TextStyle(color: Colors.grey, fontSize: 13)),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: selectedBrand,
+                items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
+                    .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                    .toList(),
+                onChanged: (v) => setDialogState(() => selectedBrand = v),
+                decoration: const InputDecoration(labelText: 'Выберите бренд'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Отмена')),
+            ElevatedButton(
+              onPressed: () {
+                if (selectedBrand != null) Navigator.pop(ctx, selectedBrand);
+              },
+              child: const Text('Получить'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == null) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final res = await _service.claimPromoManual(result);
+      final codes = (res['promo_codes'] as List).join(', ');
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('✅ Успешно'),
+            content: Text('Ваш(и) промокод(ы):\n\n$codes\n\nБренд: $result'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx), child: const Text('ОК')),
+            ],
+          ),
+        );
+        _loadAllData();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _searchAndDeletePromo() async {
+    final controller = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Поиск промокода'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+              hintText: 'Введите промокод', border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+          ElevatedButton(
+            onPressed: () async {
+              if (controller.text.isEmpty) return;
+              Navigator.pop(ctx);
+              await _showPromoDetails(controller.text.trim());
+            },
+            child: const Text('Найти'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showPromoDetails(String code) async {
+    setState(() => _isLoading = true);
+    Map<String, dynamic>? data;
+    try {
+      data = await _service.searchPromoCode(code);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+      }
+      setState(() => _isLoading = false);
+      return;
+    }
+    setState(() => _isLoading = false);
+
+    if (!mounted || data == null) return;
+
+    final isClaimed = data['is_claimed'] == true;
+    final info = StringBuffer();
+    info.writeln('Код: ${data['promo_code']}');
+    info.writeln('Бренд: ${data['brand']}');
+    info.writeln('Годен до: ${data['valid_until']}');
+    if (data.containsKey('subtype')) {
+      info.writeln('Подтип: ${data['subtype']}');
+    }
+    info.writeln('\nСтатус: ${isClaimed ? "🔴 Выдан" : "🟢 Свободен"}');
+
+    if (isClaimed) {
+      info.writeln('Кому выдан: ${data['username']} (${data['first_name']})');
+      info.writeln('Дата выдачи: ${data['claimed_at']}');
+    }
+
+    final deleteConfirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Информация о промокоде'),
+        content: Text(info.toString()),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Закрыть')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Удалить из БД'),
+          ),
+        ],
+      ),
+    );
+
+    if (deleteConfirmed == true) {
+      setState(() => _isLoading = true);
+      try {
+        await _service.deletePromoCode(code);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Промокод удален'), backgroundColor: Colors.green));
+          _loadAllData();
+        }
+      } catch (e) {
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -735,6 +963,40 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                   _buildSectionHeader(
                       'Пополнение базы', Icons.cloud_upload_outlined),
                   _buildUploadActions(isDarkMode),
+                  const SizedBox(height: 24),
+                  _buildSectionHeader(
+                      'Ручное управление', Icons.admin_panel_settings_outlined),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _claimPromoManual,
+                          icon: const Icon(Icons.download_for_offline_outlined),
+                          label: const Text('Взять без смены'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange.withOpacity(0.1),
+                            foregroundColor: Colors.orange,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _searchAndDeletePromo,
+                          icon: const Icon(Icons.manage_search_outlined),
+                          label: const Text('Поиск кода'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple.withOpacity(0.1),
+                            foregroundColor: Colors.purple,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 24),
                   _buildSectionHeader(
                     'Статистика остатков',
@@ -1048,22 +1310,42 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
 
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color:
-                isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100],
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'Поиск по сотруднику...',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              border: InputBorder.none,
-              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 13),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: isDarkMode
+                      ? Colors.white.withOpacity(0.05)
+                      : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Поиск по сотруднику...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    border: InputBorder.none,
+                    hintStyle: TextStyle(color: Colors.grey[500], fontSize: 13),
+                  ),
+                  onChanged: (v) =>
+                      setState(() => _searchQuery = v.toLowerCase()),
+                ),
+              ),
             ),
-            onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
-          ),
+            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.download_rounded, color: Colors.green),
+                onPressed: _exportToCSV,
+                tooltip: 'Скачать отчет Excel (CSV)',
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         _buildClaimedPromosListByDate(),

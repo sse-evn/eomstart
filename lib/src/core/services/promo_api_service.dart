@@ -378,6 +378,66 @@ class PromoApiService {
     }
   }
 
+  Future<Map<String, dynamic>> claimPromoManual(String brand) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/claim-manual/$brand'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes))
+          as Map<String, dynamic>;
+    } else {
+      final body = utf8.decode(response.bodyBytes);
+      final errorData = _tryParseJson(body);
+      final errorMessage = errorData?['error'] ?? 'Ошибка сервера (${response.statusCode})';
+      throw PromoApiServiceException(errorMessage.toString(), statusCode: response.statusCode);
+    }
+  }
+
+  Future<Map<String, dynamic>> searchPromoCode(String code) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+    final response = await http.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/search?code=$code'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    } else if (response.statusCode == 404) {
+      throw PromoApiServiceException('Промокод не найден', statusCode: 404);
+    } else {
+      final body = utf8.decode(response.bodyBytes);
+      final errorData = _tryParseJson(body);
+      throw PromoApiServiceException(errorData?['error'] ?? 'Ошибка сервера', statusCode: response.statusCode);
+    }
+  }
+
+  Future<void> deletePromoCode(String code) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+    final response = await http.delete(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/delete-code'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'code': code}),
+    );
+    if (response.statusCode != 200) {
+      final body = utf8.decode(response.bodyBytes);
+      final errorData = _tryParseJson(body);
+      throw PromoApiServiceException(errorData?['error'] ?? 'Ошибка удаления', statusCode: response.statusCode);
+    }
+  }
+
   // ───── Bolt Accounts ─────
 
   Future<List<dynamic>> getBoltAccounts() async {
