@@ -151,15 +151,16 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                     context: context,
                     builder: (c) => AlertDialog(
                       title: const Text('Удалить аккаунт?'),
-                      content: Text('Аккаунт "${account['login']}" будет удалён.'),
+                      content:
+                          Text('Аккаунт "${account['login']}" будет удалён.'),
                       actions: [
                         TextButton(
                             onPressed: () => Navigator.pop(c),
                             child: const Text('Нет')),
                         ElevatedButton(
                           onPressed: () => Navigator.pop(c, true),
-                          style:
-                              ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red),
                           child: const Text('Удалить',
                               style: TextStyle(color: Colors.white)),
                         ),
@@ -171,17 +172,19 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
                     _loadData();
                   }
                 },
-                child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+                child:
+                    const Text('Удалить', style: TextStyle(color: Colors.red)),
               ),
               const Spacer(),
               TextButton(
-                  onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Отмена')),
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                child:
-                    const Text('Сохранить', style: TextStyle(color: Colors.white)),
+                child: const Text('Сохранить',
+                    style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -310,20 +313,10 @@ class _BoltAccountsAdminScreenState extends State<BoltAccountsAdminScreen> {
               ElevatedButton(
                 onPressed: () async {
                   Navigator.pop(ctx);
-                  if (selectedIds.isEmpty) return;
 
                   try {
-                    // Unassign removed users
-                    for (final prev in assignedUserIds) {
-                      if (!selectedIds.contains(prev)) {
-                        await _service.unassignBoltAccount(account['id'], prev);
-                      }
-                    }
-                    // Bulk assign selected
-                    if (selectedIds.isNotEmpty) {
-                      await _service.bulkAssignBoltAccount(
-                          account['id'], selectedIds.toList());
-                    }
+                    await _service.bulkAssignBoltAccount(
+                        account['id'], selectedIds.toList());
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
