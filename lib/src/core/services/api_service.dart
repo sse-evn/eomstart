@@ -7,6 +7,7 @@ import 'package:micro_mobility_app/src/features/app/models/active_shift.dart' as
 import '../../features/app/models/shift_data.dart' as shift_data;
 import '../config/app_config.dart';
 import 'dart:async';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class ApiService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -240,12 +241,19 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getUserProfile(String token) async {
+    String appVersion = "";
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      appVersion = '${packageInfo.version}+${packageInfo.buildNumber}';
+    } catch (_) {}
+
     final response = await _authorizedRequest((token) async {
       return await http.get(
         Uri.parse(AppConfig.profileUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
+          if (appVersion.isNotEmpty) 'X-App-Version': appVersion,
         },
       );
     }, token);

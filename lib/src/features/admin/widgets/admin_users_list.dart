@@ -787,6 +787,16 @@ class _AdminUsersListState extends State<AdminUsersList> {
                         const SizedBox(height: 2),
                         Text(phone, style: TextStyle(color: Colors.grey[400], fontSize: 11)),
                       ],
+                      if (user['app_version'] != null && user['app_version'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.system_update_rounded, size: 12, color: Colors.blueAccent),
+                            const SizedBox(width: 4),
+                            Text('v${user['app_version']}', style: TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
