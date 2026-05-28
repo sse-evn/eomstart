@@ -42,7 +42,6 @@ class _AdminPromoScreenState extends State<AdminPromoScreen>
           color: primaryColor,
           child: TabBar(
             controller: _tabController,
-            isScrollable: true,
             tabs: const [
               Tab(text: 'Управление', icon: Icon(Icons.local_offer, size: 18)),
               Tab(text: 'База кодов', icon: Icon(Icons.list_alt, size: 18)),
