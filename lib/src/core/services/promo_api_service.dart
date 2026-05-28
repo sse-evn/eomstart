@@ -176,25 +176,18 @@ class PromoApiService {
     }
 
     final response = await http.get(
-      Uri.parse('${AppConfig.apiBaseUrl}/admin/users'),
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/history'),
       headers: {'Authorization': 'Bearer $token'},
     );
 
     if (response.statusCode == 200) {
-      final users = jsonDecode(utf8.decode(response.bodyBytes)) as List;
-      return users.where((user) {
-        if (user is Map && user.containsKey('promo_codes')) {
-          final promos = user['promo_codes'] as Map?;
-          return promos != null && promos.isNotEmpty;
-        }
-        return false;
-      }).toList();
+      return jsonDecode(utf8.decode(response.bodyBytes)) as List;
     } else if (response.statusCode == 401) {
       throw PromoApiServiceException('Сессия истекла', statusCode: 401);
     } else if (response.statusCode == 403) {
       throw PromoApiServiceException('Доступ запрещён', statusCode: 403);
     } else {
-      throw PromoApiServiceException('Ошибка загрузки данных пользователей',
+      throw PromoApiServiceException('Ошибка загрузки истории выдачи',
           statusCode: response.statusCode);
     }
   }
