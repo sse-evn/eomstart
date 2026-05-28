@@ -305,6 +305,69 @@ class _AdminUsersListState extends State<AdminUsersList> {
     }
   }
 
+  Future<void> _changeUserPhone(int userId, String username, String currentPhone) async {
+    final controller = TextEditingController(text: currentPhone);
+    final newPhone = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Изменить номер'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Номер телефона',
+            hintText: '+7...',
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: TextInputType.phone,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+
+    if (newPhone != null && newPhone != currentPhone) {
+      try {
+        final token = await _storage.read(key: 'jwt_token');
+        if (token == null) throw Exception('Токен не найден');
+
+        await _apiService.updateUserPhone(token, userId, newPhone);
+        _addLog('📱 Телефон изменен: $username');
+
+        await _refreshData();
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Номер телефона обновлен'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        });
+      } catch (e) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Ошибка: ${e.toString()}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        });
+      }
+    }
+  }
+
   Future<void> _deleteUser(int userId, String username) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -624,6 +687,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
     final firstName = user['first_name'] as String?;
     final role = user['role'] as String? ?? 'user';
     final status = user['status'] as String? ?? 'pending';
+    final phone = user['phone'] as String? ?? '';
+    final avatarUrl = user['avatar_url'] as String? ?? '';
     final roleColor = _roleColors[role] ?? Colors.grey;
 
     return Container(
@@ -649,21 +714,34 @@ class _AdminUsersListState extends State<AdminUsersList> {
                 // Avatar with role indicator
                 Stack(
                   children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [roleColor, roleColor.withOpacity(0.6)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [roleColor, roleColor.withOpacity(0.6)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        username.substring(0, 1).toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+                        alignment: Alignment.center,
+                        child: avatarUrl.isNotEmpty
+                            ? Image.network(
+                                avatarUrl,
+                                width: 52,
+                                height: 52,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => Text(
+                                  username.substring(0, 1).toUpperCase(),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+                                ),
+                              )
+                            : Text(
+                                username.substring(0, 1).toUpperCase(),
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+                              ),
                       ),
                     ),
                     Positioned(
@@ -705,6 +783,10 @@ class _AdminUsersListState extends State<AdminUsersList> {
                           ),
                         ],
                       ),
+                      if (phone.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(phone, style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                      ],
                     ],
                   ),
                 ),
@@ -799,14 +881,18 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
   void _showUserActions(Map<String, dynamic> user) {
     final username = user['username'] as String? ?? 'Неизвестно';
+    final firstName = user['first_name'] as String?;
     final role = user['role'] as String? ?? 'user';
     final status = user['status'] as String? ?? 'pending';
+    final phone = user['phone'] as String? ?? '';
+    final avatarUrl = user['avatar_url'] as String? ?? '';
     final userId = user['id'] as int?;
     if (userId == null) return;
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     bool canManage = ['admin', 'superadmin', 'coordinator', 'supervisor'].contains(_currentUserRole);
     bool canDelete = _currentUserRole == 'superadmin';
+    final roleColor = _roleColors[role] ?? Colors.grey;
 
     showModalBottomSheet(
       context: context,
@@ -823,10 +909,68 @@ class _AdminUsersListState extends State<AdminUsersList> {
           children: [
             Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 24),
-            Text(username, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+            
+            // Avatar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [roleColor, roleColor.withOpacity(0.6)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: avatarUrl.isNotEmpty
+                    ? Image.network(
+                        avatarUrl,
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Text(
+                          username.substring(0, 1).toUpperCase(),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 32),
+                        ),
+                      )
+                    : Text(
+                        username.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 32),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            Text(firstName ?? username, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
             const SizedBox(height: 4),
-            Text('${_roleLabels[role] ?? role} • ${status == 'active' ? 'Активен' : 'Ожидание'}', 
-              style: TextStyle(color: _roleColors[role], fontWeight: FontWeight.w600, fontSize: 13)),
+            if (firstName != null) ...[
+              Text('@$username', style: TextStyle(color: Colors.grey[500], fontSize: 14)),
+              const SizedBox(height: 4),
+            ],
+            
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: roleColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('${_roleLabels[role] ?? role} • ${status == 'active' ? 'Активен' : 'Ожидание'}', 
+                style: TextStyle(color: roleColor, fontWeight: FontWeight.w600, fontSize: 13)),
+            ),
+            
+            if (phone.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.phone_android, size: 16, color: Colors.grey[400]),
+                  const SizedBox(width: 6),
+                  Text(phone, style: TextStyle(color: Colors.grey[500], fontSize: 15, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ],
             const SizedBox(height: 24),
             if (canManage) ...[
               if (status != 'active')
@@ -839,6 +983,11 @@ class _AdminUsersListState extends State<AdminUsersList> {
                   Navigator.pop(ctx);
                   _updateUserStatus(userId, username, 'pending');
                 }),
+              const SizedBox(height: 12),
+              _buildActionButton('Изменить номер', Icons.phone_android_outlined, Colors.blue, () {
+                Navigator.pop(ctx);
+                _changeUserPhone(userId, username, phone);
+              }),
               const SizedBox(height: 12),
               _buildActionButton('Изменить роль', Icons.manage_accounts_outlined, isDarkMode ? Colors.white : Colors.black87, () {
                 Navigator.pop(ctx);

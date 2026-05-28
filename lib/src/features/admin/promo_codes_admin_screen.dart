@@ -214,6 +214,57 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     }
   }
 
+  Future<void> _copyDailyReport() async {
+    final promos = _getFilteredHistory();
+    if (promos.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нет данных для копирования')),
+        );
+      }
+      return;
+    }
+
+    final buffer = StringBuffer();
+
+    for (final item in promos) {
+      if (item is Map<String, dynamic> &&
+          item['promo_codes'] != null &&
+          (item['promo_codes'] as Map).isNotEmpty) {
+        final username = item['username']?.toString() ?? '';
+        final phone = item['phone']?.toString() ?? '';
+        final codesMap = item['promo_codes'] as Map<String, dynamic>;
+
+        for (final entry in codesMap.entries) {
+          if (entry.value is List && (entry.value as List).isNotEmpty) {
+            final brand = entry.key;
+            final codes = (entry.value as List).join(', ');
+            buffer.writeln('🎫 ВЫДАН ПРОМОКОД');
+            buffer.writeln('👤 @$username');
+            if (phone.isNotEmpty) {
+              buffer.writeln('📱 $phone');
+            }
+            buffer.writeln('🛴 $brand');
+            buffer.writeln('🔑 $codes');
+            buffer.writeln();
+          }
+        }
+      }
+    }
+
+    if (buffer.isNotEmpty) {
+      await Clipboard.setData(ClipboardData(text: buffer.toString().trim()));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Отчет скопирован в буфер обмена'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _loadActiveBrand() async {
     try {
       final data = await _service.getActivePromoBrand();
@@ -1414,6 +1465,18 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                 tooltip: 'Скачать отчет Excel (CSV)',
               ),
             ),
+            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.copy_rounded, color: Colors.blue),
+                onPressed: _copyDailyReport,
+                tooltip: 'Скопировать отчет для Telegram',
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -1686,6 +1749,17 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                     style: TextStyle(color: Colors.grey[500], fontSize: 13)),
             ],
           ),
+          if (user['phone'] != null && user['phone'].toString().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.phone_android, size: 14, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text('${user['phone']}',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           for (final entry
               in (user['promo_codes'] as Map<String, dynamic>).entries)

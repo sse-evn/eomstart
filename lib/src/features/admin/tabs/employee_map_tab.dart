@@ -148,14 +148,11 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
           ),
           child: ClipOval(
             child: emp.avatarUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: emp.avatarUrl!,
+                ? Image.network(
+                    emp.avatarUrl!,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) =>
-                        const CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.green),
-                    errorWidget: (_, __, ___) => _buildFallbackAvatar(
-                        battery: emp.battery, label: emp.name),
+                    errorBuilder: (context, error, stackTrace) =>
+                        _buildFallbackAvatar(battery: emp.battery, label: emp.name),
                   )
                 : _buildFallbackAvatar(battery: emp.battery, label: emp.name),
           ),
@@ -346,15 +343,11 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                         ),
                         child: ClipOval(
                           child: _logic.currentUserAvatarUrl != null
-                              ? CachedNetworkImage(
-                                  imageUrl: _logic.currentUserAvatarUrl!,
+                              ? Image.network(
+                                  _logic.currentUserAvatarUrl!,
                                   fit: BoxFit.cover,
-                                  placeholder: (context, url) =>
-                                      const CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                  errorWidget: (_, __, ___) => const Icon(
-                                      Icons.my_location,
-                                      color: Colors.blue),
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(Icons.my_location, color: Colors.blue),
                                 )
                               : const Icon(Icons.my_location,
                                   color: Colors.blue),
@@ -811,15 +804,16 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       url = '${AppConfig.backendHost}/$url';
     }
 
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: size,
+        height: size,
         color: Colors.grey[300],
-        borderRadius: BorderRadius.circular(12),
-        image: DecorationImage(
-          image: CachedNetworkImageProvider(url),
+        child: Image.network(
+          url,
           fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: Colors.white),
         ),
       ),
     );
@@ -842,13 +836,11 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
           children: [
             Center(
               child: InteractiveViewer(
-                child: CachedNetworkImage(
-                  imageUrl: url,
+                child: Image.network(
+                  url,
                   fit: BoxFit.contain,
-                  placeholder: (context, url) => const Center(
-                      child: CircularProgressIndicator(color: Colors.white)),
-                  errorWidget: (context, url, error) =>
-                      const Icon(Icons.error, color: Colors.white),
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.error, color: Colors.white, size: 50),
                 ),
               ),
             ),

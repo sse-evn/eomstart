@@ -40,6 +40,7 @@ class AppConfig {
 
   static String get adminUsersUrl => '$apiBaseUrl/admin/users';
   static String updateUserRoleUrl(int userId) => '$adminUsersUrl/$userId/role';
+  static String get updateUserPhoneUrl => '$adminUsersUrl/phone';
   static String updateUserStatusUrl(int userId) =>
       '$adminUsersUrl/$userId/status';
   static String deleteUserUrl(int userId) => '$adminUsersUrl/$userId';

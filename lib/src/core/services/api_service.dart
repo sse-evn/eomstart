@@ -329,6 +329,32 @@ class ApiService {
     }
   }
 
+  Future<void> updateUserPhone(String token, int userId, String phone) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.patch(
+        Uri.parse(AppConfig.updateUserPhoneUrl),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'user_id': userId, 'phone': phone}),
+      );
+    }, token);
+    if (response.statusCode != 200) {
+      String errorMessage = 'Failed to update user phone';
+      try {
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        errorMessage = errorBody['error']?.toString() ?? errorMessage;
+        if (errorMessage == 'Failed to update user phone') {
+          errorMessage = errorBody['message']?.toString() ?? errorMessage;
+        }
+      } catch (e) {
+        debugPrint('⚠️ Ошибка парсинга тела ошибки updateUserPhone: $e');
+      }
+      throw Exception(errorMessage);
+    }
+  }
+
   Future<void> createUser(
     String token,
     String username,
