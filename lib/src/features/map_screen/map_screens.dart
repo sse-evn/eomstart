@@ -86,7 +86,7 @@ class _MapScreenState extends State<MapScreen> {
                   maxZoom: AppConstants.maxZoom,
                   onTap: (tapPosition, point) => _handleMapTap(point),
                   interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.all,
+                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                   ),
                 ),
                 children: [
@@ -134,75 +134,58 @@ class _MapScreenState extends State<MapScreen> {
                           point: logic.currentLocation!,
                           width: 54,
                           height: 54,
-                          child: Transform.rotate(
-                            angle: (logic.isNavigatorMode ? logic.currentHeading : 0) * (3.1415926535897932 / 180),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 3),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 8,
-                                    spreadRadius: 2,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Stack(
-                                children: [
-                                  ClipOval(
-                                    child: logic.currentUserAvatarUrl != null
-                                        ? Image.network(
-                                            logic.currentUserAvatarUrl!,
-                                            fit: BoxFit.cover,
-                                            width: 48,
-                                            height: 48,
-                                            loadingBuilder:
-                                                (context, child, loadingProgress) {
-                                              if (loadingProgress == null)
-                                                return child;
-                                              return Container(
-                                                color: Colors.blue[300],
-                                                child:
-                                                    const CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  color: Colors.white,
-                                                ),
-                                              );
-                                            },
-                                            errorBuilder:
-                                                (context, error, stackTrace) =>
-                                                    Container(
-                                              color: Colors.blue[700],
-                                              child: const Icon(
-                                                Icons.person,
-                                                color: Colors.white,
-                                                size: 28,
-                                              ),
-                                            ),
-                                          )
-                                        : Container(
-                                            color: Colors.blue[700],
-                                            child: const Icon(
-                                              Icons.person,
-                                              color: Colors.white,
-                                              size: 28,
-                                            ),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  spreadRadius: 2,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: logic.currentUserAvatarUrl != null
+                                  ? Image.network(
+                                      logic.currentUserAvatarUrl!,
+                                      fit: BoxFit.cover,
+                                      width: 48,
+                                      height: 48,
+                                      loadingBuilder:
+                                          (context, child, loadingProgress) {
+                                        if (loadingProgress == null)
+                                          return child;
+                                        return Container(
+                                          color: Colors.blue[300],
+                                          child:
+                                              const CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
                                           ),
-                                  ),
-                                  if (logic.isNavigatorMode)
-                                    Positioned(
-                                      top: 0,
-                                      left: 0,
-                                      right: 0,
-                                      child: Align(
-                                        alignment: Alignment.topCenter,
-                                        child: Icon(Icons.navigation_rounded, color: Colors.blueAccent, size: 20),
+                                        );
+                                      },
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              Container(
+                                        color: Colors.blue[700],
+                                        child: const Icon(
+                                          Icons.person,
+                                          color: Colors.white,
+                                          size: 28,
+                                        ),
+                                      ),
+                                    )
+                                  : Container(
+                                      color: Colors.blue[700],
+                                      child: const Icon(
+                                        Icons.person,
+                                        color: Colors.white,
+                                        size: 28,
                                       ),
                                     ),
-                                ],
-                              ),
                             ),
                           ),
                         ),
@@ -245,8 +228,8 @@ class _MapScreenState extends State<MapScreen> {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                         Colors.black.withOpacity(0.1),
-                         Colors.transparent,
+                        Colors.black.withOpacity(0.1),
+                        Colors.transparent,
                       ],
                     ),
                   ),
@@ -403,14 +386,6 @@ class _MapScreenState extends State<MapScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _mapControlButon(
-          icon: logic.isNavigatorMode ? Icons.navigation_rounded : Icons.explore_outlined,
-          onPressed: () {
-            logic.toggleNavigatorMode();
-          },
-          tooltip: 'Режим навигатора',
-        ),
-        const SizedBox(height: 16),
         _mapControlButon(
           icon: Icons.add_rounded,
           onPressed: () {

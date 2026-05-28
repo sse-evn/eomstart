@@ -981,6 +981,17 @@ class _AdminUsersListState extends State<AdminUsersList> {
                 ],
               ),
             ],
+            if (user['app_version'] != null && user['app_version'].toString().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.system_update_rounded, size: 16, color: Colors.blueAccent),
+                  const SizedBox(width: 6),
+                  Text('Версия: ${user['app_version']}', style: TextStyle(color: Colors.blueAccent, fontSize: 14, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ],
             const SizedBox(height: 24),
             if (canManage) ...[
               if (status != 'active')
