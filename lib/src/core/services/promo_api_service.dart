@@ -438,6 +438,30 @@ class PromoApiService {
     }
   }
 
+  Future<List<dynamic>> getPromoCodesList({String? brand}) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+    
+    var url = '${AppConfig.apiBaseUrl}/admin/promo/list';
+    if (brand != null && brand.isNotEmpty) {
+      url += '?brand=$brand';
+    }
+    
+    final response = await http.get(
+      Uri.parse(url),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+    } else {
+      final body = utf8.decode(response.bodyBytes);
+      final errorData = _tryParseJson(body);
+      throw PromoApiServiceException(errorData?['error'] ?? 'Ошибка загрузки', statusCode: response.statusCode);
+    }
+  }
+
   // ───── Bolt Accounts ─────
 
   Future<List<dynamic>> getBoltAccounts() async {

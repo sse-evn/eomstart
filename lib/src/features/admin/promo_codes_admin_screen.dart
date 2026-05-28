@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:micro_mobility_app/src/core/services/promo_api_service.dart';
 import 'package:micro_mobility_app/src/features/admin/bolt_accounts_admin_screen.dart';
+import 'package:micro_mobility_app/src/features/admin/promo_list_screen.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -22,7 +24,7 @@ class _AdminPromoScreenState extends State<AdminPromoScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -40,8 +42,10 @@ class _AdminPromoScreenState extends State<AdminPromoScreen>
           color: primaryColor,
           child: TabBar(
             controller: _tabController,
+            isScrollable: true,
             tabs: const [
-              Tab(text: 'Промокоды', icon: Icon(Icons.local_offer, size: 18)),
+              Tab(text: 'Управление', icon: Icon(Icons.local_offer, size: 18)),
+              Tab(text: 'База кодов', icon: Icon(Icons.list_alt, size: 18)),
               Tab(text: 'Bolt Аккаунты', icon: Icon(Icons.bolt, size: 18)),
             ],
             labelColor: Colors.white,
@@ -56,6 +60,7 @@ class _AdminPromoScreenState extends State<AdminPromoScreen>
             controller: _tabController,
             children: const [
               PromoManagementContent(),
+              PromoListScreen(),
               BoltAccountsAdminScreen(),
             ],
           ),
@@ -819,8 +824,34 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('✅ Успешно'),
-            content: Text('Ваш(и) промокод(ы):\n\n$codes\n\nБренд: $result'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Бренд: $result\nВаш(и) промокод(ы):'),
+                const SizedBox(height: 8),
+                SelectableText(
+                  codes,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      fontFamily: 'monospace'),
+                ),
+              ],
+            ),
             actions: [
+              TextButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: codes));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Промокод скопирован в буфер обмена'),
+                        backgroundColor: Colors.green),
+                  );
+                },
+                child: const Text('Скопировать',
+                    style: TextStyle(color: Colors.green)),
+              ),
               TextButton(
                   onPressed: () => Navigator.pop(ctx), child: const Text('ОК')),
             ],
@@ -901,7 +932,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Информация о промокоде'),
-        content: Text(info.toString()),
+        content: SelectableText(info.toString()),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
