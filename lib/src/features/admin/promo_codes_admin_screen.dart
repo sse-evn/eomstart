@@ -92,6 +92,10 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   String _searchQuery = ''; // Для поиска по имени
   Map<String, String> _brandFormats = {}; // Форматы промокодов
 
+  DateTime? _historyStartDate =
+      DateTime.now().subtract(const Duration(days: 7));
+  DateTime? _historyEndDate = DateTime.now();
+
   @override
   void initState() {
     super.initState();
@@ -149,11 +153,12 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   }
 
   Future<void> _exportToCSV() async {
-    final promos = _claimedPromos ?? [];
+    final promos = _getFilteredHistory();
     if (promos.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Нет данных для экспорта')),
+          const SnackBar(
+              content: Text('Нет данных для экспорта за выбранный период')),
         );
       }
       return;
@@ -1331,6 +1336,26 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     );
   }
 
+  Future<void> _pickDateRange() async {
+    final range = await showDateRangePicker(
+      context: context,
+      initialDateRange: _historyStartDate != null && _historyEndDate != null
+          ? DateTimeRange(start: _historyStartDate!, end: _historyEndDate!)
+          : DateTimeRange(
+              start: DateTime.now().subtract(const Duration(days: 7)),
+              end: DateTime.now()),
+      firstDate: DateTime(2023),
+      lastDate: DateTime.now(),
+    );
+
+    if (range != null) {
+      setState(() {
+        _historyStartDate = range.start;
+        _historyEndDate = range.end;
+      });
+    }
+  }
+
   Widget _buildClaimedPromosSection(bool isDarkMode) {
     if (_claimedPromos == null) {
       return const Center(
@@ -1338,28 +1363,42 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
               padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
     }
 
+    final dateText = _historyStartDate != null && _historyEndDate != null
+        ? '${DateFormat('dd.MM.yy').format(_historyStartDate!)} - ${DateFormat('dd.MM.yy').format(_historyEndDate!)}'
+        : 'Период не выбран';
+
     return Column(
       children: [
         Row(
           children: [
             Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: isDarkMode
-                      ? Colors.white.withOpacity(0.05)
-                      : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Поиск по сотруднику...',
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    border: InputBorder.none,
-                    hintStyle: TextStyle(color: Colors.grey[500], fontSize: 13),
+              child: GestureDetector(
+                onTap: _pickDateRange,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isDarkMode
+                        ? Colors.white.withOpacity(0.05)
+                        : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  onChanged: (v) =>
-                      setState(() => _searchQuery = v.toLowerCase()),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.date_range,
+                          size: 20, color: Colors.grey),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          dateText,
+                          style: TextStyle(
+                              color: Colors.grey[700],
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1376,6 +1415,24 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color:
+                isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Поиск по сотруднику...',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              border: InputBorder.none,
+              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 13),
+            ),
+            onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
+          ),
         ),
         const SizedBox(height: 16),
         _buildClaimedPromosListByDate(),
@@ -1508,29 +1565,55 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     );
   }
 
-  // --- НОВЫЙ МЕТОД: ГРУППИРОВКА ПО ДАТАМ С ПОИСКОМ ---
-  Widget _buildClaimedPromosListByDate() {
-    final filteredUsers = <Map<String, dynamic>>[];
+  List<dynamic> _getFilteredHistory() {
     final promos = _claimedPromos ?? [];
-    for (final item in promos) {
-      if (item is Map<String, dynamic> &&
-          item['promo_codes'] != null &&
-          (item['promo_codes'] as Map).isNotEmpty) {
-        final username = (item['username'] as String?)?.toLowerCase() ?? '';
-        final firstName = (item['first_name'] as String?)?.toLowerCase() ?? '';
-        if (_searchQuery.isEmpty ||
-            username.contains(_searchQuery) ||
-            firstName.contains(_searchQuery)) {
-          filteredUsers.add(item);
+    return promos.where((item) {
+      if (item is! Map<String, dynamic>) return false;
+
+      if (item['promo_codes'] == null || (item['promo_codes'] as Map).isEmpty)
+        return false;
+
+      // Фильтр по дате
+      final createdAtStr = item['created_at'] as String?;
+      if (createdAtStr != null &&
+          _historyStartDate != null &&
+          _historyEndDate != null) {
+        final parsed = DateTime.tryParse(createdAtStr);
+        if (parsed != null) {
+          final dateOnly = DateTime(parsed.year, parsed.month, parsed.day);
+          final startOnly = DateTime(_historyStartDate!.year,
+              _historyStartDate!.month, _historyStartDate!.day);
+          final endOnly = DateTime(_historyEndDate!.year,
+              _historyEndDate!.month, _historyEndDate!.day);
+          if (dateOnly.isBefore(startOnly) || dateOnly.isAfter(endOnly)) {
+            return false;
+          }
         }
       }
-    }
 
-    if (filteredUsers.isEmpty && _searchQuery.isNotEmpty) {
+      // Фильтр по поиску
+      if (_searchQuery.isNotEmpty) {
+        final username = (item['username'] as String?)?.toLowerCase() ?? '';
+        final firstName = (item['first_name'] as String?)?.toLowerCase() ?? '';
+        if (!username.contains(_searchQuery) &&
+            !firstName.contains(_searchQuery)) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList();
+  }
+
+  // --- НОВЫЙ МЕТОД: ГРУППИРОВКА ПО ДАТАМ С ПОИСКОМ ---
+  Widget _buildClaimedPromosListByDate() {
+    final filteredUsers = _getFilteredHistory();
+
+    if (filteredUsers.isEmpty) {
       return const Center(
           child: Padding(
               padding: EdgeInsets.all(20),
-              child: Text('Ничего не найдено',
+              child: Text('За этот период пусто или ничего не найдено',
                   style: TextStyle(color: Colors.grey))));
     }
 

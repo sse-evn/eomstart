@@ -16,6 +16,8 @@ class _PromoListScreenState extends State<PromoListScreen> {
   bool _isLoading = true;
   String _selectedBrand = 'Все';
   String _searchQuery = '';
+  String _selectedValidUntil = 'Все';
+  List<String> _validUntilDates = ['Все'];
 
   @override
   void initState() {
@@ -30,6 +32,19 @@ class _PromoListScreenState extends State<PromoListScreen> {
       if (mounted) {
         setState(() {
           _codes = data;
+
+          // Извлекаем уникальные даты
+          final dates = _codes
+              .map((e) => (e['valid_until'] ?? '').toString())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList();
+          dates.sort((a, b) => b.compareTo(a)); // Сортируем по убыванию
+          _validUntilDates = ['Все', ...dates];
+          if (!_validUntilDates.contains(_selectedValidUntil)) {
+            _selectedValidUntil = 'Все';
+          }
+
           _applyFilters();
           _isLoading = false;
         });
@@ -48,12 +63,15 @@ class _PromoListScreenState extends State<PromoListScreen> {
       _filteredCodes = _codes.where((item) {
         final brand = item['brand'] ?? '';
         final code = (item['promo_code'] ?? '').toString().toLowerCase();
+        final validUntil = (item['valid_until'] ?? '').toString();
 
         final matchesBrand = _selectedBrand == 'Все' || brand == _selectedBrand;
         final matchesSearch =
             _searchQuery.isEmpty || code.contains(_searchQuery);
+        final matchesDate =
+            _selectedValidUntil == 'Все' || validUntil == _selectedValidUntil;
 
-        return matchesBrand && matchesSearch;
+        return matchesBrand && matchesSearch && matchesDate;
       }).toList();
     });
   }
@@ -104,49 +122,79 @@ class _PromoListScreenState extends State<PromoListScreen> {
           // Фильтры
           Padding(
             padding: const EdgeInsets.all(12.0),
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Поиск кода...',
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onChanged: (v) {
-                      _searchQuery = v.toLowerCase();
-                      _applyFilters();
-                    },
+                TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Поиск кода...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
+                  onChanged: (v) {
+                    _searchQuery = v.toLowerCase();
+                    _applyFilters();
+                  },
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 1,
-                  child: DropdownButtonFormField<String>(
-                    value: _selectedBrand,
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedBrand,
+                        decoration: InputDecoration(
+                          labelText: 'Бренд',
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        items: ['Все', 'JET', 'YANDEX', 'WHOOSH', 'BOLT']
+                            .map((b) => DropdownMenuItem(
+                                value: b,
+                                child: Text(b,
+                                    style: const TextStyle(fontSize: 13))))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            _selectedBrand = v;
+                            _applyFilters();
+                          }
+                        },
+                      ),
                     ),
-                    items: ['Все', 'JET', 'YANDEX', 'WHOOSH', 'BOLT']
-                        .map((b) => DropdownMenuItem(
-                            value: b,
-                            child:
-                                Text(b, style: const TextStyle(fontSize: 13))))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) {
-                        _selectedBrand = v;
-                        _applyFilters();
-                      }
-                    },
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 1,
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedValidUntil,
+                        decoration: InputDecoration(
+                          labelText: 'Срок годности',
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        isExpanded: true,
+                        items: _validUntilDates
+                            .map((d) => DropdownMenuItem(
+                                value: d,
+                                child: Text(d,
+                                    style: const TextStyle(fontSize: 13),
+                                    overflow: TextOverflow.ellipsis)))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            _selectedValidUntil = v;
+                            _applyFilters();
+                          }
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
