@@ -762,14 +762,15 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
 
   Future<void> _activateBrand() async {
     if (_selectedBrand == null || _endDate == null) return;
-    final now = DateTime.now();
-    final difference = _endDate!.difference(now).inDays;
-    final daysToSet = difference > 0 ? difference : 1;
+    
+    // Create expiration date at the end of the selected day
+    final expiresAt = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59).toIso8601String();
+    
     setState(() {
       _isLoading = true;
     });
     try {
-      await _service.setActivePromoBrand(_selectedBrand!, days: daysToSet);
+      await _service.setActivePromoBrand(_selectedBrand!, expiresAt: expiresAt);
       await _loadActiveBrand();
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -1134,29 +1135,29 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   }
 
   Widget _buildActiveBrandCard(bool isDarkMode) {
-    if (_activeBrand == null) {
+    if (_activeBrand == null || _activeBrand!['brand'] == 'NONE') {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: isDarkMode
               ? Colors.white.withOpacity(0.05)
-              : Colors.green.withOpacity(0.05),
+              : Colors.red.withOpacity(0.05),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.green.withOpacity(0.2)),
+          border: Border.all(color: Colors.red.withOpacity(0.2)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.check_circle_outline,
-                color: Colors.green, size: 28),
+            const Icon(Icons.block,
+                color: Colors.red, size: 28),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Все бренды доступны',
+                  const Text('Выдача отключена',
                       style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text('Ограничения по брендам сейчас не установлены',
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
+                  Text('Ни один бренд не установлен, выдача невозможна',
                       style: TextStyle(color: Colors.grey[500], fontSize: 13)),
                 ],
               ),

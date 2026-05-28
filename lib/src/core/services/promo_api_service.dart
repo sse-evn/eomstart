@@ -215,7 +215,7 @@ class PromoApiService {
     }
   }
 
-  Future<void> setActivePromoBrand(String brand, {int days = 10}) async {
+  Future<void> setActivePromoBrand(String brand, {String? expiresAt, int days = 10}) async {
     final token = await _getToken();
     if (token == null) {
       throw PromoApiServiceException('Не авторизован', statusCode: 401);
@@ -227,7 +227,7 @@ class PromoApiService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json'
       },
-      body: jsonEncode({'brand': brand, 'days': days}),
+      body: jsonEncode({'brand': brand, 'days': days, 'expires_at': expiresAt ?? ''}),
     );
 
     if (response.statusCode == 401) {
