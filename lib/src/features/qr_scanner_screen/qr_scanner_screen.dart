@@ -26,11 +26,7 @@ class QrScannerScreen extends StatefulWidget {
 }
 
 class _QrScannerScreenState extends State<QrScannerScreen> {
-  final MobileScannerController cameraController = MobileScannerController(
-    detectionSpeed: DetectionSpeed.normal,
-    facing: CameraFacing.back,
-    torchEnabled: false,
-  );
+  late MobileScannerController cameraController;
 
   List<String> _scannedNumbers = [];
   Map<String, int> _competitorCounts = {
@@ -39,93 +35,150 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     'Whoosh': 0,
     'Bolt': 0,
   };
-  String _scanStatus = 'Ожидание сканирования...';
-  Color _scanStatusColor = Colors.blueAccent;
+  
+  final ValueNotifier<String> _scanStatus = ValueNotifier<String>('Ожидание сканирования...');
+  final ValueNotifier<Color> _scanStatusColor = ValueNotifier<Color>(Colors.blueAccent);
+  
   String? _lastScannedCode;
   Timer? _debounceTimer;
 
-  // New combined variables
-  bool _isQrScannerOpen = false;
-  String? _targetBrandForScan;
   final TextEditingController _commentController = TextEditingController();
   String _reportType = 'before';
   final List<File> _photos = [];
   bool _sending = false;
   bool _isProcessing = false;
+  bool _flashOn = false;
+  bool _useLegacyDesign = false;
+  bool _isQrScannerOpen = false;
 
   @override
   void initState() {
     super.initState();
-    _loadScannedNumbers();
+    cameraController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      torchEnabled: false,
+    );
+    _commentController.addListener(_saveBackup);
+    _loadBackup();
   }
 
   @override
   void dispose() {
+    _commentController.removeListener(_saveBackup);
     cameraController.dispose();
     _debounceTimer?.cancel();
     _commentController.dispose();
+    _scanStatus.dispose();
+    _scanStatusColor.dispose();
     super.dispose();
   }
 
-  Future<void> _loadScannedNumbers() async {
+  Future<void> _loadBackup() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _scannedNumbers = prefs.getStringList('scooterScannedNumbers') ?? [];
-      final compStr = prefs.getString('scooterCompetitorCounts');
+      _useLegacyDesign = prefs.getBool('use_legacy_design') ?? false;
+      _scannedNumbers = prefs.getStringList('backup_scannedNumbers') ?? [];
+      final compStr = prefs.getString('backup_competitorCounts');
       if (compStr != null) {
         try {
           final Map<String, dynamic> decoded = jsonDecode(compStr);
-          _competitorCounts =
-              decoded.map((key, value) => MapEntry(key, value as int));
+          _competitorCounts = decoded.map((key, value) => MapEntry(key, value as int));
         } catch (_) {}
       }
+      _commentController.text = prefs.getString('backup_comment') ?? '';
+      _reportType = prefs.getString('backup_reportType') ?? 'before';
+      final photoPaths = prefs.getStringList('backup_photos') ?? [];
+      for (final p in photoPaths) {
+        if (File(p).existsSync()) {
+          _photos.add(File(p));
+        }
+      }
+      _flashOn = prefs.getBool('backup_flash') ?? false;
     });
   }
 
-  Future<void> _saveScannedNumbers() async {
+  Future<void> _saveBackup() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('scooterScannedNumbers', _scannedNumbers);
-    await prefs.setString(
-        'scooterCompetitorCounts', jsonEncode(_competitorCounts));
+    await prefs.setStringList('backup_scannedNumbers', _scannedNumbers);
+    await prefs.setString('backup_competitorCounts', jsonEncode(_competitorCounts));
+    await prefs.setString('backup_comment', _commentController.text);
+    await prefs.setString('backup_reportType', _reportType);
+    await prefs.setStringList('backup_photos', _photos.map((f) => f.path).toList());
+    await prefs.setBool('backup_flash', _flashOn);
+  }
+
+  Future<void> _clearBackupAndReset() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Сбросить форму?'),
+          content: const Text('Все введённые данные, список самокатов, конкурентов и фотографии будут удалены.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Отмена'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Сбросить', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('backup_scannedNumbers');
+      await prefs.remove('backup_competitorCounts');
+      await prefs.remove('backup_comment');
+      await prefs.remove('backup_reportType');
+      await prefs.remove('backup_photos');
+      
+      setState(() {
+        _photos.clear();
+        _commentController.clear();
+        _reportType = 'before';
+        _scannedNumbers.clear();
+        _competitorCounts.updateAll((key, value) => 0);
+        _scanStatus.value = 'Ожидание сканирования...';
+        _scanStatusColor.value = Colors.blueAccent;
+      });
+      _showMessage('Форма успешно очищена');
+    }
+  }
+
+  void _updateStatus(String msg, Color col) {
+    _scanStatus.value = msg;
+    _scanStatusColor.value = col;
   }
 
   String _extractNumberFromLink(String link) {
-    final whooshRegExp =
-        RegExp(r'whoosh\.app\.link\/scooter\?scooter_code=([a-zA-Z0-9]+)');
+    final whooshRegExp = RegExp(r'whoosh\.app\.link\/scooter\?scooter_code=([a-zA-Z0-9]+)');
     final whooshMatch = whooshRegExp.firstMatch(link);
-    if (whooshMatch != null && whooshMatch.group(1) != null) {
-      return whooshMatch.group(1)!;
-    }
+    if (whooshMatch != null && whooshMatch.group(1) != null) return whooshMatch.group(1)!;
 
     final wshRegExp = RegExp(r'wsh\.bike\?s=([a-zA-Z0-9]+)');
     final wshMatch = wshRegExp.firstMatch(link);
-    if (wshMatch != null && wshMatch.group(1) != null) {
-      return wshMatch.group(1)!;
-    }
+    if (wshMatch != null && wshMatch.group(1) != null) return wshMatch.group(1)!;
 
     final urentRegExp = RegExp(r'ure\.su\/j\/s\.(\d+)');
     final urentMatch = urentRegExp.firstMatch(link);
-    if (urentMatch != null && urentMatch.group(1) != null) {
-      return urentMatch.group(1)!;
-    }
+    if (urentMatch != null && urentMatch.group(1) != null) return urentMatch.group(1)!;
 
     final yandexRegExp = RegExp(r'go\.yandex\/scooters\?number=([a-zA-Z0-9]+)');
     final yandexMatch = yandexRegExp.firstMatch(link);
-    if (yandexMatch != null && yandexMatch.group(1) != null) {
-      return yandexMatch.group(1)!;
-    }
+    if (yandexMatch != null && yandexMatch.group(1) != null) return yandexMatch.group(1)!;
 
     final liteRegExp = RegExp(r'lite\.app\.link\/scooters\?id=([a-zA-Z0-9]+)');
     final liteMatch = liteRegExp.firstMatch(link);
-    if (liteMatch != null && liteMatch.group(1) != null) {
-      return liteMatch.group(1)!;
-    }
+    if (liteMatch != null && liteMatch.group(1) != null) return liteMatch.group(1)!;
 
     final boltRegExp = RegExp(r'scooters\.taxify\.eu\/qr\/([a-zA-Z0-9\-]+)');
     final boltMatch = boltRegExp.firstMatch(link);
-    if (boltMatch != null && boltMatch.group(1) != null) {
-      return boltMatch.group(1)!;
-    }
+    if (boltMatch != null && boltMatch.group(1) != null) return boltMatch.group(1)!;
 
     return link.trim();
   }
@@ -136,19 +189,15 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Добавить номер вручную'),
+          title: const Text('Ввод номеров'),
           content: TextField(
             controller: controller,
+            maxLines: 5,
             decoration: const InputDecoration(
-              hintText: "Введите номер самоката",
+              hintText: "Введите номера через пробел или с новой строки",
+              border: OutlineInputBorder(),
             ),
             autofocus: true,
-            onSubmitted: (value) {
-              Navigator.of(context).pop();
-              if (value.trim().isNotEmpty) {
-                _addScannedNumber(value.trim());
-              }
-            },
           ),
           actions: [
             TextButton(
@@ -158,8 +207,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                if (controller.text.trim().isNotEmpty) {
-                  _addScannedNumber(controller.text.trim());
+                final text = controller.text.trim();
+                if (text.isNotEmpty) {
+                  final lines = text.split(RegExp(r'[\n\s,]+'));
+                  for(final line in lines) {
+                    if (line.trim().isNotEmpty) {
+                      _addScannedNumber(line.trim());
+                    }
+                  }
                 }
               },
               child: const Text('Добавить'),
@@ -182,33 +237,21 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   void _addScannedNumber(String rawCode) {
     final trimmedInput = rawCode.trim();
     if (trimmedInput.isEmpty) {
-      setState(() {
-        _scanStatus = 'Пустой ввод';
-        _scanStatusColor = Colors.red;
-      });
+      _updateStatus('Пустой ввод', Colors.red);
       return;
     }
 
-    // 1. Check Batch Quantity Pattern (e.g. "whoosh 5", "вуш 3", "w 10")
-    final batchRegExp = RegExp(
-      r'\b(whoosh|jet|bolt|yandex|вуш|джет|болт|яндекс|w|j|b|y)\s+(\d+)\b',
-      caseSensitive: false,
-    );
+    final batchRegExp = RegExp(r'\b(whoosh|jet|bolt|yandex|вуш|джет|болт|яндекс|w|j|b|y)\s+(\d+)\b', caseSensitive: false);
     final batchMatch = batchRegExp.firstMatch(trimmedInput);
     if (batchMatch != null) {
       final serviceAlias = batchMatch.group(1)!.toLowerCase();
       final quantity = int.tryParse(batchMatch.group(2)!) ?? 0;
       
       String? brand;
-      if (serviceAlias == 'yandex' || serviceAlias == 'яндекс' || serviceAlias == 'y') {
-        brand = 'Yandex';
-      } else if (serviceAlias == 'whoosh' || serviceAlias == 'вуш' || serviceAlias == 'w') {
-        brand = 'Whoosh';
-      } else if (serviceAlias == 'jet' || serviceAlias == 'джет' || serviceAlias == 'j') {
-        brand = 'Jet';
-      } else if (serviceAlias == 'bolt' || serviceAlias == 'болт' || serviceAlias == 'b') {
-        brand = 'Bolt';
-      }
+      if (serviceAlias == 'yandex' || serviceAlias == 'яндекс' || serviceAlias == 'y') brand = 'Yandex';
+      else if (serviceAlias == 'whoosh' || serviceAlias == 'вуш' || serviceAlias == 'w') brand = 'Whoosh';
+      else if (serviceAlias == 'jet' || serviceAlias == 'джет' || serviceAlias == 'j') brand = 'Jet';
+      else if (serviceAlias == 'bolt' || serviceAlias == 'болт' || serviceAlias == 'b') brand = 'Bolt';
 
       if (brand != null && quantity > 0) {
         final upperBrand = brand.toUpperCase();
@@ -218,31 +261,23 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             _scannedNumbers.insert(0, '[$upperBrand]');
           }
           _competitorCounts[normKey] = (_competitorCounts[normKey] ?? 0) + quantity;
-          _scanStatus = 'Добавлено $normKey: $quantity шт.';
-          _scanStatusColor = Colors.green;
         });
-        _saveScannedNumbers();
+        _updateStatus('Добавлено $normKey: $quantity шт.', Colors.green);
+        _saveBackup();
         return;
       }
     }
 
-    // 2. Extract number from link or text
     final cleanedNumber = _extractNumberFromLink(trimmedInput);
-
     if (cleanedNumber.isEmpty) {
-      setState(() {
-        _scanStatus = 'Не удалось добавить номер';
-        _scanStatusColor = Colors.red;
-      });
+      _updateStatus('Не удалось добавить номер', Colors.red);
       return;
     }
 
-    // Detect brand based on link first
     String? detectedBrand = _detectBrandFromLink(trimmedInput);
     String detectedCode = cleanedNumber;
 
     if (detectedBrand == null) {
-      // 3. Apply the Python scooter patterns using word boundaries (\b)
       final yandexMatch = RegExp(r'\bY\d{5}\b', caseSensitive: false).firstMatch(trimmedInput);
       final wooshMatch = RegExp(r'\b([a-zA-Zа-яА-Я]{2}\d{4})\b').firstMatch(trimmedInput);
       final jetMatch = RegExp(r'\b(\d{6}|\d{3}-\d{3})\b').firstMatch(trimmedInput);
@@ -261,71 +296,44 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         detectedBrand = 'Bolt';
         detectedCode = boltMatch.group(1) ?? boltMatch.group(0)!;
       } else {
-        // Fallback to the original text detection to preserve old logic
         detectedBrand = _detectBrandFromText(trimmedInput);
       }
     }
 
     if (detectedBrand != null) {
       final normalizedBrand = _normalizeBrand(detectedBrand);
-      
       String cleanVal = detectedCode;
       final upper = trimmedInput.toUpperCase();
-      if (normalizedBrand == 'Bolt' && upper.startsWith('BOLT')) {
-        cleanVal = trimmedInput.substring(4).trim();
-      } else if (normalizedBrand == 'Whoosh' && upper.startsWith('WHOOSH')) {
-        cleanVal = trimmedInput.substring(6).trim();
-      } else if (normalizedBrand == 'Whoosh' && upper.startsWith('WSH')) {
-        cleanVal = trimmedInput.substring(3).trim();
-      } else if (normalizedBrand == 'Jet' && upper.startsWith('JET')) {
-        cleanVal = trimmedInput.substring(3).trim();
-      } else if (normalizedBrand == 'Yandex' && upper.startsWith('YANDEX')) {
-        cleanVal = trimmedInput.substring(6).trim();
-      }
+      if (normalizedBrand == 'Bolt' && upper.startsWith('BOLT')) cleanVal = trimmedInput.substring(4).trim();
+      else if (normalizedBrand == 'Whoosh' && upper.startsWith('WHOOSH')) cleanVal = trimmedInput.substring(6).trim();
+      else if (normalizedBrand == 'Whoosh' && upper.startsWith('WSH')) cleanVal = trimmedInput.substring(3).trim();
+      else if (normalizedBrand == 'Jet' && upper.startsWith('JET')) cleanVal = trimmedInput.substring(3).trim();
+      else if (normalizedBrand == 'Yandex' && upper.startsWith('YANDEX')) cleanVal = trimmedInput.substring(6).trim();
 
       if (cleanVal.isEmpty) cleanVal = detectedCode;
-
       _registerScooterForBrand(normalizedBrand, cleanVal);
-      return;
-    }
-
-    if (_targetBrandForScan != null) {
-      final brand = _targetBrandForScan!;
-      setState(() {
-        _targetBrandForScan = null;
-      });
-      _registerScooterForBrand(_normalizeBrand(brand), cleanedNumber);
       return;
     }
 
     if (!_scannedNumbers.contains(cleanedNumber)) {
       setState(() {
         _scannedNumbers.insert(0, cleanedNumber);
-        _scanStatus = 'Добавлен: $cleanedNumber';
-        _scanStatusColor = Colors.green;
       });
-      _saveScannedNumbers();
+      _updateStatus('Добавлен: $cleanedNumber', Colors.green);
+      _saveBackup();
     } else {
-      setState(() {
-        _scanStatus = 'Номер "$cleanedNumber" уже в списке';
-        _scanStatusColor = Colors.orange;
-      });
+      _updateStatus('Номер "$cleanedNumber" уже в списке', Colors.orange);
     }
 
     _lastScannedCode = cleanedNumber;
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(seconds: 2), () {
-      _lastScannedCode = null;
-    });
+    _debounceTimer = Timer(const Duration(seconds: 2), () { _lastScannedCode = null; });
   }
 
   void _removeScannedNumber(int index) {
     final item = _scannedNumbers[index];
     setState(() {
       _scannedNumbers.removeAt(index);
-      _scanStatus = 'Номер удалён';
-      _scanStatusColor = Colors.red;
-
       if (item.startsWith('[')) {
         final closeBracket = item.indexOf(']');
         if (closeBracket != -1) {
@@ -333,14 +341,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           final normKey = _normalizeBrand(rawBrand);
           if (_competitorCounts.containsKey(normKey)) {
             final current = _competitorCounts[normKey] ?? 0;
-            if (current > 0) {
-              _competitorCounts[normKey] = current - 1;
-            }
+            if (current > 0) _competitorCounts[normKey] = current - 1;
           }
         }
       }
     });
-    _saveScannedNumbers();
+    _saveBackup();
   }
 
   void _copyAllNumbers() {
@@ -353,44 +359,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       if (value > 0) allLines.add('$key: $value');
     });
 
-    final allNumbersText = allLines.join('\n');
-    Clipboard.setData(ClipboardData(text: allNumbersText));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Все номера скопированы')),
-    );
-  }
-
-  Future<void> _clearAllScannedNumbers() async {
-    final confirmClear = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Очистить список?'),
-          content: const Text('Удалить все отсканированные номера?'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Отмена'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child:
-                  const Text('Очистить', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmClear == true) {
-      setState(() {
-        _scannedNumbers.clear();
-        _competitorCounts.updateAll((key, value) => 0);
-        _scanStatus = 'Список очищен';
-        _scanStatusColor = Colors.grey;
-      });
-      _saveScannedNumbers();
-    }
+    Clipboard.setData(ClipboardData(text: allLines.join('\n')));
+    _showMessage('Все номера скопированы');
   }
 
   void _clearCompetitorCounts() {
@@ -398,15 +368,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       _competitorCounts.updateAll((key, value) => 0);
       _scannedNumbers.removeWhere((item) => item.startsWith('['));
     });
-    _saveScannedNumbers();
+    _saveBackup();
   }
 
   void _registerScooterForBrand(String brand, String number) {
     final normKey = _normalizeBrand(brand);
     final upperBrand = normKey.toUpperCase();
     final fullLabel = '[$upperBrand] $number';
-    if (_scannedNumbers.contains(fullLabel) ||
-        _scannedNumbers.contains(number)) {
+    if (_scannedNumbers.contains(fullLabel) || _scannedNumbers.contains(number)) {
       _showMessage('Этот самокат уже добавлен!');
       return;
     }
@@ -414,10 +383,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     setState(() {
       _scannedNumbers.insert(0, fullLabel);
       _competitorCounts[normKey] = (_competitorCounts[normKey] ?? 0) + 1;
-      _scanStatus = 'Добавлен $normKey: $number';
-      _scanStatusColor = Colors.green;
     });
-    _saveScannedNumbers();
+    _updateStatus('Добавлен $normKey: $number', Colors.green);
+    _saveBackup();
   }
 
   void _removeLastScooterForBrand(String brand) {
@@ -431,36 +399,19 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         break;
       }
     }
-
     setState(() {
-      if (indexToRemove != -1) {
-        _scannedNumbers.removeAt(indexToRemove);
-      }
+      if (indexToRemove != -1) _scannedNumbers.removeAt(indexToRemove);
       final currentCount = _competitorCounts[normKey] ?? 0;
-      if (currentCount > 0) {
-        _competitorCounts[normKey] = currentCount - 1;
-      }
+      if (currentCount > 0) _competitorCounts[normKey] = currentCount - 1;
     });
-    _saveScannedNumbers();
+    _saveBackup();
   }
 
   String? _detectBrandFromLink(String link) {
-    if (link.contains('whoosh.app.link') ||
-        link.contains('wsh.bike') ||
-        link.contains('wsh.app.link')) {
-      return 'WHOOSH';
-    }
-    if (link.contains('scooters.taxify.eu')) {
-      return 'BOLT';
-    }
-    if (link.contains('go.yandex') || link.contains('yandex')) {
-      return 'YANDEX';
-    }
-    if (link.contains('ure.su') ||
-        link.contains('lite.app.link') ||
-        link.contains('jet')) {
-      return 'JET';
-    }
+    if (link.contains('whoosh.app.link') || link.contains('wsh.bike') || link.contains('wsh.app.link')) return 'WHOOSH';
+    if (link.contains('scooters.taxify.eu')) return 'BOLT';
+    if (link.contains('go.yandex') || link.contains('yandex')) return 'YANDEX';
+    if (link.contains('ure.su') || link.contains('lite.app.link') || link.contains('jet')) return 'JET';
     return null;
   }
 
@@ -471,7 +422,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     if (upper.startsWith('JET')) return 'JET';
     if (upper.startsWith('YANDEX')) return 'YANDEX';
 
-    // Автодетекция по формату номера
     if (RegExp(r'^\d{4}$').hasMatch(upper)) return 'BOLT';
     if (RegExp(r'^[A-Z]{2}\d{4}$').hasMatch(upper)) return 'WHOOSH';
     if (RegExp(r'^Y\d{5}$').hasMatch(upper)) return 'YANDEX';
@@ -486,55 +436,11 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     setState(() {
       _scannedNumbers.insert(0, '[$upperBrand]');
       _competitorCounts[normKey] = (_competitorCounts[normKey] ?? 0) + 1;
-      _scanStatus = 'Добавлен $normKey';
-      _scanStatusColor = Colors.green;
     });
-    _saveScannedNumbers();
+    _updateStatus('Добавлен $normKey', Colors.green);
+    _saveBackup();
   }
 
-  Future<void> _resetFormState() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Сбросить форму?'),
-          content: const Text(
-              'Все введённые данные, список самокатов, конкурентов и фотографии будут удалены.'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Отмена'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child:
-                  const Text('Сбросить', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirm == true) {
-      setState(() {
-        _photos.clear();
-        _commentController.clear();
-        _reportType = 'before';
-        _scannedNumbers.clear();
-        _competitorCounts.updateAll((key, value) => 0);
-        _scanStatus = 'Ожидание сканирования...';
-        _scanStatusColor = Colors.blueAccent;
-        _isQrScannerOpen = false;
-      });
-      try {
-        await cameraController.stop();
-      } catch (_) {}
-      _saveScannedNumbers();
-      _showMessage('Форма успешно очищена');
-    }
-  }
-
-  // Unified report photo methods
   Future<void> _takePhoto() async {
     if (_photos.length >= 10) {
       _showMessage('Можно максимум 10 фото');
@@ -545,18 +451,17 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       context,
       MaterialPageRoute(builder: (_) => const CustomCameraScreen()),
     );
-
     if (photoPath == null) return;
 
     if (mounted) setState(() => _isProcessing = true);
     try {
       final geoData = await _fetchGeoAndMapBytes();
-      final processedFile =
-          await _processPhotoWithOverlay(File(photoPath), geoData);
+      final processedFile = await _processPhotoWithOverlay(File(photoPath), geoData);
       if (mounted) {
         setState(() {
           _photos.add(processedFile);
         });
+        _saveBackup();
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -572,23 +477,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (serviceEnabled) {
         LocationPermission permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
-        }
-        if (permission == LocationPermission.whileInUse ||
-            permission == LocationPermission.always) {
+        if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
           try {
-            currentPosition = await Geolocator.getCurrentPosition(
-              desiredAccuracy: LocationAccuracy.medium,
-              timeLimit: const Duration(seconds: 10),
-            );
+            currentPosition = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium, timeLimit: const Duration(seconds: 10));
           } catch (e) {
             currentPosition = await Geolocator.getLastKnownPosition();
           }
-          if (currentPosition != null) {
-            locationStr =
-                'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}';
-          }
+          if (currentPosition != null) locationStr = 'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}';
         } else {
           locationStr = 'Гео: доступ запрещён';
         }
@@ -605,13 +501,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
       final int z = 15;
       final int x = ((lng + 180.0) / 360.0 * (1 << z)).floor();
-      final int y = ((1.0 -
-                  math.log(math.tan(lat * math.pi / 180.0) +
-                          1.0 / math.cos(lat * math.pi / 180.0)) /
-                      math.pi) /
-              2.0 *
-              (1 << z))
-          .floor();
+      final int y = ((1.0 - math.log(math.tan(lat * math.pi / 180.0) + 1.0 / math.cos(lat * math.pi / 180.0)) / math.pi) / 2.0 * (1 << z)).floor();
 
       final mapUrls = [
         'https://static-maps.yandex.ru/1.x/?ll=$lng,$lat&z=$z&l=map&size=300,300&pt=$lng,$lat,pm2rdm',
@@ -622,32 +512,20 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
       for (final mapUrl in mapUrls) {
         try {
-          final response = await http
-              .get(Uri.parse(mapUrl))
-              .timeout(const Duration(seconds: 5));
-
+          final response = await http.get(Uri.parse(mapUrl)).timeout(const Duration(seconds: 5));
           if (response.statusCode == 200) {
             mapBytes = response.bodyBytes;
             break;
           }
-        } catch (e) {
-          debugPrint('Ошибка загрузки карты с $mapUrl: $e');
-        }
+        } catch (_) {}
       }
     }
-
-    return {
-      'locationStr': locationStr,
-      'mapBytes': mapBytes,
-      'hasGeo': currentPosition != null,
-    };
+    return {'locationStr': locationStr, 'mapBytes': mapBytes, 'hasGeo': currentPosition != null};
   }
 
-  Future<File> _processPhotoWithOverlay(
-      File imageFile, Map<String, dynamic> geoData) async {
+  Future<File> _processPhotoWithOverlay(File imageFile, Map<String, dynamic> geoData) async {
     final now = DateTime.now();
-    final timeStr =
-        '${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year} '
+    final timeStr = '${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year} '
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
     final String locationStr = geoData['locationStr'];
@@ -658,40 +536,20 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     if (original == null) return imageFile;
 
     var oriented = img.bakeOrientation(original);
-    // Сохраняем оригинальную ориентацию (альбомную или портретную),
-    // чтобы поддерживать оба формата.
     final resized = img.copyResize(oriented, width: 1280);
 
-    // Dynamic map overlay strictly on the bottom-left corner and larger
     if (mapBytes != null) {
       try {
         final mapImg = img.decodeImage(mapBytes);
         if (mapImg != null) {
           final mapW = mapImg.width;
           final mapH = mapImg.height;
-
-          img.drawRect(
-            resized,
-            x1: 18,
-            y1: resized.height - mapH - 22,
-            x2: 22 + mapW,
-            y2: resized.height - 18,
-            color: img.ColorRgb8(255, 255, 255),
-            thickness: 2,
-          );
-          img.compositeImage(
-            resized,
-            mapImg,
-            dstX: 20,
-            dstY: resized.height - mapH - 20,
-          );
+          img.drawRect(resized, x1: 18, y1: resized.height - mapH - 22, x2: 22 + mapW, y2: resized.height - 18, color: img.ColorRgb8(255, 255, 255), thickness: 2);
+          img.compositeImage(resized, mapImg, dstX: 20, dstY: resized.height - mapH - 20);
         }
-      } catch (e) {
-        debugPrint('Ошибка наложения мини-карты: $e');
-      }
+      } catch (_) {}
     }
 
-    // Text: date and geo on bottom right
     final textColor = img.ColorRgb8(255, 255, 255);
     final shadowColor = img.ColorRgb8(0, 0, 0);
     final font = img.arial24;
@@ -700,38 +558,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final timeX = resized.width - (timeStr.length * 15) - 20;
     final locationX = resized.width - (locationStr.length * 15) - 20;
 
-    img.drawString(
-        resized,
-        font: font,
-        timeStr,
-        x: timeX + 1,
-        y: bottomY - 30 + 1,
-        color: shadowColor);
-    img.drawString(
-        resized,
-        font: font,
-        locationStr,
-        x: locationX + 1,
-        y: bottomY + 1,
-        color: shadowColor);
-    img.drawString(
-        resized,
-        font: font,
-        timeStr,
-        x: timeX,
-        y: bottomY - 30,
-        color: textColor);
-    img.drawString(
-        resized,
-        font: font,
-        locationStr,
-        x: locationX,
-        y: bottomY,
-        color: textColor);
+    img.drawString(resized, font: font, timeStr, x: timeX + 1, y: bottomY - 30 + 1, color: shadowColor);
+    img.drawString(resized, font: font, locationStr, x: locationX + 1, y: bottomY + 1, color: shadowColor);
+    img.drawString(resized, font: font, timeStr, x: timeX, y: bottomY - 30, color: textColor);
+    img.drawString(resized, font: font, locationStr, x: locationX, y: bottomY, color: textColor);
 
     final jpeg = img.encodeJpg(resized, quality: 88);
-    final outFile = File(
-        '${imageFile.path}_map_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    final outFile = File('${imageFile.path}_map_${DateTime.now().millisecondsSinceEpoch}.jpg');
     return outFile.writeAsBytes(jpeg);
   }
 
@@ -742,45 +575,38 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       SnackBar(
         content: Text(text),
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(milliseconds: 1000),
+        margin: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
+        duration: const Duration(milliseconds: 2000),
       ),
     );
   }
 
   Future<void> _sendReport() async {
     final shiftProvider = context.read<ShiftProvider>();
-
     final hasCounts = _competitorCounts.values.any((v) => v > 0);
+    
     if (_scannedNumbers.isEmpty && !hasCounts) {
       _showMessage('Сначала отсканируйте или добавьте хотя бы один самокат');
       return;
     }
-
     if (_photos.isEmpty) {
       _showMessage('Добавьте хотя бы одно фото');
       return;
     }
 
-    setState(() {
-      _sending = true;
-    });
+    setState(() { _sending = true; });
     final profile = shiftProvider.profile ?? {};
-
     final firstName = profile['firstName'] ?? profile['first_name'];
     final username = profile['username'];
     final telegramId = profile['telegram_id'];
 
-    final employeeName =
-        firstName?.toString() ?? username?.toString() ?? 'Пользователь';
-    final String? employeeUsername = username?.toString();
-    final int? employeeTelegramId = (telegramId is int)
-        ? telegramId
-        : int.tryParse(telegramId?.toString() ?? '');
+    final employeeName = firstName?.toString() ?? username?.toString() ?? 'Пользователь';
+    final employeeUsername = username?.toString();
+    final employeeTelegramId = (telegramId is int) ? telegramId : int.tryParse(telegramId?.toString() ?? '');
 
     shiftProvider.updateLastReportTime(DateTime.now());
     _showMessage('🚀 Отчёт отправляется в фоне...');
 
-    // Trigger upload
     _performBackgroundUpload(
       reportType: _reportType,
       comment: _commentController.text.trim(),
@@ -792,7 +618,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       photos: List<File>.from(_photos),
     );
 
-    // Reset view completely
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('backup_scannedNumbers');
+    await prefs.remove('backup_competitorCounts');
+    await prefs.remove('backup_comment');
+    await prefs.remove('backup_reportType');
+    await prefs.remove('backup_photos');
+
     setState(() {
       _photos.clear();
       _commentController.clear();
@@ -801,7 +633,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       _scannedNumbers.clear();
       _competitorCounts.updateAll((key, value) => 0);
     });
-    _saveScannedNumbers();
   }
 
   Future<void> _performBackgroundUpload({
@@ -817,7 +648,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     try {
       final uri = Uri.parse(AppConfig.reportUploadUrl);
       final request = http.MultipartRequest('POST', uri);
-
       request.headers['X-Report-Token'] = AppConfig.reportApiToken;
       request.fields['report_type'] = reportType;
       request.fields['comment'] = comment;
@@ -826,45 +656,264 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         request.fields['competitor_scooters'] = jsonEncode(competitorCounts);
       }
       request.fields['employee_name'] = employeeName;
-
       if (employeeUsername != null && employeeUsername.trim().isNotEmpty) {
         request.fields['employee_username'] = employeeUsername.trim();
       }
-
       if (employeeTelegramId != null) {
         request.fields['employee_telegram_id'] = employeeTelegramId.toString();
       }
-
       for (final file in photos) {
         request.files.add(
-          await http.MultipartFile.fromPath(
-            'photos',
-            file.path,
-            contentType: MediaType('image', 'jpeg'),
-          ),
+          await http.MultipartFile.fromPath('photos', file.path, contentType: MediaType('image', 'jpeg')),
         );
       }
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
+      final response = await http.Response.fromStream(await request.send());
       if (response.statusCode >= 200 && response.statusCode < 300) {
         debugPrint('Background report sent successfully');
       } else {
-        debugPrint(
-            'Error sending background report: ${response.statusCode} ${response.body}');
+        debugPrint('Error sending background report: ${response.statusCode} ${response.body}');
       }
     } catch (e) {
       debugPrint('Exception in background report upload: $e');
     }
   }
 
-  // Widgets
+  void _showAddScootersSheet() {
+    FocusScope.of(context).unfocus();
+    if (_flashOn) {
+       Future.delayed(const Duration(milliseconds: 500), () {
+          try { cameraController.toggleTorch(); } catch (_) {}
+       });
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return Container(
+          height: MediaQuery.of(ctx).size.height * 0.88,
+          decoration: BoxDecoration(
+            color: isDark ? Colors.grey[900] : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+               Container(
+                 margin: const EdgeInsets.only(top: 12, bottom: 8),
+                 width: 40, height: 4,
+                 decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2)),
+               ),
+               const Text('Добавление самокатов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+               const SizedBox(height: 12),
+               Expanded(
+                 child: SingleChildScrollView(
+                   padding: const EdgeInsets.symmetric(horizontal: 16),
+                   child: Column(
+                     children: [
+                       _qrScannerWidget(),
+                       ValueListenableBuilder<String>(
+                         valueListenable: _scanStatus,
+                         builder: (context, status, child) {
+                           return Padding(
+                             padding: const EdgeInsets.symmetric(vertical: 8.0),
+                             child: Center(
+                               child: Text(status, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _scanStatusColor.value)),
+                             ),
+                           );
+                         }
+                       ),
+                       const SizedBox(height: 8),
+                       SizedBox(
+                         width: double.infinity,
+                         child: ElevatedButton.icon(
+                           onPressed: () {
+                             Navigator.pop(ctx);
+                             _addNumberManually();
+                           },
+                           icon: const Icon(Icons.edit_rounded),
+                           label: const Text('Ввести номера вручную', style: TextStyle(fontWeight: FontWeight.bold)),
+                           style: ElevatedButton.styleFrom(
+                             backgroundColor: Colors.blue[600],
+                             foregroundColor: Colors.white,
+                             padding: const EdgeInsets.symmetric(vertical: 14),
+                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                           ),
+                         ),
+                       ),
+                       const SizedBox(height: 16),
+                       _competitorsInlineWidget(),
+                       const SizedBox(height: 32),
+                     ]
+                   )
+                 )
+               )
+            ]
+          )
+        );
+      }
+    ).then((_) {
+      setState((){});
+    });
+  }
+
+  Widget _qrScannerWidget() {
+    return Container(
+      height: 250,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.green[700]!, width: 2),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Stack(
+        children: [
+          MobileScanner(
+            controller: cameraController,
+            onDetect: (capture) {
+              if (_sending || _isProcessing) return;
+              for (final barcode in capture.barcodes) {
+                if (barcode.rawValue != null && barcode.rawValue != _lastScannedCode) {
+                  _addScannedNumber(barcode.rawValue!);
+                }
+              }
+            },
+          ),
+          Positioned(
+            bottom: 8,
+            right: 8,
+            child: StatefulBuilder(
+              builder: (context, setLocalState) {
+                return FloatingActionButton.small(
+                  backgroundColor: Colors.black54,
+                  onPressed: () {
+                     cameraController.toggleTorch();
+                     setLocalState(() { _flashOn = !_flashOn; });
+                     _saveBackup();
+                  },
+                  child: Icon(
+                    _flashOn ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
+                    color: Colors.white,
+                  ),
+                );
+              }
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _competitorsInlineWidget() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final keys = _competitorCounts.keys.toList();
+
+    return StatefulBuilder(
+      builder: (context, setSheetState) {
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.grey[900] : Colors.grey[100],
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Конкуренты рядом', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  if (_competitorCounts.values.any((v) => v > 0))
+                    GestureDetector(
+                      onTap: () {
+                         _clearCompetitorCounts();
+                         setSheetState((){});
+                      },
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.delete_sweep_rounded, size: 16, color: Colors.redAccent),
+                          SizedBox(width: 4),
+                          Text('Сбросить', style: TextStyle(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (keys.isNotEmpty) Expanded(child: _buildCompetitorCard(keys[0], isDark, setSheetState)),
+                  if (keys.length > 1) const SizedBox(width: 10),
+                  if (keys.length > 1) Expanded(child: _buildCompetitorCard(keys[1], isDark, setSheetState)),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  if (keys.length > 2) Expanded(child: _buildCompetitorCard(keys[2], isDark, setSheetState)),
+                  if (keys.length > 3) const SizedBox(width: 10),
+                  if (keys.length > 3) Expanded(child: _buildCompetitorCard(keys[3], isDark, setSheetState)),
+                ],
+              ),
+            ],
+          ),
+        );
+      }
+    );
+  }
+
+  Widget _buildCompetitorCard(String key, bool isDark, void Function(void Function()) setSheetState) {
+    final count = _competitorCounts[key] ?? 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[850] : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[300]!),
+      ),
+      child: Column(
+        children: [
+          Text(key, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white : Colors.black87)),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              GestureDetector(
+                onTap: () { _removeLastScooterForBrand(key); setSheetState((){}); },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.red[50], borderRadius: BorderRadius.circular(8)),
+                  child: Icon(Icons.remove, size: 16, color: Colors.red[700]),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Text('$count', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+              ),
+              GestureDetector(
+                onTap: () { _incrementBrandWithQuickLabel(key); setSheetState((){}); },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.green[50], borderRadius: BorderRadius.circular(8)),
+                  child: Icon(Icons.add, size: 16, color: Colors.green[700]),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _infoCard() {
     final shiftProvider = context.read<ShiftProvider>();
     final profile = shiftProvider.profile ?? {};
-    final firstName =
-        profile['firstName'] ?? profile['first_name'] ?? 'Пользователь';
+    final firstName = profile['firstName'] ?? profile['first_name'] ?? 'Пользователь';
     final username = profile['username'] ?? '';
 
     return Container(
@@ -877,13 +926,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.green.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -892,22 +935,295 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             children: [
               Icon(Icons.assignment_rounded, color: Colors.white, size: 24),
               SizedBox(width: 8),
-              Text(
-                'Создание отчёта',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+              Text('Создание отчёта', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('Сотрудник: $firstName ${username.isNotEmpty ? "(@$username)" : ""}', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+        ],
+      ),
+    );
+  }
+
+  Map<String, int> _getSummaryCounts() {
+    final Map<String, int> summary = {'Yandex': 0, 'Jet': 0, 'Whoosh': 0, 'Bolt': 0, 'Other': 0};
+    for (final num in _scannedNumbers) {
+      final clean = num.trim();
+      final upper = clean.toUpperCase();
+      bool matched = false;
+      for (final brand in ['Yandex', 'Jet', 'Whoosh', 'Bolt']) {
+        if (upper.startsWith('[${brand.toUpperCase()}]')) {
+          summary[brand] = (summary[brand] ?? 0) + 1;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        String rawNum = upper;
+        if (upper.startsWith('[')) {
+          final closeIdx = upper.indexOf(']');
+          if (closeIdx != -1) rawNum = upper.substring(closeIdx + 1).trim();
+        }
+        if (RegExp(r'^\d{4}$').hasMatch(rawNum)) summary['Bolt'] = (summary['Bolt'] ?? 0) + 1;
+        else if (RegExp(r'^[A-Z]{2}\d{4}$').hasMatch(rawNum)) summary['Whoosh'] = (summary['Whoosh'] ?? 0) + 1;
+        else if (RegExp(r'^Y\d{5}$').hasMatch(rawNum)) summary['Yandex'] = (summary['Yandex'] ?? 0) + 1;
+        else if (RegExp(r'^\d{6}$').hasMatch(rawNum)) summary['Jet'] = (summary['Jet'] ?? 0) + 1;
+        else summary['Other'] = (summary['Other'] ?? 0) + 1;
+      }
+    }
+    return summary;
+  }
+
+  Widget _scannedListWidget() {
+    final total = _scannedNumbers.length;
+    if (total == 0) return const SizedBox.shrink();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final summary = _getSummaryCounts();
+    final List<String> parts = [];
+    summary.forEach((brand, count) { if (count > 0) parts.add('$brand: $count'); });
+
+    final visibleNumbers = _scannedNumbers.asMap().entries.where((entry) => !entry.value.startsWith('[') || entry.value.contains(' ')).toList();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[900] : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Список самокатов', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    if (parts.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(parts.join('   •   '), style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.greenAccent[400] : Colors.green[700])),
+                    ],
+                  ],
                 ),
               ),
             ],
           ),
+          if (visibleNumbers.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8, runSpacing: 8,
+              children: visibleNumbers.map((entry) {
+                final index = entry.key;
+                final number = entry.value;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[800] : Colors.green[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: isDark ? Colors.grey[700]! : Colors.green[100]!),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.electric_scooter_rounded, size: 14, color: isDark ? Colors.white70 : Colors.green[700]),
+                      const SizedBox(width: 6),
+                      Text(number, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.green[900])),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => _removeScannedNumber(index),
+                        child: Icon(Icons.close, size: 14, color: isDark ? Colors.white30 : Colors.green[700]),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _photosActionWidget() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+         const Text('Фотографии отчета', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+         const SizedBox(height: 8),
+         Row(
+           children: [
+             Expanded(
+               child: ElevatedButton.icon(
+                 onPressed: _sending || _isProcessing ? null : () {
+                    FocusScope.of(context).unfocus();
+                    setState(() { _reportType = 'before'; });
+                    _saveBackup();
+                    _takePhoto();
+                 },
+                 icon: const Icon(Icons.photo_camera_back_outlined),
+                 label: const Text('Добавить ДО'),
+                 style: ElevatedButton.styleFrom(
+                   backgroundColor: _reportType == 'before' ? Colors.green[700] : Colors.grey[400],
+                   foregroundColor: Colors.white,
+                   padding: const EdgeInsets.symmetric(vertical: 12),
+                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                 ),
+               ),
+             ),
+             const SizedBox(width: 8),
+             Expanded(
+               child: ElevatedButton.icon(
+                 onPressed: _sending || _isProcessing ? null : () {
+                    FocusScope.of(context).unfocus();
+                    setState(() { _reportType = 'after'; });
+                    _saveBackup();
+                    _takePhoto();
+                 },
+                 icon: const Icon(Icons.task_alt_rounded),
+                 label: const Text('Добавить ПОСЛЕ'),
+                 style: ElevatedButton.styleFrom(
+                   backgroundColor: _reportType == 'after' ? Colors.green[700] : Colors.grey[400],
+                   foregroundColor: Colors.white,
+                   padding: const EdgeInsets.symmetric(vertical: 12),
+                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                 ),
+               ),
+             ),
+           ]
+         ),
+         const SizedBox(height: 12),
+         _photosGridWidget(),
+      ]
+    );
+  }
+
+  Widget _photosGridWidget() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[900] : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Загружено фото: ${_photos.length}/10', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              if (_isProcessing)
+                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+            ]
+          ),
+          if (_photos.isEmpty && !_isProcessing)
+             const Padding(
+               padding: EdgeInsets.only(top: 16),
+               child: Text('Нет добавленных фотографий', style: TextStyle(color: Colors.grey, fontSize: 13)),
+             ),
+          if (_photos.isNotEmpty || _isProcessing)
+             Padding(
+               padding: const EdgeInsets.only(top: 16),
+               child: GridView.builder(
+                 shrinkWrap: true,
+                 physics: const NeverScrollableScrollPhysics(),
+                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                   crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8,
+                 ),
+                 itemCount: _photos.length + (_isProcessing ? 1 : 0),
+                 itemBuilder: (context, index) {
+                   if (index == _photos.length && _isProcessing) {
+                     return Container(
+                       decoration: BoxDecoration(color: isDark ? Colors.grey[850] : Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+                       child: const Center(child: CircularProgressIndicator()),
+                     );
+                   }
+                   final file = _photos[index];
+                   return Stack(
+                     clipBehavior: Clip.none,
+                     children: [
+                       GestureDetector(
+                         onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (_) => Dialog.fullscreen(
+                                backgroundColor: Colors.black,
+                                child: Stack(
+                                  children: [
+                                    InteractiveViewer(child: Center(child: Image.file(file))),
+                                    Positioned(
+                                      top: 40, right: 20,
+                                      child: IconButton(
+                                        icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                                        onPressed: () => Navigator.pop(context),
+                                      )
+                                    )
+                                  ]
+                                )
+                              )
+                            );
+                         },
+                         child: Container(
+                           decoration: BoxDecoration(
+                             borderRadius: BorderRadius.circular(12),
+                             image: DecorationImage(image: FileImage(file), fit: BoxFit.cover),
+                           ),
+                         ),
+                       ),
+                       Positioned(
+                         top: -6, right: -6,
+                         child: GestureDetector(
+                           onTap: () {
+                             setState(() { _photos.removeAt(index); });
+                             _saveBackup();
+                           },
+                           child: Container(
+                             padding: const EdgeInsets.all(4),
+                             decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                             child: const Icon(Icons.close, color: Colors.white, size: 12),
+                           )
+                         )
+                       )
+                     ]
+                   );
+                 }
+               )
+             )
+        ]
+      )
+    );
+  }
+
+  Widget _commentWidget() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[900] : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Комментарий (необязательно)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(height: 8),
-          Text(
-            'Сотрудник: $firstName ${username.isNotEmpty ? "(@$username)" : ""}',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
+          TextField(
+            controller: _commentController,
+            maxLines: 2,
+            style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+            decoration: InputDecoration(
+              hintText: 'Опишите детали...',
+              hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.grey[400]),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding: const EdgeInsets.all(12),
             ),
           ),
         ],
@@ -922,9 +1238,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     });
     try {
       if (nextState) {
-        await cameraController.start();
+        cameraController.start();
+        if (_flashOn) {
+           Future.delayed(const Duration(milliseconds: 500), () {
+              try { cameraController.toggleTorch(); } catch (_) {}
+           });
+        }
       } else {
-        await cameraController.stop();
+        cameraController.stop();
       }
     } catch (_) {}
   }
@@ -937,22 +1258,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           Expanded(
             child: ElevatedButton.icon(
               onPressed: _toggleQrScanner,
-              icon: Icon(
-                _isQrScannerOpen
-                    ? Icons.qr_code_rounded
-                    : Icons.qr_code_scanner_rounded,
-                size: 18,
-              ),
-              label: Text(
-                _isQrScannerOpen ? 'Скрыть QR' : 'Сканировать QR',
-                style: const TextStyle(fontSize: 12),
-              ),
+              icon: Icon(_isQrScannerOpen ? Icons.qr_code_rounded : Icons.qr_code_scanner_rounded, size: 18),
+              label: Text(_isQrScannerOpen ? 'Скрыть QR' : 'Сканировать QR', style: const TextStyle(fontSize: 12)),
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    _isQrScannerOpen ? Colors.orange : Colors.green[700],
+                backgroundColor: _isQrScannerOpen ? Colors.orange : Colors.green[700],
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ),
@@ -965,8 +1276,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue[600],
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ),
@@ -975,415 +1285,42 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     );
   }
 
-  Widget _qrScannerWidget() {
-    if (!_isQrScannerOpen) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.green[700]!, width: 2),
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: Stack(
-        children: [
-          SizedBox(
-            height: 250,
-            child: MobileScanner(
-              controller: cameraController,
-              onDetect: (capture) {
-                if (_sending || _isProcessing) return;
-                for (final barcode in capture.barcodes) {
-                  if (barcode.rawValue != null &&
-                      barcode.rawValue != _lastScannedCode) {
-                    _addScannedNumber(barcode.rawValue!);
-                  }
-                }
-              },
-            ),
+  Widget _buildLegacyScannerAndCompetitors() {
+    return Column(
+      children: [
+        _actionRowWidget(),
+        if (_isQrScannerOpen) _qrScannerWidget(),
+        if (_isQrScannerOpen)
+          ValueListenableBuilder<String>(
+             valueListenable: _scanStatus,
+             builder: (context, status, child) {
+               return Padding(
+                 padding: const EdgeInsets.symmetric(vertical: 6.0),
+                 child: Center(
+                   child: Text(status, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _scanStatusColor.value)),
+                 ),
+               );
+             }
           ),
-          Positioned(
-            bottom: 8,
-            right: 8,
-            child: ValueListenableBuilder<TorchState>(
-              valueListenable: cameraController.torchState,
-              builder: (context, state, child) {
-                return FloatingActionButton.small(
-                  backgroundColor: Colors.black54,
-                  onPressed: () => cameraController.toggleTorch(),
-                  child: Icon(
-                    state == TorchState.on
-                        ? Icons.flashlight_off_rounded
-                        : Icons.flashlight_on_rounded,
-                    color: Colors.white,
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+        _competitorsInlineWidget(),
+      ],
     );
   }
 
-  Map<String, int> _getSummaryCounts() {
-    final Map<String, int> summary = {
-      'Yandex': 0,
-      'Jet': 0,
-      'Whoosh': 0,
-      'Bolt': 0,
-      'Other': 0,
-    };
-
-    for (final num in _scannedNumbers) {
-      final clean = num.trim();
-      final upper = clean.toUpperCase();
-
-      bool matched = false;
-      for (final brand in ['Yandex', 'Jet', 'Whoosh', 'Bolt']) {
-        if (upper.startsWith('[${brand.toUpperCase()}]')) {
-          summary[brand] = (summary[brand] ?? 0) + 1;
-          matched = true;
-          break;
-        }
-      }
-
-      if (!matched) {
-        // Очистим от возможных скобок для детекции по формату
-        String rawNum = upper;
-        if (upper.startsWith('[')) {
-          final closeIdx = upper.indexOf(']');
-          if (closeIdx != -1) {
-            rawNum = upper.substring(closeIdx + 1).trim();
-          }
-        }
-
-        if (RegExp(r'^\d{4}$').hasMatch(rawNum)) {
-          summary['Bolt'] = (summary['Bolt'] ?? 0) + 1;
-        } else if (RegExp(r'^[A-Z]{2}\d{4}$').hasMatch(rawNum)) {
-          summary['Whoosh'] = (summary['Whoosh'] ?? 0) + 1;
-        } else if (RegExp(r'^Y\d{5}$').hasMatch(rawNum)) {
-          summary['Yandex'] = (summary['Yandex'] ?? 0) + 1;
-        } else if (RegExp(r'^\d{6}$').hasMatch(rawNum)) {
-          summary['Jet'] = (summary['Jet'] ?? 0) + 1;
-        } else {
-          summary['Other'] = (summary['Other'] ?? 0) + 1;
-        }
-      }
-    }
-
-    return summary;
-  }
-
-  Widget _scannedListWidget() {
-    final total = _scannedNumbers.length;
-    if (total == 0) return const SizedBox.shrink();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final summary = _getSummaryCounts();
-    final List<String> parts = [];
-    summary.forEach((brand, count) {
-      if (count > 0) {
-        parts.add('$brand: $count');
-      }
-    });
-
-    final visibleNumbers = _scannedNumbers.asMap().entries.where((entry) {
-      final val = entry.value;
-      final isGeneric = val.startsWith('[') && !val.contains(' ');
-      return !isGeneric;
-    }).toList();
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey[900] : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Список самокатов',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    if (parts.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        parts.join('   •   '),
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: isDark
-                              ? Colors.greenAccent[400]
-                              : Colors.green[700],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: _clearAllScannedNumbers,
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.delete_rounded,
-                        size: 16, color: Colors.redAccent),
-                    SizedBox(width: 4),
-                    Text(
-                      'Очистить',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.redAccent,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (visibleNumbers.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: visibleNumbers.map((entry) {
-                final index = entry.key;
-                final number = entry.value;
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.grey[800] : Colors.green[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isDark ? Colors.grey[700]! : Colors.green[100]!,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.electric_scooter_rounded,
-                          size: 14,
-                          color: isDark ? Colors.white70 : Colors.green[700]),
-                      const SizedBox(width: 6),
-                      Text(
-                        number,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.green[900],
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () => _removeScannedNumber(index),
-                        child: Icon(
-                          Icons.close,
-                          size: 14,
-                          color: isDark ? Colors.white30 : Colors.green[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _copyAllNumbers,
-              icon: const Icon(Icons.copy_rounded, size: 16),
-              label: const Text('Копировать список',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isDark ? Colors.grey[800] : Colors.green[50],
-                foregroundColor: isDark ? Colors.white : Colors.green[700],
-                elevation: 0,
-                minimumSize: const Size(double.infinity, 38),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _competitorsInlineWidget() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final keys = _competitorCounts.keys.toList();
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey[900] : Colors.grey[100],
-        borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Конкуренты рядом',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              if (_competitorCounts.values.any((v) => v > 0))
-                GestureDetector(
-                  onTap: _clearCompetitorCounts,
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.delete_sweep_rounded,
-                          size: 16, color: Colors.redAccent),
-                      SizedBox(width: 4),
-                      Text(
-                        'Сбросить',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.redAccent,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              if (keys.isNotEmpty)
-                Expanded(child: _buildCompetitorCard(keys[0], isDark)),
-              if (keys.length > 1) const SizedBox(width: 10),
-              if (keys.length > 1)
-                Expanded(child: _buildCompetitorCard(keys[1], isDark)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              if (keys.length > 2)
-                Expanded(child: _buildCompetitorCard(keys[2], isDark)),
-              if (keys.length > 3) const SizedBox(width: 10),
-              if (keys.length > 3)
-                Expanded(child: _buildCompetitorCard(keys[3], isDark)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompetitorCard(String key, bool isDark) {
-    final count = _competitorCounts[key] ?? 0;
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey[850] : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.grey[800]! : Colors.grey[300]!,
-        ),
-      ),
-      child: Column(
-        children: [
-          Text(
-            key,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              GestureDetector(
-                onTap: () => _removeLastScooterForBrand(key),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.grey[800] : Colors.red[50],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.remove, size: 16, color: Colors.red[700]),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-              ),
-              GestureDetector(
-                onTap: () => _incrementBrandWithQuickLabel(key),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.grey[800] : Colors.green[50],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.add, size: 16, color: Colors.green[700]),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTypeButton(
-      {required String value, required String title, required IconData icon}) {
+  Widget _buildLegacyTypeButton({required String value, required String title, required IconData icon}) {
     final selected = _reportType == value;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final bg = selected
-        ? Colors.green[700]
-        : (isDark ? Colors.grey[900] : Colors.white);
-    final borderCol = selected
-        ? Colors.transparent
-        : (isDark ? Colors.grey[800]! : Colors.grey[300]!);
-    final textCol =
-        selected ? Colors.white : (isDark ? Colors.white70 : Colors.black87);
-    final iconCol =
-        selected ? Colors.white : (isDark ? Colors.white54 : Colors.grey[600]);
+    final bg = selected ? Colors.green[700] : (isDark ? Colors.grey[900] : Colors.white);
+    final borderCol = selected ? Colors.transparent : (isDark ? Colors.grey[800]! : Colors.grey[300]!);
+    final textCol = selected ? Colors.white : (isDark ? Colors.white70 : Colors.black87);
+    final iconCol = selected ? Colors.white : (isDark ? Colors.white54 : Colors.grey[600]);
 
     return Expanded(
       child: InkWell(
         onTap: () {
-          setState(() {
-            _reportType = value;
-          });
+          setState(() { _reportType = value; });
+          _saveBackup();
         },
         borderRadius: BorderRadius.circular(16),
         child: AnimatedContainer(
@@ -1392,27 +1329,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: borderCol,
-              width: 1.5,
-            ),
+            border: Border.all(color: borderCol, width: 1.5),
           ),
           child: Column(
             children: [
-              Icon(
-                icon,
-                size: 24,
-                color: iconCol,
-              ),
+              Icon(icon, size: 24, color: iconCol),
               const SizedBox(height: 6),
-              Text(
-                title,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: textCol,
-                ),
-              ),
+              Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textCol)),
             ],
           ),
         ),
@@ -1420,171 +1343,37 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     );
   }
 
-  Widget _photosWidget() {
-    final reportTitle = _reportType == 'before'
-        ? 'Фото ДО начала работы'
-        : 'Фото ПОСЛЕ завершения';
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey[900] : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '$reportTitle (${_photos.length}/10)',
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              if (_isProcessing)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: _sending ? null : _takePhoto,
-            icon: const Icon(Icons.camera_alt_rounded),
-            label: const Text('Сделать фото'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green[700],
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 44),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (_photos.isEmpty && !_isProcessing)
-            Container(
-              padding: const EdgeInsets.all(16),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: isDark ? Colors.grey[850] : Colors.grey[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
-                    style: BorderStyle.solid),
-              ),
-              child: const Text('Нет добавленных фотографий',
-                  style: TextStyle(color: Colors.grey, fontSize: 12)),
-            ),
-          if (_photos.isNotEmpty || _isProcessing) ...[
-            const SizedBox(height: 10),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              itemCount: _photos.length + (_isProcessing ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == _photos.length && _isProcessing) {
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.grey[850] : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
-                }
-
-                final file = _photos[index];
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        image: DecorationImage(
-                          image: FileImage(file),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: -6,
-                      right: -6,
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _photos.removeAt(index);
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.close,
-                              color: Colors.white, size: 12),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _commentWidget() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey[900] : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Комментарий (необязательно)',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _commentController,
-            maxLines: 2,
-            style: TextStyle(
-                fontSize: 14, color: isDark ? Colors.white : Colors.black87),
-            decoration: InputDecoration(
-              hintText: 'Опишите детали...',
-              hintStyle:
-                  TextStyle(color: isDark ? Colors.white30 : Colors.grey[400]),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              contentPadding: const EdgeInsets.all(12),
-            ),
-          ),
-        ],
-      ),
+  Widget _buildLegacyPhotosActionWidget() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+         const Text('Выберите время съёмки', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+         const SizedBox(height: 8),
+         Row(
+           children: [
+             _buildLegacyTypeButton(value: 'before', title: 'ДО работы', icon: Icons.photo_camera_back_outlined),
+             const SizedBox(width: 8),
+             _buildLegacyTypeButton(value: 'after', title: 'ПОСЛЕ работы', icon: Icons.task_alt_rounded),
+           ],
+         ),
+         const SizedBox(height: 12),
+         ElevatedButton.icon(
+           onPressed: _sending || _isProcessing ? null : () {
+               FocusScope.of(context).unfocus();
+               _takePhoto();
+           },
+           icon: const Icon(Icons.camera_alt_rounded),
+           label: const Text('Сделать фото'),
+           style: ElevatedButton.styleFrom(
+             backgroundColor: Colors.green[700],
+             foregroundColor: Colors.white,
+             minimumSize: const Size(double.infinity, 44),
+             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+           ),
+         ),
+         const SizedBox(height: 12),
+         _photosGridWidget(),
+      ],
     );
   }
 
@@ -1595,10 +1384,38 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         title: const Text('Создание отчёта'),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Colors.redAccent),
-            tooltip: 'Очистить всё',
-            onPressed: _resetFormState,
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'toggle_design') {
+                final newValue = !_useLegacyDesign;
+                SharedPreferences.getInstance().then((prefs) => prefs.setBool('use_legacy_design', newValue));
+                setState(() { _useLegacyDesign = newValue; });
+              } else if (value == 'clear') {
+                _clearBackupAndReset();
+              }
+            },
+            itemBuilder: (BuildContext context) => [
+              PopupMenuItem(
+                value: 'toggle_design',
+                child: Row(
+                  children: [
+                    Icon(_useLegacyDesign ? Icons.toggle_on : Icons.toggle_off, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    Text(_useLegacyDesign ? 'Новый дизайн' : 'Старый дизайн'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'clear',
+                child: Row(
+                  children: [
+                    Icon(Icons.refresh_rounded, color: Colors.redAccent),
+                    SizedBox(width: 8),
+                    Text('Очистить всё'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1613,95 +1430,62 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   children: [
                     _infoCard(),
                     const SizedBox(height: 12),
-
-                    // Actions row (Scan / Manual)
-                    _actionRowWidget(),
-
-                    // Expandable QR Scanner view
-                    _qrScannerWidget(),
-
-                    // Scan Status Text
-                    if (_isQrScannerOpen) ...[
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6.0),
-                          child: Text(
-                            _scanStatus,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                              color: _scanStatusColor,
+                    
+                    if (_useLegacyDesign)
+                       _buildLegacyScannerAndCompetitors()
+                    else
+                      Column(
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _showAddScootersSheet,
+                              icon: const Icon(Icons.qr_code_scanner_rounded),
+                              label: const Text('Добавить самокаты', style: TextStyle(fontWeight: FontWeight.bold)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue[700],
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 8),
+                        ],
                       ),
-                    ],
 
-                    // Competitors inline widget
-                    _competitorsInlineWidget(),
-
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Выберите время съёмки',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _buildTypeButton(
-                          value: 'before',
-                          title: 'ДО работы',
-                          icon: Icons.photo_camera_back_outlined,
-                        ),
-                        const SizedBox(width: 8),
-                        _buildTypeButton(
-                          value: 'after',
-                          title: 'ПОСЛЕ работы',
-                          icon: Icons.task_alt_rounded,
-                        ),
-                      ],
-                    ),
-
-                    // Photos widget
-                    _photosWidget(),
-
-                    // Comment widget
-                    _commentWidget(),
-
-                    // Scanned List View
                     _scannedListWidget(),
+                    const SizedBox(height: 8),
+                    
+                    if (_useLegacyDesign)
+                      _buildLegacyPhotosActionWidget()
+                    else
+                      _photosActionWidget(),
+                      
+                    _commentWidget(),
                   ],
                 ),
               ),
             ),
 
-            // Submit Button
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _sending ? null : _sendReport,
+                  onPressed: (_sending || _isProcessing) ? null : _sendReport,
                   icon: _sending
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2),
-                        )
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                       : const Icon(Icons.send_rounded),
                   label: Text(
                     _sending ? 'Отправка...' : 'Отправить отчёт',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green[700],
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 2,
                   ),
                 ),
