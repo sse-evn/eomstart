@@ -681,8 +681,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   void _showAddScootersSheet() {
     FocusScope.of(context).unfocus();
     if (_flashOn) {
-       Future.delayed(const Duration(milliseconds: 500), () {
-          try { cameraController.toggleTorch(); } catch (_) {}
+       Future.delayed(const Duration(milliseconds: 500), () async {
+          try { await cameraController.toggleTorch(); } catch (_) {}
        });
     }
 
@@ -788,8 +788,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               builder: (context, setLocalState) {
                 return FloatingActionButton.small(
                   backgroundColor: Colors.black54,
-                  onPressed: () {
-                     cameraController.toggleTorch();
+                  onPressed: () async {
+                     try { await cameraController.toggleTorch(); } catch (_) {}
                      setLocalState(() { _flashOn = !_flashOn; });
                      _saveBackup();
                   },
@@ -1238,14 +1238,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     });
     try {
       if (nextState) {
-        cameraController.start();
+        await cameraController.start();
         if (_flashOn) {
-           Future.delayed(const Duration(milliseconds: 500), () {
-              try { cameraController.toggleTorch(); } catch (_) {}
+           Future.delayed(const Duration(milliseconds: 500), () async {
+              try { await cameraController.toggleTorch(); } catch (_) {}
            });
         }
       } else {
-        cameraController.stop();
+        await cameraController.stop();
       }
     } catch (_) {}
   }

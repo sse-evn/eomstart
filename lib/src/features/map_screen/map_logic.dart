@@ -24,6 +24,9 @@ class MapLogic {
   late final MapController mapController;
   bool isLoading = false;
   bool isLocating = false; // Флаг для индикатора загрузки геопозиции
+  bool isNavigatorMode = false;
+  double currentHeading = 0.0;
+  StreamSubscription<Position>? _positionStream;
   List<dynamic> availableMaps = [];
   int selectedMapId = -1;
   final FlutterSecureStorage storage = const FlutterSecureStorage();
@@ -195,8 +198,44 @@ class MapLogic {
 
   void dispose() {
     _disposed = true;
+    _positionStream?.cancel();
     _trackingTimer?.cancel();
     mapController.dispose();
+  }
+
+  Future<void> toggleNavigatorMode() async {
+    isNavigatorMode = !isNavigatorMode;
+    if (isNavigatorMode) {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        isNavigatorMode = false;
+        _showErrorSnackBar('Включите GPS');
+        return;
+      }
+      
+      _positionStream?.cancel();
+      _positionStream = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 2,
+        ),
+      ).listen((Position position) {
+        if (_disposed) return;
+        currentLocation = LatLng(position.latitude, position.longitude);
+        currentHeading = position.heading;
+        if (isNavigatorMode) {
+           mapController.move(currentLocation!, mapController.camera.zoom > 16 ? mapController.camera.zoom : 18.0);
+           mapController.rotate(currentHeading);
+        }
+        _notify();
+      });
+      // Принудительно центрируемся сейчас
+      fetchCurrentLocation(isManual: true);
+    } else {
+      _positionStream?.cancel();
+      mapController.rotate(0);
+      _notify();
+    }
   }
 
   Future<void> _initMap() async {
