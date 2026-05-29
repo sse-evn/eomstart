@@ -1303,4 +1303,25 @@ class ApiService {
     }
     return [];
   }
+
+  Future<List<dynamic>> getScooterReports(String token) async {
+    try {
+      final response = await _authorizedRequest(
+        (t) => http.get(
+          Uri.parse('${AppConfig.apiBaseUrl}/admin/scooter-reports'),
+          headers: {'Authorization': 'Bearer $t', 'Content-Type': 'application/json'},
+        ),
+        token,
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(utf8.decode(response.bodyBytes, allowMalformed: true));
+        return body is List ? body : [];
+      } else {
+        throw Exception('Failed to load scooter reports');
+      }
+    } catch (e) {
+      debugPrint('Ошибка getScooterReports: $e');
+      rethrow;
+    }
+  }
 }

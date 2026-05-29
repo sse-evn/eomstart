@@ -4,6 +4,7 @@ import 'package:micro_mobility_app/src/features/admin/promo_codes_admin_screen.d
 import 'package:micro_mobility_app/src/features/admin/shift_history_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/shift_monitoring_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/admin_map_screens.dart';
+import 'package:micro_mobility_app/src/features/admin/scooter_reports_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/generator_shifts.dart';
 import 'package:micro_mobility_app/src/features/admin/widgets/admin_users_list.dart';
 
@@ -14,8 +15,7 @@ class AdminPanelScreen extends StatefulWidget {
   State<AdminPanelScreen> createState() => _AdminPanelScreenState();
 }
 
-class _AdminPanelScreenState extends State<AdminPanelScreen>
-    with SingleTickerProviderStateMixin {
+class _AdminPanelScreenState extends State<AdminPanelScreen> {
   int _currentIndex = 0;
 
   final List<String> _titles = [
@@ -26,25 +26,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     'Промокоды',
   ];
 
-  late TabController _tabController;
-
-  // 🔁 Метод для обновления вкладок
-  void _refreshShifts() {
-    // Просто пересоздаём Future — это безопасно
-    setState(() {
-      // Ничего не делаем — перестроится через FutureBuilder
-    });
-  }
-
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -66,34 +54,37 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         currentBody = const MapAndZoneScreen();
         break;
       case 3:
-        currentBody = Column(
-          children: [
-            Material(
-              color: primaryColor,
-              child: TabBar(
-                controller: _tabController,
-                tabs: const [
-                  Tab(text: 'Активные', icon: Icon(Icons.play_arrow, size: 18)),
-                  Tab(text: 'История', icon: Icon(Icons.history, size: 18)),
-                ],
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.white70,
-                indicator: const UnderlineTabIndicator(
-                  borderSide: BorderSide(color: Colors.white, width: 2.0),
+        currentBody = DefaultTabController(
+          length: 3,
+          child: Column(
+            children: [
+              Material(
+                color: primaryColor,
+                child: const TabBar(
+                  tabs: [
+                    Tab(text: 'Активные', icon: Icon(Icons.play_arrow, size: 18)),
+                    Tab(text: 'История', icon: Icon(Icons.history, size: 18)),
+                    Tab(text: 'Надзор', icon: Icon(Icons.report_problem_outlined, size: 18)),
+                  ],
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white70,
+                  indicator: UnderlineTabIndicator(
+                    borderSide: BorderSide(color: Colors.white, width: 2.0),
+                  ),
                 ),
               ),
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: const [
-                  // ✅ Экраны просто перестраиваются при setState
-                  ShiftMonitoringScreen(),
-                  ShiftHistoryScreen(),
-                ],
+              const Expanded(
+                child: TabBarView(
+                  children: [
+                    // ✅ Экраны просто перестраиваются при setState
+                    ShiftMonitoringScreen(),
+                    ShiftHistoryScreen(),
+                    ScooterReportsScreen(),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
         break;
       case 4:

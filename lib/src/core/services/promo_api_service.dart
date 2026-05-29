@@ -288,6 +288,48 @@ class PromoApiService {
     return null;
   }
 
+  Future<List<dynamic>> getActivePromoBrands() async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/active-brands'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final body = utf8.decode(response.bodyBytes);
+      if (body == 'null' || body.trim().isEmpty) return [];
+      return jsonDecode(body) as List<dynamic>;
+    }
+    return [];
+  }
+
+  Future<void> deleteScheduledPromoBrand(int id) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+
+    final response = await http.delete(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/promo/active-brand/$id'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 401) {
+      throw PromoApiServiceException('Сессия истекла', statusCode: 401);
+    }
+    if (response.statusCode == 403) {
+      throw PromoApiServiceException('Доступ запрещён', statusCode: 403);
+    }
+    if (response.statusCode != 200) {
+      throw PromoApiServiceException('Ошибка удаления расписания',
+          statusCode: response.statusCode);
+    }
+  }
+
   Future<Map<String, String>> getBrandFormats() async {
     final token = await _getToken();
     if (token == null) {

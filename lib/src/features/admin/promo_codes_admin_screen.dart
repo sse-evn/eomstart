@@ -82,6 +82,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   Map<String, dynamic>? _stats;
   List<dynamic>? _claimedPromos;
   Map<String, dynamic>? _activeBrand;
+  List<dynamic>? _scheduledBrands;
   String? _selectedBrand;
   DateTimeRange? _activeBrandDateRange;
   DateTime? _selectedValidUntil; // Дата окончания, выбранная для загрузки файла
@@ -268,7 +269,13 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   Future<void> _loadActiveBrand() async {
     try {
       final data = await _service.getActivePromoBrand();
-      if (mounted) setState(() => _activeBrand = data);
+      final scheduled = await _service.getActivePromoBrands();
+      if (mounted) {
+        setState(() {
+          _activeBrand = data;
+          _scheduledBrands = scheduled;
+        });
+      }
     } catch (e) {}
   }
 
@@ -810,7 +817,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
       await _loadActiveBrand();
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Ограничение снято')));
+            .showSnackBar(const SnackBar(content: Text('Все ограничения сняты')));
       }
     } catch (e) {
       if (mounted) {
@@ -823,6 +830,23 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _deleteScheduledBrand(int id) async {
+    setState(() => _isLoading = true);
+    try {
+      await _service.deleteScheduledPromoBrand(id);
+      await _loadActiveBrand();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Расписание удалено')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -1050,9 +1074,9 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 physics: const BouncingScrollPhysics(),
                 children: [
-                  _buildSectionHeader(
-                      'Текущее состояние', Icons.dashboard_customize_outlined),
-                  _buildActiveBrandCard(isDarkMode),
+                  _buildSectionHeader('Текущее состояние и расписание',
+                      Icons.dashboard_customize_outlined),
+                  _buildActiveBrandsList(isDarkMode),
                   const SizedBox(height: 24),
                   _buildSectionHeader(
                       'Активация ограничений', Icons.bolt_outlined),
@@ -1145,8 +1169,8 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     );
   }
 
-  Widget _buildActiveBrandCard(bool isDarkMode) {
-    if (_activeBrand == null || _activeBrand!['brand'] == 'NONE') {
+  Widget _buildActiveBrandsList(bool isDarkMode) {
+    if (_scheduledBrands == null || _scheduledBrands!.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -1158,16 +1182,14 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.block,
-                color: Colors.red, size: 28),
+            const Icon(Icons.block, color: Colors.red, size: 28),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Выдача отключена',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
                   Text('Ни один бренд не установлен, выдача невозможна',
                       style: TextStyle(color: Colors.grey[500], fontSize: 13)),
                 ],
@@ -1178,23 +1200,29 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
       );
     }
 
-    final brand = _activeBrand!['brand'] as String;
-    final brandColor = _getBrandColor(brand);
+    return Column(
+      children: _scheduledBrands!.map((schedule) {
+        final brand = schedule['brand'] as String;
+        final startsAt = schedule['starts_at'] as String;
+        final expiresAt = schedule['expires_at'] as String;
+        final id = schedule['id'] as int;
+        final brandColor = _getBrandColor(brand);
+        
+        final isCurrentlyActive = _activeBrand != null && _activeBrand!['brand'] == brand;
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [brandColor.withOpacity(0.15), brandColor.withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: brandColor.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Row(
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [brandColor.withOpacity(isCurrentlyActive ? 0.25 : 0.1), brandColor.withOpacity(0.05)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: brandColor.withOpacity(isCurrentlyActive ? 0.5 : 0.2)),
+          ),
+          child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
@@ -1207,17 +1235,16 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Активен только $brand',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w900, fontSize: 18)),
-                    Text('Действует до ${_activeBrand!['expires_at']}',
-                        style:
-                            TextStyle(color: Colors.grey[400], fontSize: 13)),
+                    Text(isCurrentlyActive ? 'Активен $brand' : 'Запланирован $brand',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 18, color: isCurrentlyActive ? null : Colors.grey[500])),
+                    Text('С $startsAt до $expiresAt',
+                        style: TextStyle(color: Colors.grey[500], fontSize: 13)),
                   ],
                 ),
               ),
               IconButton(
-                onPressed: _clearActiveBrand,
+                onPressed: () => _deleteScheduledBrand(id),
                 icon: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: const BoxDecoration(
@@ -1227,8 +1254,8 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
               ),
             ],
           ),
-        ],
-      ),
+        );
+      }).toList(),
     );
   }
 

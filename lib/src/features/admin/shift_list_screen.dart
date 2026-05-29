@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/src/features/admin/shift_monitoring_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/shift_history_screen.dart';
+import 'package:micro_mobility_app/src/features/admin/scooter_reports_screen.dart';
 
 class ShiftListScreen extends StatelessWidget {
   const ShiftListScreen({super.key});
@@ -14,6 +15,7 @@ class ShiftListScreen extends StatelessWidget {
           tabs: [
             Tab(text: 'Активные', icon: Icon(Icons.play_arrow)),
             Tab(text: 'История', icon: Icon(Icons.history)),
+            Tab(text: 'Надзор', icon: Icon(Icons.report_problem_outlined)),
           ],
         ),
         Expanded(
@@ -21,6 +23,7 @@ class ShiftListScreen extends StatelessWidget {
             children: [
               ShiftMonitoringScreen(), // Активные
               ShiftHistoryScreen(), // Завершённые
+              ScooterReportsScreen(), // Отчеты самокатов
             ],
           ),
         ),
