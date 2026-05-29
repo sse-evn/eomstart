@@ -18,7 +18,8 @@ class _ScooterReportsScreenState extends State<ScooterReportsScreen> {
   final ApiService _apiService = ApiService();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   
-  Map<String, List<dynamic>> _groupedReports = {};
+  // Ключ 1: Смена (напр. "07:00 - 15:00"), Ключ 2: Никнейм сотрудника -> Список отчетов
+  Map<String, Map<String, List<dynamic>>> _groupedReports = {};
   Map<String, String> _userNames = {};
   
   bool _isLoading = true;
@@ -45,25 +46,35 @@ class _ScooterReportsScreenState extends State<ScooterReportsScreen> {
       final activeShifts = await _apiService.getActiveShifts(token);
       final reports = await _apiService.getScooterReports(token);
       
-      Map<String, List<dynamic>> grouped = {};
+      Map<String, Map<String, List<dynamic>>> grouped = {};
       Map<String, String> names = {};
       
       // Сначала добавим всех активных скаутов на смене
       for (var shift in activeShifts) {
+        final shiftRange = shift.slotTimeRange.isNotEmpty ? shift.slotTimeRange : 'Неизвестная смена';
         final username = shift.username.isNotEmpty ? shift.username : 'unknown';
-        grouped[username] = [];
+        
+        if (!grouped.containsKey(shiftRange)) {
+          grouped[shiftRange] = {};
+        }
+        grouped[shiftRange]![username] = [];
         names[username] = username;
       }
       
-      // Затем добавим отчеты (если скаут уже добавлен, отчеты прикрепятся к нему)
+      // Затем добавим отчеты
       for (var r in reports) {
         final username = r['employee_username']?.toString() ?? 'unknown';
         final name = r['employee_name']?.toString() ?? 'Неизвестный';
+        final shiftRange = r['slot_time_range']?.toString() ?? '';
+        final finalShiftRange = shiftRange.isNotEmpty ? shiftRange : 'Вне смены';
         
-        if (!grouped.containsKey(username)) {
-          grouped[username] = [];
+        if (!grouped.containsKey(finalShiftRange)) {
+          grouped[finalShiftRange] = {};
         }
-        grouped[username]!.add(r);
+        if (!grouped[finalShiftRange]!.containsKey(username)) {
+          grouped[finalShiftRange]![username] = [];
+        }
+        grouped[finalShiftRange]![username]!.add(r);
         
         // Обновим имя, если оно пришло из отчета (оно полнее)
         if (names[username] == username || !names.containsKey(username)) {
@@ -123,32 +134,35 @@ class _ScooterReportsScreenState extends State<ScooterReportsScreen> {
   Future<void> _exportToCSV() async {
     final buffer = StringBuffer();
     buffer.write('\uFEFF'); // BOM для Excel
-    buffer.writeln('Имя,Никнейм,Время,Бренд,Номер самоката,Тип отчета,Координаты');
+    buffer.writeln('Смена,Имя,Никнейм,Время,Бренд,Номер самоката,Тип отчета,Координаты');
     
-    final usernames = _groupedReports.keys.toList();
-    for (var username in usernames) {
-      final name = _userNames[username] ?? username;
-      final reports = _groupedReports[username]!;
-      final filteredReports = _getFilteredReports(reports);
+    final shiftRanges = _groupedReports.keys.toList();
+    for (var shiftRange in shiftRanges) {
+      final usersMap = _groupedReports[shiftRange]!;
+      for (var username in usersMap.keys) {
+        final name = _userNames[username] ?? username;
+        final reports = usersMap[username]!;
+        final filteredReports = _getFilteredReports(reports);
 
-      for (var report in filteredReports) {
-        final brand = report['brand'] ?? '';
-        final scooterNum = report['scooter_number'] ?? '';
-        final reportType = report['report_type'] ?? '';
-        final createdAtStr = report['created_at'] ?? '';
-        
-        String timeStr = '';
-        if (createdAtStr.isNotEmpty) {
-          try {
-             timeStr = DateFormat('dd.MM.yyyy HH:mm').format(DateTime.parse(createdAtStr).toLocal());
-          } catch (_) {}
+        for (var report in filteredReports) {
+          final brand = report['brand'] ?? '';
+          final scooterNum = report['scooter_number'] ?? '';
+          final reportType = report['report_type'] ?? '';
+          final createdAtStr = report['created_at'] ?? '';
+          
+          String timeStr = '';
+          if (createdAtStr.isNotEmpty) {
+            try {
+               timeStr = DateFormat('dd.MM.yyyy HH:mm').format(DateTime.parse(createdAtStr).toLocal());
+            } catch (_) {}
+          }
+          
+          final lat = report['lat']?.toString() ?? '';
+          final lon = report['lon']?.toString() ?? '';
+          final coords = (lat.isNotEmpty && lon.isNotEmpty) ? '$lat,$lon' : 'Нет';
+          
+          buffer.writeln('"$shiftRange","$name","@$username","$timeStr","$brand","$scooterNum","$reportType","$coords"');
         }
-        
-        final lat = report['lat']?.toString() ?? '';
-        final lon = report['lon']?.toString() ?? '';
-        final coords = (lat.isNotEmpty && lon.isNotEmpty) ? '$lat,$lon' : 'Нет';
-        
-        buffer.writeln('"$name","@$username","$timeStr","$brand","$scooterNum","$reportType","$coords"');
       }
     }
     
@@ -186,7 +200,8 @@ class _ScooterReportsScreenState extends State<ScooterReportsScreen> {
       );
     }
 
-    final usernames = _groupedReports.keys.toList();
+    final shiftRanges = _groupedReports.keys.toList();
+    shiftRanges.sort(); // Сортируем смены по времени (07:00-15:00 будет до 15:00-23:00)
 
     return Column(
       children: [
@@ -234,106 +249,124 @@ class _ScooterReportsScreenState extends State<ScooterReportsScreen> {
             onRefresh: _loadReports,
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: usernames.length,
+              itemCount: shiftRanges.length,
               itemBuilder: (context, index) {
-                final username = usernames[index];
-                final allReports = _groupedReports[username]!;
-                final filteredReports = _getFilteredReports(allReports);
-                final name = _userNames[username] ?? username;
+                final shiftRange = shiftRanges[index];
+                final usersMap = _groupedReports[shiftRange]!;
+                final usernames = usersMap.keys.toList();
 
-                // Если фильтр строгий, и у пользователя 0 подходящих отчетов, мы его все равно показываем,
-                // чтобы было видно бездельников.
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  child: ExpansionTile(
-                    title: Text(
-                      '$name (@$username)',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    subtitle: Text(
-                      'Отчетов: ${filteredReports.length}',
-                      style: TextStyle(
-                        color: filteredReports.isEmpty ? Colors.red : Colors.green,
-                        fontWeight: FontWeight.w600,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16, bottom: 16),
+                      child: Text(
+                        'Смена: $shiftRange',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blueAccent,
+                        ),
                       ),
                     ),
-                    children: filteredReports.map((report) {
-                      final brand = report['brand'] ?? 'Неизвестно';
-                      final scooterNum = report['scooter_number'] ?? '';
-                      final reportType = report['report_type'] ?? '';
-                      final createdAtStr = report['created_at'] ?? '';
-                      
-                      String timeStr = createdAtStr;
-                      if (createdAtStr.isNotEmpty) {
-                        try {
-                          final dt = DateTime.parse(createdAtStr).toLocal();
-                          timeStr = DateFormat('dd.MM.yyyy HH:mm').format(dt);
-                        } catch (e) {
-                          // ignore
-                        }
-                      }
+                    ...usernames.map((username) {
+                      final allReports = usersMap[username]!;
+                      final filteredReports = _getFilteredReports(allReports);
+                      final name = _userNames[username] ?? username;
 
-                      double? lat;
-                      double? lon;
-                      if (report['lat'] != null) lat = (report['lat'] as num).toDouble();
-                      if (report['lon'] != null) lon = (report['lon'] as num).toDouble();
-
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Бренд: $brand • $scooterNum',
-                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                                  ),
-                                ),
-                                Text(
-                                  timeStr,
-                                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                                ),
-                              ],
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        child: ExpansionTile(
+                          title: Text(
+                            '$name (@$username)',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          subtitle: Text(
+                            'Отчетов: ${filteredReports.length}',
+                            style: TextStyle(
+                              color: filteredReports.isEmpty ? Colors.red : Colors.green,
+                              fontWeight: FontWeight.w600,
                             ),
-                            const SizedBox(height: 4),
-                            Text('Тип отчета: $reportType', style: const TextStyle(fontSize: 14)),
-                            if (lat != null && lon != null) ...[
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: OutlinedButton.icon(
-                                  onPressed: () => _openMap(lat!, lon!),
-                                  icon: const Icon(Icons.location_on, color: Colors.blue, size: 18),
-                                  label: const Text('Показать на карте'),
-                                  style: OutlinedButton.styleFrom(
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          children: filteredReports.map((report) {
+                            final brand = report['brand'] ?? 'Неизвестно';
+                            final scooterNum = report['scooter_number'] ?? '';
+                            final reportType = report['report_type'] ?? '';
+                            final createdAtStr = report['created_at'] ?? '';
+                            
+                            String timeStr = createdAtStr;
+                            if (createdAtStr.isNotEmpty) {
+                              try {
+                                final dt = DateTime.parse(createdAtStr).toLocal();
+                                timeStr = DateFormat('dd.MM.yyyy HH:mm').format(dt);
+                              } catch (e) {
+                                // ignore
+                              }
+                            }
+
+                            double? lat;
+                            double? lon;
+                            if (report['lat'] != null) lat = (report['lat'] as num).toDouble();
+                            if (report['lon'] != null) lon = (report['lon'] as num).toDouble();
+
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'Бренд: $brand • $scooterNum',
+                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                        ),
+                                      ),
+                                      Text(
+                                        timeStr,
+                                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                      ),
+                                    ],
                                   ),
-                                ),
+                                  const SizedBox(height: 4),
+                                  Text('Тип отчета: $reportType', style: const TextStyle(fontSize: 14)),
+                                  if (lat != null && lon != null) ...[
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        onPressed: () => _openMap(lat!, lon!),
+                                        icon: const Icon(Icons.location_on, color: Colors.blue, size: 18),
+                                        label: const Text('Показать на карте'),
+                                        style: OutlinedButton.styleFrom(
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                        ),
+                                      ),
+                                    ),
+                                  ] else ...[
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      '📍 Координаты не найдены',
+                                      style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic),
+                                    ),
+                                  ],
+                                ],
                               ),
-                            ] else ...[
-                              const SizedBox(height: 8),
-                              const Text(
-                                '📍 Координаты не найдены',
-                                style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic),
-                              ),
-                            ],
-                          ],
+                            );
+                          }).toList(),
                         ),
                       );
-                    }).toList(),
-                  ),
+                    }),
+                  ],
                 );
               },
             ),
