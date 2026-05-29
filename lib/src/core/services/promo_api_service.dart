@@ -24,6 +24,7 @@ class PromoApiService {
   Future<void> uploadPromoFile(
     List<int> fileBytes, {
     required String brand,
+    required String validFrom,
     required String validUntil,
     String? subtype,
   }) async {
@@ -50,6 +51,7 @@ class PromoApiService {
     );
 
     request.fields['brand'] = brand;
+    request.fields['valid_from'] = validFrom;
     request.fields['valid_until'] = validUntil;
     if (subtype != null && subtype.isNotEmpty) {
       request.fields['subtype'] = subtype;
@@ -78,7 +80,7 @@ class PromoApiService {
   }
 
   Future<void> uploadPromoFromGoogleSheet(String sheetUrl,
-      {required String brand, required String validUntil, String? subtype}) async {
+      {required String brand, required String validFrom, required String validUntil, String? subtype}) async {
     final token = await _getToken();
     if (token == null) {
       throw PromoApiServiceException('Не авторизован', statusCode: 401);
@@ -87,6 +89,7 @@ class PromoApiService {
     final bodyMap = {
       'google_sheet_url': sheetUrl,
       'brand': brand,
+      'valid_from': validFrom,
       'valid_until': validUntil,
     };
     if (subtype != null && subtype.isNotEmpty) {
@@ -215,7 +218,7 @@ class PromoApiService {
     }
   }
 
-  Future<void> setActivePromoBrand(String brand, {String? expiresAt, int days = 10}) async {
+  Future<void> setActivePromoBrand(String brand, {String? startsAt, String? expiresAt, int days = 10}) async {
     final token = await _getToken();
     if (token == null) {
       throw PromoApiServiceException('Не авторизован', statusCode: 401);
@@ -227,7 +230,7 @@ class PromoApiService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json'
       },
-      body: jsonEncode({'brand': brand, 'days': days, 'expires_at': expiresAt ?? ''}),
+      body: jsonEncode({'brand': brand, 'days': days, 'starts_at': startsAt ?? '', 'expires_at': expiresAt ?? ''}),
     );
 
     if (response.statusCode == 401) {

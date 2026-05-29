@@ -83,7 +83,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   List<dynamic>? _claimedPromos;
   Map<String, dynamic>? _activeBrand;
   String? _selectedBrand;
-  DateTime? _endDate;
+  DateTimeRange? _activeBrandDateRange;
   DateTime? _selectedValidUntil; // Дата окончания, выбранная для загрузки файла
 
   // --- НОВАЯ ПЕРЕМЕННАЯ ---
@@ -350,7 +350,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
 
     String? dialogBrand;
     String? dialogSubtype;
-    DateTime? dialogDate;
+    DateTimeRange? dialogDateRange;
 
     final selectedData = await showDialog<Map<String, String>>(
       context: context,
@@ -393,21 +393,24 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
               TextFormField(
                 readOnly: true,
                 onTap: () async {
-                  final pickedDate = await showDatePicker(
+                  final pickedRange = await showDateRangePicker(
                     context: ctx,
-                    initialDate: DateTime.now().add(const Duration(days: 7)),
-                    firstDate: DateTime.now(),
+                    initialDateRange: DateTimeRange(
+                      start: DateTime.now(),
+                      end: DateTime.now().add(const Duration(days: 7)),
+                    ),
+                    firstDate: DateTime.now().subtract(const Duration(days: 1)),
                     lastDate: DateTime(2030),
                   );
-                  if (pickedDate != null) {
-                    setDialogState(() => dialogDate = pickedDate);
+                  if (pickedRange != null) {
+                    setDialogState(() => dialogDateRange = pickedRange);
                   }
                 },
                 decoration: InputDecoration(
-                  labelText: 'Дата окончания действия',
-                  hintText: dialogDate == null
-                      ? 'Выберите дату'
-                      : dialogDate!.toLocal().toString().split(' ')[0],
+                  labelText: 'Период действия',
+                  hintText: dialogDateRange == null
+                      ? 'Выберите даты'
+                      : '${dialogDateRange!.start.toLocal().toString().split(' ')[0]} - ${dialogDateRange!.end.toLocal().toString().split(' ')[0]}',
                   suffixIcon: const Icon(Icons.calendar_today),
                 ),
               ),
@@ -420,10 +423,11 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
             ),
             ElevatedButton(
               onPressed: () {
-                if (dialogBrand != null && dialogDate != null) {
+                if (dialogBrand != null && dialogDateRange != null) {
                   Navigator.pop(ctx, {
                     'brand': dialogBrand!,
-                    'validUntil': dialogDate!.toIso8601String().split('T')[0],
+                    'validFrom': dialogDateRange!.start.toIso8601String().split('T')[0],
+                    'validUntil': dialogDateRange!.end.toIso8601String().split('T')[0],
                     if (dialogSubtype != null) 'subtype': dialogSubtype!,
                   });
                 }
@@ -446,6 +450,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
       await _service.uploadPromoFile(
         bytes,
         brand: selectedData['brand']!,
+        validFrom: selectedData['validFrom']!,
         validUntil: selectedData['validUntil']!,
         subtype: selectedData['subtype'],
       );
@@ -500,7 +505,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     final controller = TextEditingController();
     String? dialogBrand;
     String? dialogSubtype;
-    DateTime? dialogDate;
+    DateTimeRange? dialogDateRange;
 
     final urlData = await showDialog<Map<String, String>>(
       context: context,
@@ -554,21 +559,24 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                 TextFormField(
                   readOnly: true,
                   onTap: () async {
-                    final pickedDate = await showDatePicker(
+                    final pickedRange = await showDateRangePicker(
                       context: ctx,
-                      initialDate: DateTime.now().add(const Duration(days: 7)),
-                      firstDate: DateTime.now(),
+                      initialDateRange: DateTimeRange(
+                        start: DateTime.now(),
+                        end: DateTime.now().add(const Duration(days: 7)),
+                      ),
+                      firstDate: DateTime.now().subtract(const Duration(days: 1)),
                       lastDate: DateTime(2030),
                     );
-                    if (pickedDate != null) {
-                      setDialogState(() => dialogDate = pickedDate);
+                    if (pickedRange != null) {
+                      setDialogState(() => dialogDateRange = pickedRange);
                     }
                   },
                   decoration: InputDecoration(
-                    labelText: 'Дата окончания',
-                    hintText: dialogDate == null
-                        ? 'Выберите дату'
-                        : dialogDate!.toLocal().toString().split(' ')[0],
+                    labelText: 'Период действия',
+                    hintText: dialogDateRange == null
+                        ? 'Выберите даты'
+                        : '${dialogDateRange!.start.toLocal().toString().split(' ')[0]} - ${dialogDateRange!.end.toLocal().toString().split(' ')[0]}',
                     suffixIcon: const Icon(Icons.calendar_today),
                   ),
                 ),
@@ -583,11 +591,12 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
               onPressed: () {
                 if (controller.text.isNotEmpty &&
                     dialogBrand != null &&
-                    dialogDate != null) {
+                    dialogDateRange != null) {
                   Navigator.pop(ctx, {
                     'url': controller.text.trim(),
                     'brand': dialogBrand!,
-                    'validUntil': dialogDate!.toIso8601String().split('T')[0],
+                    'validFrom': dialogDateRange!.start.toIso8601String().split('T')[0],
+                    'validUntil': dialogDateRange!.end.toIso8601String().split('T')[0],
                     if (dialogSubtype != null) 'subtype': dialogSubtype!,
                   });
                 }
@@ -606,6 +615,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
       await _service.uploadPromoFromGoogleSheet(
         urlData['url']!,
         brand: urlData['brand']!,
+        validFrom: urlData['validFrom']!,
         validUntil: urlData['validUntil']!,
         subtype: urlData['subtype'],
       );
@@ -761,16 +771,17 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   }
 
   Future<void> _activateBrand() async {
-    if (_selectedBrand == null || _endDate == null) return;
+    if (_selectedBrand == null || _activeBrandDateRange == null) return;
     
     // Create expiration date at the end of the selected day
-    final expiresAt = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59).toIso8601String();
+    final startsAt = _activeBrandDateRange!.start.toIso8601String().split('T')[0];
+    final expiresAt = DateTime(_activeBrandDateRange!.end.year, _activeBrandDateRange!.end.month, _activeBrandDateRange!.end.day, 23, 59, 59).toIso8601String();
     
     setState(() {
       _isLoading = true;
     });
     try {
-      await _service.setActivePromoBrand(_selectedBrand!, expiresAt: expiresAt);
+      await _service.setActivePromoBrand(_selectedBrand!, startsAt: startsAt, expiresAt: expiresAt);
       await _loadActiveBrand();
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -1257,19 +1268,22 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
           TextFormField(
             readOnly: true,
             onTap: () async {
-              final pickedDate = await showDatePicker(
+              final pickedRange = await showDateRangePicker(
                 context: context,
-                initialDate: DateTime.now().add(const Duration(days: 7)),
+                initialDateRange: DateTimeRange(
+                  start: DateTime.now(),
+                  end: DateTime.now().add(const Duration(days: 7)),
+                ),
                 firstDate: DateTime.now().subtract(const Duration(days: 1)),
                 lastDate: DateTime(2030),
               );
-              if (pickedDate != null) setState(() => _endDate = pickedDate);
+              if (pickedRange != null) setState(() => _activeBrandDateRange = pickedRange);
             },
             decoration: InputDecoration(
-              labelText: 'Дата окончания',
-              hintText: _endDate == null
-                  ? 'Выберите дату'
-                  : DateFormat('dd.MM.yyyy').format(_endDate!),
+              labelText: 'Период действия ограничения',
+              hintText: _activeBrandDateRange == null
+                  ? 'Выберите даты'
+                  : '${DateFormat('dd.MM.yy').format(_activeBrandDateRange!.start)} - ${DateFormat('dd.MM.yy').format(_activeBrandDateRange!.end)}',
               prefixIcon: const Icon(Icons.calendar_today_outlined),
               filled: true,
               fillColor:
@@ -1283,7 +1297,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _selectedBrand != null && _endDate != null
+              onPressed: _selectedBrand != null && _activeBrandDateRange != null
                   ? _activateBrand
                   : null,
               style: ElevatedButton.styleFrom(
