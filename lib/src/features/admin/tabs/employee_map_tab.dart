@@ -476,6 +476,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
 
           // Shift Details UI (Overlay)
           if (_logic.selectedShift != null) _buildShiftDetailPanel(isDarkMode),
+          if (_logic.selectedLiveEmployee != null && !_logic.isHistoryMode) _buildLiveEmployeePanel(isDarkMode),
         ],
       ),
     );
@@ -776,6 +777,77 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                   onPressed: () {
                     _logic.selectedShift = null;
                     _logic.selectedEmployeeHistory = [];
+                    setState(() {});
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLiveEmployeePanel(bool isDarkMode) {
+    final emp = _logic.selectedLiveEmployee!;
+    final isOnline = _logic.isEmployeeOnline(emp.timestamp);
+    
+    return Positioned(
+      bottom: 100, // Над BottomSheet
+      left: 20,
+      right: 20,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(color: Colors.black26, blurRadius: 15, spreadRadius: 2)
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                _buildModernMarker(emp, isOnline),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(emp.name ?? 'ID ${emp.userId}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900, fontSize: 18)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(isOnline ? Icons.wifi : Icons.wifi_off, 
+                            size: 14, color: isOnline ? Colors.green : Colors.grey),
+                          const SizedBox(width: 4),
+                          Text(isOnline ? 'В сети' : 'Был(а): ${DateFormat('HH:mm').format(emp.timestamp)}',
+                              style: TextStyle(color: isOnline ? Colors.green : Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      if (emp.battery != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(emp.battery! > 20 ? Icons.battery_full : Icons.battery_alert,
+                                size: 14, color: emp.battery! > 20 ? Colors.green : Colors.red),
+                            const SizedBox(width: 4),
+                            Text('${emp.battery!.toInt()}%',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    _logic.selectedLiveEmployee = null;
                     setState(() {});
                   },
                 ),

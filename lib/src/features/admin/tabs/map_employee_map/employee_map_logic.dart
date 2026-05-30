@@ -46,6 +46,7 @@ class EmployeeMapLogic {
   List<ActiveShift> historyShifts = [];
   bool isHistoryLoading = false;
   ActiveShift? selectedShift;
+  EmployeeLocation? selectedLiveEmployee;
 
   bool get isHistoryMode {
     final now = DateTime.now();
@@ -70,6 +71,7 @@ class EmployeeMapLogic {
   }
 
   void zoomToEmployee(EmployeeLocation emp) {
+    selectedLiveEmployee = emp;
     mapController.move(emp.position, 15.0);
     _notify();
   }
@@ -401,6 +403,7 @@ class EmployeeMapLogic {
     } else {
       historyShifts = [];
       selectedShift = null;
+      selectedLiveEmployee = null;
       selectedEmployeeHistory = [];
       startLiveTracking();
       await fetchEmployeeLocations();

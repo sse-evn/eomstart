@@ -4,7 +4,7 @@ description: EOM START
 
 publish_to: 'EVN'
 
-version: 1.0.17+6
+version: 1.0.18+7
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

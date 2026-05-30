@@ -124,7 +124,7 @@ class _ShiftDetailsScreenState extends State<ShiftDetailsScreen> {
                 const SizedBox(height: 12),
                 _buildSelfieCard(theme),
                 const SizedBox(height: 32),
-                if ((_currentUserRole == 'superadmin' || _currentUserRole == 'admin') && !isEnded) ...[
+                if ((_currentUserRole == 'superadmin' || _currentUserRole == 'admin' || _currentUserRole == 'supervisor' || _currentUserRole == 'coordinator') && !isEnded) ...[
                   _buildAdminActions(theme),
                   const SizedBox(height: 40),
                 ],
