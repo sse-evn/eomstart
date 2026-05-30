@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:micro_mobility_app/src/features/home/home_screen.dart';
@@ -20,6 +21,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
+
 
   final List<Widget> _screens = [
     const DashboardHome(),
@@ -48,8 +50,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               selectedFontSize: 13,
               unselectedItemColor: Colors.grey[600],
               onTap: (index) {
-                // Разрешаем переход на вкладку "Главная" (0) и "Профиль" (3) всегда
-                // Для вкладок "Карта" (1) и "QR" (2) проверяем наличие активной смены
+                // Разрешаем переход на вкладку tr(context, "Главная", tr(context, "Басты бет", "Басты бет")) (0) и tr(context, "Профиль", "Профиль") (3) всегда
+                // Для вкладок tr(context, "Карта", "Карта") (1) и tr(context, "QR", "QR") (2) проверяем наличие активной смены
                 if (index != 0 && index != 3 && !hasActiveShift) {
                   final provider =
                       Provider.of<ShiftProvider>(context, listen: false);
@@ -61,8 +63,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   if (!isAllowedRole) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Сначала откройте рабочую смену'),
+                      SnackBar(
+                        content: Text(tr(context, 'Сначала откройте рабочую смену', tr(context, 'Алдымен жұмыс ауысымын ашыңыз', 'Алдымен жұмыс ауысымын ашыңыз'))),
                         backgroundColor: Colors.orange,
                         duration: Duration(seconds: 2),
                       ),
@@ -78,25 +80,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
               items: [
                 BottomNavigationBarItem(
                   icon: _buildIcon(AppIcons.home, AppIcons.home2, 0),
-                  label: 'Главная',
+                  label: tr(context, 'Главная', tr(context, 'Басты бет', 'Басты бет')),
                 ),
                 BottomNavigationBarItem(
                   icon: Opacity(
                     opacity: hasActiveShift ? 1.0 : 0.5,
                     child: _buildIcon(AppIcons.map, AppIcons.map2, 1),
                   ),
-                  label: 'Карта',
+                  label: tr(context, 'Карта', 'Карта'),
                 ),
                 BottomNavigationBarItem(
                   icon: Opacity(
                     opacity: hasActiveShift ? 1.0 : 0.5,
                     child: _buildIcon(AppIcons.qr, AppIcons.qr2, 2),
                   ),
-                  label: 'QR',
+                  label: tr(context, 'QR', 'QR'),
                 ),
                 BottomNavigationBarItem(
                   icon: _buildIcon(AppIcons.profile, AppIcons.profile2, 3),
-                  label: 'Профиль',
+                  label: tr(context, 'Профиль', 'Профиль'),
                 ),
               ],
               type: BottomNavigationBarType.fixed,

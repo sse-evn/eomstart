@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -120,7 +121,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
   void _showStillPendingMessage() {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content:
             Text('Ваш аккаунт всё ещё ожидает подтверждения администратором'),
         duration: Duration(seconds: 2),
@@ -173,7 +174,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
       backgroundColor: Colors.grey[50],
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -188,9 +189,9 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                   fit: BoxFit.contain,
                 ),
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               Text(
-                'Ожидание подтверждения',
+                tr(context, 'Ожидание подтверждения', 'Растауды күтуде'),
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -198,22 +199,22 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
-              const Text(
+              SizedBox(height: 12),
+              Text(
                 'Ваш аккаунт находится на рассмотрении у администратора. Мы свяжемся с вами в ближайшее время.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                 decoration: BoxDecoration(
                   color: Colors.green[50],
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: primaryColor.withOpacity(0.3)),
                 ),
-                child: const Text(
+                child: Text(
                   'Проверка обычно занимает не более 24 часов',
                   style: TextStyle(
                     fontSize: 12,
@@ -222,24 +223,24 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                   ),
                 ),
               ),
-              const SizedBox(height: 30),
+              SizedBox(height: 30),
               TextButton(
                 onPressed: _isChecking ? null : _logout,
-                child: const Text(
+                child: Text(
                   'Выйти из системы',
                   style: TextStyle(color: Colors.grey),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               if (_isChecking)
-                const Text(
+                Text(
                   'Проверка статуса...',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 )
               else
                 Text(
                   'Следующая проверка через ${_checkInterval.inSeconds} секунд',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
             ],
           ),

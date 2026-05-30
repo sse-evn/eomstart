@@ -1,5 +1,6 @@
 // lib/screens/settings_screen.dart
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/src/core/providers/settings_provider.dart';
 
@@ -15,8 +16,8 @@ class SettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Настройки',
+        title: Text(
+          tr(context, 'Настройки', 'Баптаулар'),
           style: TextStyle(
             fontWeight: FontWeight.w600,
           ),
@@ -35,13 +36,13 @@ class SettingsScreen extends StatelessWidget {
       body: Container(
         color: Theme.of(context).colorScheme.surface,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+          padding: EdgeInsets.fromLTRB(16, 24, 16, 32),
           children: [
             // Заголовок секции
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
-                'Основные настройки',
+                tr(context, 'Основные настройки', 'Негізгі баптаулар'),
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -49,7 +50,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
 
             // Переключатель темы
             Card(
@@ -59,11 +60,11 @@ class SettingsScreen extends StatelessWidget {
               ),
               child: SwitchListTile(
                 activeThumbColor: primaryColor,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                title: const Text('Тёмная тема'),
+                contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                title: Text(tr(context, 'Тёмная тема', 'Қараңғы тақырып')),
                 subtitle: Text(
-                  isDarkMode ? 'Темная тема включена' : 'Светлая тема',
-                  style: const TextStyle(fontSize: 12),
+                  isDarkMode ? tr(context, 'Темная тема включена', 'Қараңғы тақырып қосылды') : tr(context, 'Светлая тема', 'Жарық тақырып'),
+                  style: TextStyle(fontSize: 12),
                 ),
                 value: isDarkMode,
                 onChanged: (value) {
@@ -79,7 +80,7 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
 
             // Переключатель уведомлений
             // Card(
@@ -89,12 +90,12 @@ class SettingsScreen extends StatelessWidget {
             //   ),
             //   child: SwitchListTile(
             //     activeColor: primaryColor,
-            //     contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            //     title: const Text('Уведомления'),
+            //     contentPadding: EdgeInsets.symmetric(horizontal: 16),
+            //     title: Text(tr(context, 'Уведомления', 'Хабарламалар')),
             //     subtitle: Text(
             //       settingsProvider.notificationsEnabled
-            //           ? 'Вы получаете уведомления'
-            //           : 'Уведомления отключены',
+            //           ? tr(context, 'Вы получаете уведомления', 'Сіз хабарламалар аласыз')
+            //           : tr(context, 'Уведомления отключены', 'Хабарламалар өшірілді'),
             //       style: TextStyle(fontSize: 12),
             //     ),
             //     value: settingsProvider.notificationsEnabled,
@@ -105,9 +106,9 @@ class SettingsScreen extends StatelessWidget {
             //           backgroundColor: primaryColor,
             //           content: Text(
             //             value
-            //                 ? 'Уведомления включены'
-            //                 : 'Уведомления отключены',
-            //             style: const TextStyle(color: Colors.white),
+            //                 ? tr(context, 'Уведомления включены', 'Хабарламалар қосылды')
+            //                 : tr(context, 'Уведомления отключены', 'Хабарламалар өшірілді'),
+            //             style: TextStyle(color: Colors.white),
             //           ),
             //           duration: const Duration(seconds: 2),
             //           behavior: SnackBarBehavior.floating,

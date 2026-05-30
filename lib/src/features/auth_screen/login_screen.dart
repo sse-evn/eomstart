@@ -1,4 +1,5 @@
   import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:loader_overlay/loader_overlay.dart';
 import 'package:micro_mobility_app/src/core/providers/shift_provider.dart'
     show ShiftProvider;
@@ -328,7 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -343,7 +344,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     IconButton(
                       onPressed:
                           _isLoading ? null : () => Navigator.maybePop(context),
-                      icon: const Icon(Icons.close),
+                      icon: Icon(Icons.close),
                     ),
                   ],
                 ),
@@ -352,7 +353,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: WebViewWidget(controller: _tgController!),
               ),
               if (_isLoading)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(16),
                   child: CircularProgressIndicator(),
                 ),
@@ -395,7 +396,7 @@ class _LoginScreenState extends State<LoginScreen> {
           body: SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.all(24),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -416,16 +417,16 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: isDarkMode ? Colors.white : Colors.green[800],
                             ),
                           ),
-                          const SizedBox(height: 32),
+                          SizedBox(height: 32),
                           _buildTextField(
                             controller: _usernameController,
                             label: 'Имя пользователя',
                             icon: Icons.person_outline,
                             enabled: !_isLoading,
                           ),
-                          const SizedBox(height: 20),
+                          SizedBox(height: 20),
                           _buildPasswordField(),
-                          const SizedBox(height: 32),
+                          SizedBox(height: 32),
                           SizedBox(
                             width: double.infinity,
                             height: 55,
@@ -437,8 +438,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 elevation: 4,
                               ),
                               onPressed: _isLoading ? null : _handleRegularLogin,
-                              child: const Text(
-                                'Войти',
+                              child: Text(
+                                tr(context, 'Войти', 'Кіру'),
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w500,
@@ -448,13 +449,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           if (_isTelegramEnabled) ...[
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24),
                             Row(
                               children: [
-                                const Expanded(
+                                Expanded(
                                     child: Divider(color: Colors.grey, thickness: 1)),
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  padding: EdgeInsets.symmetric(horizontal: 12),
                                   child: Text(
                                     'или',
                                     style: TextStyle(
@@ -465,17 +466,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                 ),
-                                const Expanded(
+                                Expanded(
                                     child: Divider(color: Colors.grey, thickness: 1)),
                               ],
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24),
                             SizedBox(
                               width: double.infinity,
                               height: 55,
                               child: OutlinedButton.icon(
                                 icon: Container(
-                                  padding: const EdgeInsets.all(4),
+                                  padding: EdgeInsets.all(4),
                                   decoration: BoxDecoration(
                                     color: Colors.blue[400],
                                     borderRadius: BorderRadius.circular(6),
@@ -486,7 +487,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     color: Colors.white,
                                   ),
                                 ),
-                                label: const Text(
+                                label: Text(
                                   'Войти через Telegram',
                                   style: TextStyle(
                                     color: Colors.blue,
@@ -507,17 +508,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: 24),
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: isDarkMode ? Colors.grey[800] : const Color.fromARGB(255, 3, 3, 3),
+                        color: isDarkMode ? Colors.grey[800] : Color.fromARGB(255, 3, 3, 3),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Введите свои учетные данные для доступа к системе',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 14, color: Colors.grey),
@@ -575,7 +576,7 @@ class _LoginScreenState extends State<LoginScreen> {
         filled: true,
         fillColor: isDarkMode ? Colors.grey[900] : Colors.grey[50],
         contentPadding:
-            const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+            EdgeInsets.symmetric(vertical: 20, horizontal: 20),
       ),
     );
   }
@@ -593,7 +594,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return null;
       },
       decoration: InputDecoration(
-        labelText: 'Пароль',
+        labelText: tr(context, 'Пароль', 'Құпия сөз'),
         labelStyle:
             TextStyle(color: isDarkMode ? Colors.grey[400] : Colors.grey[700]),
         prefixIcon: Icon(Icons.lock_outline, color: Colors.green[700]),
@@ -630,7 +631,7 @@ class _LoginScreenState extends State<LoginScreen> {
         filled: true,
         fillColor: isDarkMode ? Colors.grey[900] : Colors.grey[50],
         contentPadding:
-            const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+            EdgeInsets.symmetric(vertical: 20, horizontal: 20),
       ),
     );
   }

@@ -1,5 +1,6 @@
 // screens/map_screen.dart
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:micro_mobility_app/src/core/utils/map_app_constants.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
@@ -54,8 +55,8 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Карта объектов',
+        title: Text(
+          tr(context, 'Карта объектов', 'Нысандар картасы'),
           style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.5),
         ),
         centerTitle: false,
@@ -143,7 +144,7 @@ class _MapScreenState extends State<MapScreen> {
                                   color: Colors.black.withOpacity(0.3),
                                   blurRadius: 8,
                                   spreadRadius: 2,
-                                  offset: const Offset(0, 2),
+                                  offset: Offset(0, 2),
                                 ),
                               ],
                             ),
@@ -161,7 +162,7 @@ class _MapScreenState extends State<MapScreen> {
                                         return Container(
                                           color: Colors.blue[300],
                                           child:
-                                              const CircularProgressIndicator(
+                                              CircularProgressIndicator(
                                             strokeWidth: 2,
                                             color: Colors.white,
                                           ),
@@ -171,7 +172,7 @@ class _MapScreenState extends State<MapScreen> {
                                           (context, error, stackTrace) =>
                                               Container(
                                         color: Colors.blue[700],
-                                        child: const Icon(
+                                        child: Icon(
                                           Icons.person,
                                           color: Colors.white,
                                           size: 28,
@@ -180,7 +181,7 @@ class _MapScreenState extends State<MapScreen> {
                                     )
                                   : Container(
                                       color: Colors.blue[700],
-                                      child: const Icon(
+                                      child: Icon(
                                         Icons.person,
                                         color: Colors.white,
                                         size: 28,
@@ -201,7 +202,7 @@ class _MapScreenState extends State<MapScreen> {
                         final lon = double.tryParse(
                                 loc['longitude']?.toString() ?? '0') ??
                             0;
-                        final name = loc['employee_name']?.toString() ?? 'Скаут';
+                        final name = loc['employee_name']?.toString() ?? tr(context, 'Скаут', 'Скаут');
                         
                         return Marker(
                           point: LatLng(lat, lon),
@@ -249,7 +250,7 @@ class _MapScreenState extends State<MapScreen> {
               ),
               // Индикатор загрузки
               if (logic.isLoading)
-                const Center(
+                Center(
                   child: Card(
                     elevation: 8,
                     shape: CircleBorder(),
@@ -276,17 +277,17 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showZoneInfoSheet(Map<String, dynamic> data) {
-    final name = data['name']?.toString() ?? data['description']?.toString() ?? 'Активная зона';
-    final isRestricted = data['type'] == 'restricted' || (data['description']?.toString().contains('Запрет') ?? false);
+    final name = data['name']?.toString() ?? data['description']?.toString() ?? tr(context, 'Активная зона', 'Белсенді аймақ');
+    final isRestricted = data['type'] == 'restricted' || (data['description']?.toString().contains(tr(context, 'Запрет', 'Тиым')) ?? false);
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A), // Темный фон для четкости
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          color: Color(0xFF1A1A1A), // Темный фон для четкости
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           boxShadow: [
             BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20)
           ],
@@ -299,7 +300,7 @@ class _MapScreenState extends State<MapScreen> {
               height: 4,
               decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Row(
               children: [
                 Icon(
@@ -307,17 +308,17 @@ class _MapScreenState extends State<MapScreen> {
                   color: isRestricted ? Colors.redAccent : Colors.greenAccent,
                   size: 28,
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         name,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white),
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white),
                       ),
                       Text(
-                        isRestricted ? 'Ограничение проезда/парковки' : 'Разрешенная зона работы',
+                        isRestricted ? tr(context, 'Ограничение проезда/парковки', 'Өту/тұрақ шектеуі') : tr(context, 'Разрешенная зона работы', 'Рұқсат етілген жұмыс аймағы'),
                         style: TextStyle(color: Colors.white60, fontSize: 13),
                       ),
                     ],
@@ -325,7 +326,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
           ],
         ),
       ),
@@ -339,16 +340,16 @@ class _MapScreenState extends State<MapScreen> {
           future: logic.isOffline(),
           builder: (context, snapshot) {
             if (snapshot.data == true) {
-              return const Padding(
+              return Padding(
                 padding: EdgeInsets.only(right: 8),
                 child: Icon(Icons.wifi_off_rounded, color: Colors.orange, size: 20),
               );
             }
-            return const SizedBox.shrink();
+            return SizedBox.shrink();
           },
         ),
         if (logic.isMapLoadedOffline)
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(right: 8),
             child: Icon(Icons.sd_storage_rounded, color: Colors.green, size: 20),
           ),
@@ -362,21 +363,21 @@ class _MapScreenState extends State<MapScreen> {
         _mapControlButon(
           icon: Icons.layers_rounded,
           onPressed: () => logic.showLayerSettingsDialog(),
-          tooltip: 'Слои',
+          tooltip: tr(context, 'Слои', 'Қабаттар'),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         if (logic.availableMaps.isNotEmpty)
           _mapControlButon(
             icon: Icons.map_rounded,
             onPressed: () => _showMapSelectionMenu(),
-            tooltip: 'Выбор города',
+            tooltip: tr(context, 'Выбор города', 'Қаланы таңдау'),
           ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         if (logic.selectedMapId != -1)
           _mapControlButon(
             icon: Icons.download_for_offline_rounded,
             onPressed: () => logic.downloadMapLocally(logic.selectedMapId),
-            tooltip: 'Скачать карту',
+            tooltip: tr(context, 'Скачать карту', 'Картаны жүктеу'),
           ),
       ],
     );
@@ -395,7 +396,7 @@ class _MapScreenState extends State<MapScreen> {
             );
           },
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         _mapControlButon(
           icon: Icons.remove_rounded,
           onPressed: () {
@@ -405,11 +406,11 @@ class _MapScreenState extends State<MapScreen> {
             );
           },
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         GestureDetector(
           onTap: () => logic.fetchCurrentLocation(isManual: true),
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.green[700],
               shape: BoxShape.circle,
@@ -418,12 +419,12 @@ class _MapScreenState extends State<MapScreen> {
                   color: Colors.green.withOpacity(0.4),
                   blurRadius: 12,
                   spreadRadius: 2,
-                  offset: const Offset(0, 4),
+                  offset: Offset(0, 4),
                 ),
               ],
             ),
             child: logic.isLocating
-                ? const SizedBox(
+                ? SizedBox(
                     width: 24,
                     height: 24,
                     child: CircularProgressIndicator(
@@ -431,7 +432,7 @@ class _MapScreenState extends State<MapScreen> {
                       color: Colors.white,
                     ),
                   )
-                : const Icon(Icons.my_location_rounded, color: Colors.white, size: 28),
+                : Icon(Icons.my_location_rounded, color: Colors.white, size: 28),
           ),
         ),
       ],
@@ -451,7 +452,7 @@ class _MapScreenState extends State<MapScreen> {
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
             blurRadius: 8,
-            offset: const Offset(0, 2),
+            offset: Offset(0, 2),
           ),
         ],
       ),
@@ -467,7 +468,7 @@ class _MapScreenState extends State<MapScreen> {
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(4),
+          padding: EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: Colors.orange[800],
             shape: BoxShape.circle,
@@ -476,18 +477,18 @@ class _MapScreenState extends State<MapScreen> {
               BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
             ],
           ),
-          child: const Icon(Icons.person_pin_circle_rounded, size: 22, color: Colors.white),
+          child: Icon(Icons.person_pin_circle_rounded, size: 22, color: Colors.white),
         ),
-        const SizedBox(height: 2),
+        SizedBox(height: 2),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
           decoration: BoxDecoration(
             color: Colors.black54,
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
             name,
-            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+            style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -501,8 +502,8 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
+        padding: EdgeInsets.all(24),
+        decoration: BoxDecoration(
           color: Color(0xFF1A1A1A), // Темный фон
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
@@ -520,9 +521,9 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-            const Text(
-              'Выберите город',
+            SizedBox(height: 24),
+            Text(
+              tr(context, 'Выберите город', 'Қаланы таңдаңыз'),
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
@@ -530,18 +531,18 @@ class _MapScreenState extends State<MapScreen> {
                 letterSpacing: 0.5,
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Flexible(
               child: ListView(
                 shrinkWrap: true,
                 children: logic.availableMaps.map((map) {
                   final id = map['id'] as int;
-                  final city = map['city'] as String? ?? 'Неизвестный город';
+                  final city = map['city'] as String? ?? tr(context, 'Неизвестный город', 'Белгісіз қала');
                   final desc = map['description'] as String? ?? '';
                   final isSelected = logic.selectedMapId == id;
 
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
+                    margin: EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
                       color: isSelected ? Colors.green.withOpacity(0.15) : Colors.white.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(16),
@@ -551,9 +552,9 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                     child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                       leading: Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: isSelected ? Colors.green : Colors.white10,
                           shape: BoxShape.circle,
@@ -576,7 +577,7 @@ class _MapScreenState extends State<MapScreen> {
                         ? Text(desc, style: TextStyle(color: Colors.white38, fontSize: 12)) 
                         : null,
                       trailing: isSelected 
-                        ? const Icon(Icons.check_circle, color: Colors.green, size: 24) 
+                        ? Icon(Icons.check_circle, color: Colors.green, size: 24) 
                         : null,
                       onTap: () {
                         logic.onMapChanged(id);
@@ -587,7 +588,7 @@ class _MapScreenState extends State<MapScreen> {
                 }).toList(),
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
           ],
         ),
       ),
@@ -599,8 +600,8 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
+        padding: EdgeInsets.all(24),
+        decoration: BoxDecoration(
           color: Color(0xFF1A1A1A),
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
@@ -617,7 +618,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             Container(
               width: 70,
               height: 70,
@@ -626,30 +627,30 @@ class _MapScreenState extends State<MapScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.orange.withOpacity(0.5), width: 2),
               ),
-              child: const Icon(Icons.person_rounded, color: Colors.orangeAccent, size: 45),
+              child: Icon(Icons.person_rounded, color: Colors.orangeAccent, size: 45),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Text(
               name,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
-              'Скаут команды',
+              tr(context, 'Скаут команды', 'Команда скауты'),
               style: TextStyle(color: Colors.white54, fontSize: 16),
             ),
-            const SizedBox(height: 32),
+            SizedBox(height: 32),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _scoutAction(Icons.message_rounded, 'Написать', () {}),
-                _scoutAction(Icons.call_rounded, 'Позвонить', () {}),
-                _scoutAction(Icons.gps_fixed_rounded, 'Маршрут', () {
+                _scoutAction(Icons.message_rounded, tr(context, 'Написать', 'Жазу'), () {}),
+                _scoutAction(Icons.call_rounded, tr(context, 'Позвонить', 'Қоңырау шалу'), () {}),
+                _scoutAction(Icons.gps_fixed_rounded, tr(context, 'Маршрут', 'Маршрут'), () {
                    Navigator.pop(context);
                 }),
               ],
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
           ],
         ),
       ),
@@ -662,15 +663,15 @@ class _MapScreenState extends State<MapScreen> {
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.grey[100],
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: Colors.black87),
           ),
-          const SizedBox(height: 8),
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          SizedBox(height: 8),
+          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         ],
       ),
     );

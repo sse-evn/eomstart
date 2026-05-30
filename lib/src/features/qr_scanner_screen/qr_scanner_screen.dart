@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:flutter/services.dart' show ClipboardData, Clipboard;
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -36,7 +37,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     'Bolt': 0,
   };
   
-  final ValueNotifier<String> _scanStatus = ValueNotifier<String>('Ожидание сканирования...');
+  late final ValueNotifier<String> _scanStatus;
   final ValueNotifier<Color> _scanStatusColor = ValueNotifier<Color>(Colors.blueAccent);
   
   String? _lastScannedCode;
@@ -54,6 +55,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   @override
   void initState() {
     super.initState();
+    _scanStatus = ValueNotifier<String>(tr(context, 'Ожидание сканирования...', 'Сканерлеуді күту...'));
     cameraController = MobileScannerController(
       detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
@@ -113,16 +115,16 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Сбросить форму?'),
-          content: const Text('Все введённые данные, список самокатов, конкурентов и фотографии будут удалены.'),
+          title: Text(tr(context, 'Сбросить форму?', 'Форманы бастапқыға қайтару керек пе?')),
+          content: Text(tr(context, 'Все введённые данные, список самокатов, конкурентов и фотографии будут удалены.', 'Барлық енгізілген деректер, самокаттар тізімі, бәсекелестер және суреттер жойылады.')),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Отмена'),
+              child: Text(tr(context, 'Отмена', 'Болдырмау')),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Сбросить', style: TextStyle(color: Colors.red)),
+              child: Text(tr(context, 'Сбросить', 'Бастапқыға қайтару'), style: TextStyle(color: Colors.red)),
             ),
           ],
         );
@@ -143,10 +145,10 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         _reportType = 'before';
         _scannedNumbers.clear();
         _competitorCounts.updateAll((key, value) => 0);
-        _scanStatus.value = 'Ожидание сканирования...';
+        _scanStatus.value = tr(context, 'Ожидание сканирования...', 'Сканерлеуді күту...');
         _scanStatusColor.value = Colors.blueAccent;
       });
-      _showMessage('Форма успешно очищена');
+      _showMessage(tr(context, 'Форма успешно очищена', 'Форма сәтті тазартылды'));
     }
   }
 
@@ -189,12 +191,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Ввод номеров'),
+          title: Text(tr(context, 'Ввод номеров', 'Нөмірлерді енгізу')),
           content: TextField(
             controller: controller,
             maxLines: 5,
-            decoration: const InputDecoration(
-              hintText: "Введите номера через пробел или с новой строки",
+            decoration: InputDecoration(
+              hintText: tr(context, "Введите номера через пробел или с новой строки", "Нөмірлерді бос орын немесе жаңа жол арқылы енгізіңіз"),
               border: OutlineInputBorder(),
             ),
             autofocus: true,
@@ -202,7 +204,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Отмена'),
+              child: Text(tr(context, 'Отмена', 'Болдырмау')),
             ),
             TextButton(
               onPressed: () {
@@ -217,7 +219,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   }
                 }
               },
-              child: const Text('Добавить'),
+              child: Text(tr(context, 'Добавить', 'Қосу')),
             ),
           ],
         );
@@ -237,7 +239,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   void _addScannedNumber(String rawCode) {
     final trimmedInput = rawCode.trim();
     if (trimmedInput.isEmpty) {
-      _updateStatus('Пустой ввод', Colors.red);
+      _updateStatus(tr(context, 'Пустой ввод', 'Бос мәлімет'), Colors.red);
       return;
     }
 
@@ -248,10 +250,10 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       final quantity = int.tryParse(batchMatch.group(2)!) ?? 0;
       
       String? brand;
-      if (serviceAlias == 'yandex' || serviceAlias == 'яндекс' || serviceAlias == 'y') brand = 'Yandex';
-      else if (serviceAlias == 'whoosh' || serviceAlias == 'вуш' || serviceAlias == 'w') brand = 'Whoosh';
-      else if (serviceAlias == 'jet' || serviceAlias == 'джет' || serviceAlias == 'j') brand = 'Jet';
-      else if (serviceAlias == 'bolt' || serviceAlias == 'болт' || serviceAlias == 'b') brand = 'Bolt';
+      if (serviceAlias == 'yandex' || serviceAlias == tr(context, 'яндекс', 'яндекс') || serviceAlias == 'y') brand = 'Yandex';
+      else if (serviceAlias == 'whoosh' || serviceAlias == tr(context, 'вуш', 'вуш') || serviceAlias == 'w') brand = 'Whoosh';
+      else if (serviceAlias == 'jet' || serviceAlias == tr(context, 'джет', 'джет') || serviceAlias == 'j') brand = 'Jet';
+      else if (serviceAlias == 'bolt' || serviceAlias == tr(context, 'болт', 'болт') || serviceAlias == 'b') brand = 'Bolt';
 
       if (brand != null && quantity > 0) {
         final upperBrand = brand.toUpperCase();
@@ -262,7 +264,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           }
           _competitorCounts[normKey] = (_competitorCounts[normKey] ?? 0) + quantity;
         });
-        _updateStatus('Добавлено $normKey: $quantity шт.', Colors.green);
+        _updateStatus(tr(context, 'Добавлено $normKey: $quantity шт.', '$normKey қосылды: $quantity дана.'), Colors.green);
         _saveBackup();
         return;
       }
@@ -270,7 +272,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
     final cleanedNumber = _extractNumberFromLink(trimmedInput);
     if (cleanedNumber.isEmpty) {
-      _updateStatus('Не удалось добавить номер', Colors.red);
+      _updateStatus(tr(context, 'Не удалось добавить номер', 'Нөмірді қосу мүмкін болмады'), Colors.red);
       return;
     }
 
@@ -319,7 +321,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       setState(() {
         _scannedNumbers.insert(0, cleanedNumber);
       });
-      _updateStatus('Добавлен: $cleanedNumber', Colors.green);
+      _updateStatus(tr(context, 'Добавлен: $cleanedNumber', 'Қосылды: $cleanedNumber'), Colors.green);
       _saveBackup();
     } else {
       _updateStatus('Номер "$cleanedNumber" уже в списке', Colors.orange);
@@ -360,7 +362,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     });
 
     Clipboard.setData(ClipboardData(text: allLines.join('\n')));
-    _showMessage('Все номера скопированы');
+    _showMessage(tr(context, 'Все номера скопированы', 'Барлық нөмірлер көшірілді'));
   }
 
   void _clearCompetitorCounts() {
@@ -376,7 +378,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final upperBrand = normKey.toUpperCase();
     final fullLabel = '[$upperBrand] $number';
     if (_scannedNumbers.contains(fullLabel) || _scannedNumbers.contains(number)) {
-      _showMessage('Этот самокат уже добавлен!');
+      _showMessage(tr(context, 'Этот самокат уже добавлен!', 'Бұл самокат қосылған!'));
       return;
     }
 
@@ -384,7 +386,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       _scannedNumbers.insert(0, fullLabel);
       _competitorCounts[normKey] = (_competitorCounts[normKey] ?? 0) + 1;
     });
-    _updateStatus('Добавлен $normKey: $number', Colors.green);
+    _updateStatus(tr(context, 'Добавлен $normKey: $number', '$normKey қосылды: $number'), Colors.green);
     _saveBackup();
   }
 
@@ -437,13 +439,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       _scannedNumbers.insert(0, '[$upperBrand]');
       _competitorCounts[normKey] = (_competitorCounts[normKey] ?? 0) + 1;
     });
-    _updateStatus('Добавлен $normKey', Colors.green);
+    _updateStatus(tr(context, 'Добавлен $normKey', '$normKey қосылды'), Colors.green);
     _saveBackup();
   }
 
   Future<void> _takePhoto() async {
     if (_photos.length >= 10) {
-      _showMessage('Можно максимум 10 фото');
+      _showMessage(tr(context, 'Можно максимум 10 фото', 'Ең көбі 10 сурет қосуға болады'));
       return;
     }
 
@@ -469,7 +471,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   Future<Map<String, dynamic>> _fetchGeoAndMapBytes() async {
-    String locationStr = 'Гео: недоступно';
+    String locationStr = tr(context, 'Гео: недоступно', 'Гео: қолжетімсіз');
     Position? currentPosition;
     Uint8List? mapBytes;
 
@@ -484,15 +486,15 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           } catch (e) {
             currentPosition = await Geolocator.getLastKnownPosition();
           }
-          if (currentPosition != null) locationStr = 'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}';
+          if (currentPosition != null) locationStr = tr(context, 'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}', 'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}');
         } else {
-          locationStr = 'Гео: доступ запрещён';
+          locationStr = tr(context, 'Гео: доступ запрещён', 'Гео: рұқсат жоқ');
         }
       } else {
-        locationStr = 'Гео: сервис отключён';
+        locationStr = tr(context, 'Гео: сервис отключён', 'Гео: сервис өшірілген');
       }
     } catch (_) {
-      locationStr = 'Гео: ошибка';
+      locationStr = tr(context, 'Гео: ошибка', 'Гео: қате');
     }
 
     if (currentPosition != null) {
@@ -575,7 +577,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       SnackBar(
         content: Text(text),
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
+        margin: EdgeInsets.only(bottom: 80, left: 16, right: 16),
         duration: const Duration(milliseconds: 2000),
       ),
     );
@@ -586,11 +588,11 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final hasCounts = _competitorCounts.values.any((v) => v > 0);
     
     if (_scannedNumbers.isEmpty && !hasCounts) {
-      _showMessage('Сначала отсканируйте или добавьте хотя бы один самокат');
+      _showMessage(tr(context, 'Сначала отсканируйте или добавьте хотя бы один самокат', 'Алдымен кем дегенде бір самокат қосыңыз не сканерлеңіз'));
       return;
     }
     if (_photos.isEmpty) {
-      _showMessage('Добавьте хотя бы одно фото');
+      _showMessage(tr(context, 'Добавьте хотя бы одно фото', 'Кем дегенде бір сурет қосыңыз'));
       return;
     }
 
@@ -600,12 +602,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final username = profile['username'];
     final telegramId = profile['telegram_id'];
 
-    final employeeName = firstName?.toString() ?? username?.toString() ?? 'Пользователь';
+    final employeeName = firstName?.toString() ?? username?.toString() ?? tr(context, 'Пользователь', 'Қолданушы');
     final employeeUsername = username?.toString();
     final employeeTelegramId = (telegramId is int) ? telegramId : int.tryParse(telegramId?.toString() ?? '');
 
     shiftProvider.updateLastReportTime(DateTime.now());
-    _showMessage('🚀 Отчёт отправляется в фоне...');
+    _showMessage(tr(context, '🚀 Отчёт отправляется в фоне...', '🚀 Есеп фондық режимде жіберілуде...'));
 
     _performBackgroundUpload(
       reportType: _reportType,
@@ -697,20 +699,20 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           height: MediaQuery.of(ctx).size.height * 0.88,
           decoration: BoxDecoration(
             color: isDark ? Colors.grey[900] : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             children: [
                Container(
-                 margin: const EdgeInsets.only(top: 12, bottom: 8),
+                 margin: EdgeInsets.only(top: 12, bottom: 8),
                  width: 40, height: 4,
                  decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2)),
                ),
-               const Text('Добавление самокатов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-               const SizedBox(height: 12),
+               Text(tr(context, 'Добавление самокатов', 'Самокаттарды қосу'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+               SizedBox(height: 12),
                Expanded(
                  child: SingleChildScrollView(
-                   padding: const EdgeInsets.symmetric(horizontal: 16),
+                   padding: EdgeInsets.symmetric(horizontal: 16),
                    child: Column(
                      children: [
                        _qrScannerWidget(),
@@ -718,14 +720,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                          valueListenable: _scanStatus,
                          builder: (context, status, child) {
                            return Padding(
-                             padding: const EdgeInsets.symmetric(vertical: 8.0),
+                             padding: EdgeInsets.symmetric(vertical: 8.0),
                              child: Center(
                                child: Text(status, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _scanStatusColor.value)),
                              ),
                            );
                          }
                        ),
-                       const SizedBox(height: 8),
+                       SizedBox(height: 8),
                        SizedBox(
                          width: double.infinity,
                          child: ElevatedButton.icon(
@@ -733,19 +735,19 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                              Navigator.pop(ctx);
                              _addNumberManually();
                            },
-                           icon: const Icon(Icons.edit_rounded),
-                           label: const Text('Ввести номера вручную', style: TextStyle(fontWeight: FontWeight.bold)),
+                           icon: Icon(Icons.edit_rounded),
+                           label: Text(tr(context, 'Ввести номера вручную', 'Нөмірлерді қолмен енгізу'), style: TextStyle(fontWeight: FontWeight.bold)),
                            style: ElevatedButton.styleFrom(
                              backgroundColor: Colors.blue[600],
                              foregroundColor: Colors.white,
-                             padding: const EdgeInsets.symmetric(vertical: 14),
+                             padding: EdgeInsets.symmetric(vertical: 14),
                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                            ),
                          ),
                        ),
-                       const SizedBox(height: 16),
+                       SizedBox(height: 16),
                        _competitorsInlineWidget(),
-                       const SizedBox(height: 32),
+                       SizedBox(height: 32),
                      ]
                    )
                  )
@@ -762,7 +764,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   Widget _qrScannerWidget() {
     return Container(
       height: 250,
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.green[700]!, width: 2),
@@ -813,8 +815,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     return StatefulBuilder(
       builder: (context, setSheetState) {
         return Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          padding: const EdgeInsets.all(12),
+          margin: EdgeInsets.symmetric(vertical: 8),
+          padding: EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: isDark ? Colors.grey[900] : Colors.grey[100],
             borderRadius: BorderRadius.circular(16),
@@ -826,37 +828,37 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Конкуренты рядом', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text(tr(context, 'Конкуренты рядом', 'Жақын маңдағы бәсекелестер'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   if (_competitorCounts.values.any((v) => v > 0))
                     GestureDetector(
                       onTap: () {
                          _clearCompetitorCounts();
                          setSheetState((){});
                       },
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.delete_sweep_rounded, size: 16, color: Colors.redAccent),
                           SizedBox(width: 4),
-                          Text('Сбросить', style: TextStyle(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                          Text(tr(context, 'Сбросить', 'Бастапқыға қайтару'), style: TextStyle(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               Row(
                 children: [
                   if (keys.isNotEmpty) Expanded(child: _buildCompetitorCard(keys[0], isDark, setSheetState)),
-                  if (keys.length > 1) const SizedBox(width: 10),
+                  if (keys.length > 1) SizedBox(width: 10),
                   if (keys.length > 1) Expanded(child: _buildCompetitorCard(keys[1], isDark, setSheetState)),
                 ],
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               Row(
                 children: [
                   if (keys.length > 2) Expanded(child: _buildCompetitorCard(keys[2], isDark, setSheetState)),
-                  if (keys.length > 3) const SizedBox(width: 10),
+                  if (keys.length > 3) SizedBox(width: 10),
                   if (keys.length > 3) Expanded(child: _buildCompetitorCard(keys[3], isDark, setSheetState)),
                 ],
               ),
@@ -870,7 +872,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   Widget _buildCompetitorCard(String key, bool isDark, void Function(void Function()) setSheetState) {
     final count = _competitorCounts[key] ?? 0;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
         color: isDark ? Colors.grey[850] : Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -879,26 +881,26 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       child: Column(
         children: [
           Text(key, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white : Colors.black87)),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               GestureDetector(
                 onTap: () { _removeLastScooterForBrand(key); setSheetState((){}); },
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(8),
                   decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.red[50], borderRadius: BorderRadius.circular(8)),
                   child: Icon(Icons.remove, size: 16, color: Colors.red[700]),
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
+                padding: EdgeInsets.symmetric(horizontal: 14),
                 child: Text('$count', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
               ),
               GestureDetector(
                 onTap: () { _incrementBrandWithQuickLabel(key); setSheetState((){}); },
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(8),
                   decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.green[50], borderRadius: BorderRadius.circular(8)),
                   child: Icon(Icons.add, size: 16, color: Colors.green[700]),
                 ),
@@ -913,12 +915,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   Widget _infoCard() {
     final shiftProvider = context.read<ShiftProvider>();
     final profile = shiftProvider.profile ?? {};
-    final firstName = profile['firstName'] ?? profile['first_name'] ?? 'Пользователь';
+    final firstName = profile['firstName'] ?? profile['first_name'] ?? tr(context, 'Пользователь', 'Қолданушы');
     final username = profile['username'] ?? '';
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Colors.green[800]!, Colors.green[600]!],
@@ -926,20 +928,20 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 8, offset: Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
               Icon(Icons.assignment_rounded, color: Colors.white, size: 24),
               SizedBox(width: 8),
-              Text('Создание отчёта', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+              Text(tr(context, 'Создание отчёта', 'Есеп жасау'), style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
             ],
           ),
-          const SizedBox(height: 8),
-          Text('Сотрудник: $firstName ${username.isNotEmpty ? "(@$username)" : ""}', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+          SizedBox(height: 8),
+          Text('Сотрудник: $firstName ${username.isNotEmpty ? "(@$username)" : ""}', style: TextStyle(color: Colors.white70, fontSize: 14)),
         ],
       ),
     );
@@ -976,7 +978,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
   Widget _scannedListWidget() {
     final total = _scannedNumbers.length;
-    if (total == 0) return const SizedBox.shrink();
+    if (total == 0) return SizedBox.shrink();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final summary = _getSummaryCounts();
@@ -986,8 +988,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final visibleNumbers = _scannedNumbers.asMap().entries.where((entry) => !entry.value.startsWith('[') || entry.value.contains(' ')).toList();
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? Colors.grey[900] : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1004,9 +1006,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Список самокатов', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(tr(context, 'Список самокатов', 'Самокаттар тізімі'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     if (parts.isNotEmpty) ...[
-                      const SizedBox(height: 6),
+                      SizedBox(height: 6),
                       Text(parts.join('   •   '), style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.greenAccent[400] : Colors.green[700])),
                     ],
                   ],
@@ -1015,14 +1017,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             ],
           ),
           if (visibleNumbers.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Wrap(
               spacing: 8, runSpacing: 8,
               children: visibleNumbers.map((entry) {
                 final index = entry.key;
                 final number = entry.value;
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: isDark ? Colors.grey[800] : Colors.green[50],
                     borderRadius: BorderRadius.circular(8),
@@ -1032,9 +1034,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.electric_scooter_rounded, size: 14, color: isDark ? Colors.white70 : Colors.green[700]),
-                      const SizedBox(width: 6),
+                      SizedBox(width: 6),
                       Text(number, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.green[900])),
-                      const SizedBox(width: 6),
+                      SizedBox(width: 6),
                       GestureDetector(
                         onTap: () => _removeScannedNumber(index),
                         child: Icon(Icons.close, size: 14, color: isDark ? Colors.white30 : Colors.green[700]),
@@ -1054,8 +1056,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-         const Text('Фотографии отчета', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-         const SizedBox(height: 8),
+         Text(tr(context, 'Фотографии отчета', 'Есеп суреттері'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+         SizedBox(height: 8),
          Row(
            children: [
              Expanded(
@@ -1066,17 +1068,17 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                     _saveBackup();
                     _takePhoto();
                  },
-                 icon: const Icon(Icons.photo_camera_back_outlined),
-                 label: const Text('Добавить ДО'),
+                 icon: Icon(Icons.photo_camera_back_outlined),
+                 label: Text(tr(context, 'Добавить ДО', 'ДЕЙІН сурет қосу')),
                  style: ElevatedButton.styleFrom(
                    backgroundColor: _reportType == 'before' ? Colors.green[700] : Colors.grey[400],
                    foregroundColor: Colors.white,
-                   padding: const EdgeInsets.symmetric(vertical: 12),
+                   padding: EdgeInsets.symmetric(vertical: 12),
                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                  ),
                ),
              ),
-             const SizedBox(width: 8),
+             SizedBox(width: 8),
              Expanded(
                child: ElevatedButton.icon(
                  onPressed: _sending || _isProcessing ? null : () {
@@ -1085,19 +1087,19 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                     _saveBackup();
                     _takePhoto();
                  },
-                 icon: const Icon(Icons.task_alt_rounded),
-                 label: const Text('Добавить ПОСЛЕ'),
+                 icon: Icon(Icons.task_alt_rounded),
+                 label: Text(tr(context, 'Добавить ПОСЛЕ', 'СОҢғы сурет қосу')),
                  style: ElevatedButton.styleFrom(
                    backgroundColor: _reportType == 'after' ? Colors.green[700] : Colors.grey[400],
                    foregroundColor: Colors.white,
-                   padding: const EdgeInsets.symmetric(vertical: 12),
+                   padding: EdgeInsets.symmetric(vertical: 12),
                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                  ),
                ),
              ),
            ]
          ),
-         const SizedBox(height: 12),
+         SizedBox(height: 12),
          _photosGridWidget(),
       ]
     );
@@ -1106,7 +1108,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   Widget _photosGridWidget() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? Colors.grey[900] : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1117,22 +1119,22 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Загружено фото: ${_photos.length}/10', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(tr(context, 'Загружено фото: ${_photos.length}/10', 'Жүктелген сурет: ${_photos.length}/10'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               if (_isProcessing)
-                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
             ]
           ),
           if (_photos.isEmpty && !_isProcessing)
-             const Padding(
+             Padding(
                padding: EdgeInsets.only(top: 16),
-               child: Text('Нет добавленных фотографий', style: TextStyle(color: Colors.grey, fontSize: 13)),
+               child: Text(tr(context, 'Нет добавленных фотографий', 'Қосылған суреттер жоқ'), style: TextStyle(color: Colors.grey, fontSize: 13)),
              ),
           if (_photos.isNotEmpty || _isProcessing)
              Padding(
-               padding: const EdgeInsets.only(top: 16),
+               padding: EdgeInsets.only(top: 16),
                child: GridView.builder(
                  shrinkWrap: true,
-                 physics: const NeverScrollableScrollPhysics(),
+                 physics: NeverScrollableScrollPhysics(),
                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                    crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8,
                  ),
@@ -1141,7 +1143,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                    if (index == _photos.length && _isProcessing) {
                      return Container(
                        decoration: BoxDecoration(color: isDark ? Colors.grey[850] : Colors.grey[100], borderRadius: BorderRadius.circular(12)),
-                       child: const Center(child: CircularProgressIndicator()),
+                       child: Center(child: CircularProgressIndicator()),
                      );
                    }
                    final file = _photos[index];
@@ -1160,7 +1162,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                                     Positioned(
                                       top: 40, right: 20,
                                       child: IconButton(
-                                        icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                                        icon: Icon(Icons.close, color: Colors.white, size: 30),
                                         onPressed: () => Navigator.pop(context),
                                       )
                                     )
@@ -1184,9 +1186,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                              _saveBackup();
                            },
                            child: Container(
-                             padding: const EdgeInsets.all(4),
-                             decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                             child: const Icon(Icons.close, color: Colors.white, size: 12),
+                             padding: EdgeInsets.all(4),
+                             decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                             child: Icon(Icons.close, color: Colors.white, size: 12),
                            )
                          )
                        )
@@ -1203,8 +1205,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   Widget _commentWidget() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? Colors.grey[900] : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1213,17 +1215,17 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Комментарий (необязательно)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          const SizedBox(height: 8),
+          Text(tr(context, 'Комментарий (необязательно)', 'Пікір (міндетті емес)'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          SizedBox(height: 8),
           TextField(
             controller: _commentController,
             maxLines: 2,
             style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
             decoration: InputDecoration(
-              hintText: 'Опишите детали...',
+              hintText: tr(context, 'Опишите детали...', 'Мәліметтерді жазыңыз...'),
               hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.grey[400]),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              contentPadding: const EdgeInsets.all(12),
+              contentPadding: EdgeInsets.all(12),
             ),
           ),
         ],
@@ -1252,14 +1254,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
   Widget _actionRowWidget() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
         children: [
           Expanded(
             child: ElevatedButton.icon(
               onPressed: _toggleQrScanner,
               icon: Icon(_isQrScannerOpen ? Icons.qr_code_rounded : Icons.qr_code_scanner_rounded, size: 18),
-              label: Text(_isQrScannerOpen ? 'Скрыть QR' : 'Сканировать QR', style: const TextStyle(fontSize: 12)),
+              label: Text(_isQrScannerOpen ? tr(context, 'Скрыть QR', 'QR жасыру') : tr(context, 'Сканировать QR', 'QR сканерлеу'), style: TextStyle(fontSize: 12)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _isQrScannerOpen ? Colors.orange : Colors.green[700],
                 foregroundColor: Colors.white,
@@ -1267,12 +1269,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           Expanded(
             child: ElevatedButton.icon(
               onPressed: _addNumberManually,
-              icon: const Icon(Icons.edit_rounded, size: 18),
-              label: const Text('Вручную', style: TextStyle(fontSize: 12)),
+              icon: Icon(Icons.edit_rounded, size: 18),
+              label: Text(tr(context, 'Вручную', 'Қолмен'), style: TextStyle(fontSize: 12)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue[600],
                 foregroundColor: Colors.white,
@@ -1295,7 +1297,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
              valueListenable: _scanStatus,
              builder: (context, status, child) {
                return Padding(
-                 padding: const EdgeInsets.symmetric(vertical: 6.0),
+                 padding: EdgeInsets.symmetric(vertical: 6.0),
                  child: Center(
                    child: Text(status, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _scanStatusColor.value)),
                  ),
@@ -1325,7 +1327,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         borderRadius: BorderRadius.circular(16),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(16),
@@ -1334,7 +1336,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           child: Column(
             children: [
               Icon(icon, size: 24, color: iconCol),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textCol)),
             ],
           ),
@@ -1347,23 +1349,23 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-         const Text('Выберите время съёмки', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-         const SizedBox(height: 8),
+         Text(tr(context, 'Выберите время съёмки', 'Түсіру уақытын таңдаңыз'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+         SizedBox(height: 8),
          Row(
            children: [
-             _buildLegacyTypeButton(value: 'before', title: 'ДО работы', icon: Icons.photo_camera_back_outlined),
-             const SizedBox(width: 8),
-             _buildLegacyTypeButton(value: 'after', title: 'ПОСЛЕ работы', icon: Icons.task_alt_rounded),
+             _buildLegacyTypeButton(value: 'before', title: tr(context, 'ДО работы', 'Жұмысқа ДЕЙІН'), icon: Icons.photo_camera_back_outlined),
+             SizedBox(width: 8),
+             _buildLegacyTypeButton(value: 'after', title: tr(context, 'ПОСЛЕ работы', 'Жұмыстан СОҢ'), icon: Icons.task_alt_rounded),
            ],
          ),
-         const SizedBox(height: 12),
+         SizedBox(height: 12),
          ElevatedButton.icon(
            onPressed: _sending || _isProcessing ? null : () {
                FocusScope.of(context).unfocus();
                _takePhoto();
            },
-           icon: const Icon(Icons.camera_alt_rounded),
-           label: const Text('Сделать фото'),
+           icon: Icon(Icons.camera_alt_rounded),
+           label: Text(tr(context, 'Сделать фото', 'Суретке түсіру')),
            style: ElevatedButton.styleFrom(
              backgroundColor: Colors.green[700],
              foregroundColor: Colors.white,
@@ -1371,7 +1373,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
            ),
          ),
-         const SizedBox(height: 12),
+         SizedBox(height: 12),
          _photosGridWidget(),
       ],
     );
@@ -1381,7 +1383,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Создание отчёта'),
+        title: Text(tr(context, 'Создание отчёта', 'Есеп жасау')),
         centerTitle: true,
         actions: [
           PopupMenuButton<String>(
@@ -1400,18 +1402,18 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                 child: Row(
                   children: [
                     Icon(_useLegacyDesign ? Icons.toggle_on : Icons.toggle_off, color: Colors.blue),
-                    const SizedBox(width: 8),
-                    Text(_useLegacyDesign ? 'Новый дизайн' : 'Старый дизайн'),
+                    SizedBox(width: 8),
+                    Text(_useLegacyDesign ? tr(context, 'Новый дизайн', 'Жаңа дизайн') : tr(context, 'Старый дизайн', 'Ескі дизайн')),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'clear',
                 child: Row(
                   children: [
                     Icon(Icons.refresh_rounded, color: Colors.redAccent),
                     SizedBox(width: 8),
-                    Text('Очистить всё'),
+                    Text(tr(context, 'Очистить всё', 'Барлығын өшіру')),
                   ],
                 ),
               ),
@@ -1424,12 +1426,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _infoCard(),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     
                     if (_useLegacyDesign)
                        _buildLegacyScannerAndCompetitors()
@@ -1440,22 +1442,22 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               onPressed: _showAddScootersSheet,
-                              icon: const Icon(Icons.qr_code_scanner_rounded),
-                              label: const Text('Добавить самокаты', style: TextStyle(fontWeight: FontWeight.bold)),
+                              icon: Icon(Icons.qr_code_scanner_rounded),
+                              label: Text(tr(context, 'Добавить самокаты', 'Самокаттар қосу'), style: TextStyle(fontWeight: FontWeight.bold)),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.blue[700],
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
                         ],
                       ),
 
                     _scannedListWidget(),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     
                     if (_useLegacyDesign)
                       _buildLegacyPhotosActionWidget()
@@ -1469,22 +1471,22 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             ),
 
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: (_sending || _isProcessing) ? null : _sendReport,
                   icon: _sending
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.send_rounded),
+                      ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Icon(Icons.send_rounded),
                   label: Text(
-                    _sending ? 'Отправка...' : 'Отправить отчёт',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    _sending ? tr(context, 'Отправка...', 'Жіберілуде...') : tr(context, 'Отправить отчёт', 'Есеп жіберу'),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green[700],
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 2,
                   ),

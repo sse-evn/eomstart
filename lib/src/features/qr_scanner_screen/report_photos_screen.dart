@@ -5,6 +5,7 @@
 // import 'dart:ui' as ui;
 
 // import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 // import 'package:geolocator/geolocator.dart';
 // import 'package:http/http.dart' as http;
 // import 'package:http_parser/http_parser.dart';
@@ -48,7 +49,7 @@
 
 //   Future<void> _pickImages() async {
 //     if (_photos.length >= 10) {
-//       _showMessage('Можно максимум 10 фото');
+//       _showMessage(tr(context, 'Можно максимум 10 фото', 'Ең көбі 10 сурет қосуға болады'));
 //       return;
 //     }
 
@@ -60,7 +61,7 @@
 //     final selectedFiles = picked.take(remain).map((e) => File(e.path)).toList();
 
 //     if (picked.length > remain) {
-//       _showMessage('Добавлены только первые 10 фото');
+//       _showMessage(tr(context, 'Добавлены только первые 10 фото', 'Тек алғашқы 10 сурет қосылды'));
 //     }
 
 //     if (mounted) setState(() => _isProcessing = true);
@@ -81,7 +82,7 @@
 
 //   Future<void> _takePhoto() async {
 //     if (_photos.length >= 10) {
-//       _showMessage('Можно максимум 10 фото');
+//       _showMessage(tr(context, 'Можно максимум 10 фото', 'Ең көбі 10 сурет қосуға болады'));
 //       return;
 //     }
 
@@ -108,7 +109,7 @@
 //   }
 
 //   Future<Map<String, dynamic>> _fetchGeoAndMapBytes() async {
-//     String locationStr = 'Гео: недоступно';
+//     String locationStr = tr(context, 'Гео: недоступно', 'Гео: қолжетімсіз');
 //     Position? currentPosition;
 //     Uint8List? mapBytes;
 
@@ -131,16 +132,16 @@
 //           }
 //           if (currentPosition != null) {
 //             locationStr =
-//                 'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}';
+//                 tr(context, 'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}', 'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}');
 //           }
 //         } else {
-//           locationStr = 'Гео: доступ запрещён';
+//           locationStr = tr(context, 'Гео: доступ запрещён', 'Гео: рұқсат жоқ');
 //         }
 //       } else {
-//         locationStr = 'Гео: сервис отключён';
+//         locationStr = tr(context, 'Гео: сервис отключён', 'Гео: сервис өшірілген');
 //       }
 //     } catch (_) {
-//       locationStr = 'Гео: ошибка';
+//       locationStr = tr(context, 'Гео: ошибка', 'Гео: қате');
 //     }
 
 //     if (currentPosition != null) {
@@ -173,7 +174,7 @@
 //             break; // Успешно загрузили карту, выходим
 //           }
 //         } catch (e) {
-//           debugPrint('Ошибка загрузки карты с $mapUrl: $e');
+//           debugPrint(tr(context, 'Ошибка загрузки карты с $mapUrl: $e', '$mapUrl -ден картаны жүктеу қатесі: $e'));
 //         }
 //       }
 //     }
@@ -225,7 +226,7 @@
 //           );
 //         }
 //       } catch (e) {
-//         debugPrint('Ошибка наложения мини-карты: $e');
+//         debugPrint(tr(context, 'Ошибка наложения мини-карты: $e', 'Мини-картаны қою қатесі: $e'));
 //       }
 //     }
 
@@ -291,14 +292,14 @@
 
 //   Future<void> _sendReport() async {
 //     if (_photos.isEmpty) {
-//       _showMessage('Добавь хотя бы одно фото');
+//       _showMessage(tr(context, 'Добавь хотя бы одно фото', 'Кем дегенде бір сурет қос'));
 //       return;
 //     }
 
 //     // Показываем уведомление, что процесс пошел
 //     ScaffoldMessenger.of(context).showSnackBar(
-//       const SnackBar(
-//         content: Text('🚀 Отчёт отправляется в фоне...'),
+//       SnackBar(
+//         content: Text(tr(context, '🚀 Отчёт отправляется в фоне...', '🚀 Есеп фондық режимде жіберілуде...')),
 //         backgroundColor: Colors.blue,
 //         duration: Duration(seconds: 3),
 //       ),
@@ -383,7 +384,7 @@
 
 //   Widget _sectionTitle(String text) {
 //     return Padding(
-//       padding: const EdgeInsets.only(bottom: 10),
+//       padding: EdgeInsets.only(bottom: 10),
 //       child: Text(
 //         text,
 //         style: _theme.textTheme.titleMedium?.copyWith(
@@ -418,14 +419,14 @@
 //             ),
 //           ),
 //           Padding(
-//             padding: const EdgeInsets.all(20),
+//             padding: EdgeInsets.all(20),
 //             child: Column(
 //               crossAxisAlignment: CrossAxisAlignment.start,
 //               children: [
 //                 Row(
 //                   children: [
 //                     Container(
-//                       padding: const EdgeInsets.all(8),
+//                       padding: EdgeInsets.all(8),
 //                       decoration: BoxDecoration(
 //                         color: _colors.primary.withOpacity(0.2),
 //                         borderRadius: BorderRadius.circular(12),
@@ -433,7 +434,7 @@
 //                       child: Icon(Icons.person_outline_rounded,
 //                           color: _colors.onPrimaryContainer, size: 24),
 //                     ),
-//                     const SizedBox(width: 12),
+//                     SizedBox(width: 12),
 //                     Expanded(
 //                       child: Column(
 //                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,11 +467,11 @@
 //                     Icon(Icons.electric_scooter,
 //                         color: _colors.onPrimaryContainer.withOpacity(0.6),
 //                         size: 20),
-//                     const SizedBox(width: 8),
+//                     SizedBox(width: 8),
 //                     Expanded(
 //                       child: Text(
 //                         widget.scooterNumbers.isEmpty
-//                             ? 'Самокаты не выбраны'
+//                             ? tr(context, 'Самокаты не выбраны', 'Самокаттар таңдалмады')
 //                             : 'Самокаты: ${widget.scooterNumbers.join(', ')}',
 //                         style: _theme.textTheme.bodyMedium?.copyWith(
 //                           color: _colors.onPrimaryContainer,
@@ -482,14 +483,14 @@
 //                 ),
 //                 if (widget.competitorCounts != null &&
 //                     widget.competitorCounts!.values.any((v) => v > 0)) ...[
-//                   const SizedBox(height: 8),
+//                   SizedBox(height: 8),
 //                   Row(
 //                     crossAxisAlignment: CrossAxisAlignment.start,
 //                     children: [
 //                       Icon(Icons.compare_arrows_rounded,
 //                           color: _colors.onPrimaryContainer.withOpacity(0.6),
 //                           size: 20),
-//                       const SizedBox(width: 8),
+//                       SizedBox(width: 8),
 //                       Expanded(
 //                         child: Text(
 //                           'Введено вручную: ${widget.competitorCounts!.entries.where((e) => e.value > 0).map((e) => '${e.key}: ${e.value}').join(', ')}',
@@ -524,7 +525,7 @@
 //         child: AnimatedContainer(
 //           duration: const Duration(milliseconds: 250),
 //           curve: Curves.easeInOut,
-//           padding: const EdgeInsets.symmetric(vertical: 20),
+//           padding: EdgeInsets.symmetric(vertical: 20),
 //           decoration: BoxDecoration(
 //             gradient: selected
 //                 ? LinearGradient(
@@ -542,7 +543,7 @@
 //                     BoxShadow(
 //                       color: Colors.green.withOpacity(0.3),
 //                       blurRadius: 10,
-//                       offset: const Offset(0, 4),
+//                       offset: Offset(0, 4),
 //                     )
 //                   ]
 //                 : null,
@@ -558,7 +559,7 @@
 //                 size: 28,
 //                 color: selected ? Colors.white : _colors.onSurfaceVariant,
 //               ),
-//               const SizedBox(height: 8),
+//               SizedBox(height: 8),
 //               Text(
 //                 title,
 //                 style: _theme.textTheme.titleMedium?.copyWith(
@@ -575,11 +576,11 @@
 
 //   Widget _photoCard() {
 //     final reportTitle = _reportType == 'before'
-//         ? 'Фото ДО начала работы'
-//         : 'Фото ПОСЛЕ завершения';
+//         ? tr(context, 'Фото ДО начала работы', 'Жұмысқа ДЕЙІНГІ сурет')
+//         : tr(context, 'Фото ПОСЛЕ завершения', 'Аяқталған СОҢғы сурет');
 
 //     return Container(
-//       padding: const EdgeInsets.all(20),
+//       padding: EdgeInsets.all(20),
 //       decoration: BoxDecoration(
 //         color: _colors.surface,
 //         borderRadius: BorderRadius.circular(24),
@@ -588,7 +589,7 @@
 //           BoxShadow(
 //             color: _colors.shadow.withOpacity(0.05),
 //             blurRadius: 20,
-//             offset: const Offset(0, 10),
+//             offset: Offset(0, 10),
 //           ),
 //         ],
 //       ),
@@ -598,7 +599,7 @@
 //           Row(
 //             children: [
 //               Icon(Icons.photo_library_rounded, color: Colors.green[700]),
-//               const SizedBox(width: 12),
+//               SizedBox(width: 12),
 //               Expanded(
 //                 child: Text(
 //                   '$reportTitle (${_photos.length}/10)',
@@ -610,24 +611,24 @@
 //               ),
 //             ],
 //           ),
-//           const SizedBox(height: 20),
+//           SizedBox(height: 20),
 //           Row(
 //             children: [
 //               Expanded(
 //                 child: _actionButton(
 //                   onPressed: _sending ? null : _takePhoto,
 //                   icon: Icons.camera_alt_rounded,
-//                   label: 'Камера',
+//                   label: tr(context, 'Камера', 'Камера'),
 //                   isPrimary: true,
 //                 ),
 //               ),
 //             ],
 //           ),
-//           const SizedBox(height: 14),
+//           SizedBox(height: 14),
 //           if (_photos.isEmpty && !_isProcessing)
 //             Container(
 //               width: double.infinity,
-//               padding: const EdgeInsets.all(20),
+//               padding: EdgeInsets.all(20),
 //               decoration: BoxDecoration(
 //                 color: _colors.surfaceContainerHighest,
 //                 borderRadius: BorderRadius.circular(16),
@@ -640,18 +641,18 @@
 //                     size: 34,
 //                     color: _colors.onSurfaceVariant,
 //                   ),
-//                   const SizedBox(height: 8),
+//                   SizedBox(height: 8),
 //                   Text(
-//                     'Фото пока не добавлены',
+//                     tr(context, 'Фото пока не добавлены', 'Суреттер әлі қосылмады'),
 //                     textAlign: TextAlign.center,
 //                     style: _theme.textTheme.bodyLarge?.copyWith(
 //                       fontWeight: FontWeight.w600,
 //                       color: _colors.onSurface,
 //                     ),
 //                   ),
-//                   const SizedBox(height: 4),
+//                   SizedBox(height: 4),
 //                   Text(
-//                     'Нужно минимум 1 фото',
+//                     tr(context, 'Нужно минимум 1 фото', 'Кемінде 1 сурет қажет'),
 //                     style: _theme.textTheme.bodySmall?.copyWith(
 //                       color: _colors.onSurfaceVariant,
 //                     ),
@@ -662,7 +663,7 @@
 //           else if (_photos.isNotEmpty || _isProcessing)
 //             GridView.builder(
 //               shrinkWrap: true,
-//               physics: const NeverScrollableScrollPhysics(),
+//               physics: NeverScrollableScrollPhysics(),
 //               itemCount: _photos.length + (_isProcessing ? 1 : 0),
 //               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
 //                 crossAxisCount: 3,
@@ -679,13 +680,13 @@
 //                       borderRadius: BorderRadius.circular(12),
 //                       border: Border.all(color: _colors.outlineVariant),
 //                     ),
-//                     child: const Center(
+//                     child: Center(
 //                       child: Column(
 //                         mainAxisSize: MainAxisSize.min,
 //                         children: [
 //                           CircularProgressIndicator(strokeWidth: 2),
 //                           SizedBox(height: 6),
-//                           Text('загрузка...', style: TextStyle(fontSize: 10)),
+//                           Text(tr(context, 'загрузка...', 'жүктелуде...'), style: TextStyle(fontSize: 10)),
 //                         ],
 //                       ),
 //                     ),
@@ -710,7 +711,7 @@
 //                 BoxShadow(
 //                   color: Colors.black.withOpacity(0.1),
 //                   blurRadius: 8,
-//                   offset: const Offset(0, 4),
+//                   offset: Offset(0, 4),
 //                 ),
 //               ],
 //             ),
@@ -729,7 +730,7 @@
 //           child: GestureDetector(
 //             onTap: _sending ? null : () => _removePhoto(index),
 //             child: Container(
-//               padding: const EdgeInsets.all(4),
+//               padding: EdgeInsets.all(4),
 //               decoration: BoxDecoration(
 //                 color: Colors.red.withOpacity(0.9),
 //                 shape: BoxShape.circle,
@@ -740,7 +741,7 @@
 //                   ),
 //                 ],
 //               ),
-//               child: const Icon(Icons.close, color: Colors.white, size: 16),
+//               child: Icon(Icons.close, color: Colors.white, size: 16),
 //             ),
 //           ),
 //         ),
@@ -748,14 +749,14 @@
 //           bottom: 8,
 //           left: 8,
 //           child: Container(
-//             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+//             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
 //             decoration: BoxDecoration(
 //               color: Colors.black.withOpacity(0.6),
 //               borderRadius: BorderRadius.circular(8),
 //             ),
 //             child: Text(
 //               '${index + 1}',
-//               style: const TextStyle(
+//               style: TextStyle(
 //                 color: Colors.white,
 //                 fontSize: 10,
 //                 fontWeight: FontWeight.bold,
@@ -788,7 +789,7 @@
 //           children: [
 //             Icon(icon,
 //                 color: isPrimary ? Colors.white : _colors.onSurface, size: 20),
-//             const SizedBox(width: 8),
+//             SizedBox(width: 8),
 //             Text(
 //               label,
 //               style: TextStyle(
@@ -809,7 +810,7 @@
 //       enabled: !_sending,
 //       style: TextStyle(color: _colors.onSurface),
 //       decoration: InputDecoration(
-//         hintText: 'Например: грязный, разбито крыло, нужна замена',
+//         hintText: tr(context, 'Например: грязный, разбито крыло, нужна замена', 'Мысалы: кір, қанаты сынған, ауыстыру қажет'),
 //         hintStyle: TextStyle(color: _colors.onSurfaceVariant),
 //         filled: true,
 //         fillColor: _colors.surfaceContainerLow,
@@ -837,7 +838,7 @@
 //     return Stack(children: [
 //       Scaffold(
 //         appBar: AppBar(
-//           title: const Text('Фотоотчёт'),
+//           title: Text(tr(context, 'Фотоотчёт', 'Фотоесеп')),
 //           centerTitle: true,
 //         ),
 //         body: SafeArea(
@@ -845,40 +846,40 @@
 //             children: [
 //               Expanded(
 //                 child: ListView(
-//                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+//                   padding: EdgeInsets.fromLTRB(16, 12, 16, 16),
 //                   children: [
 //                     _infoCard(),
-//                     const SizedBox(height: 24),
-//                     _sectionTitle('Шаг 1: Выберите время съёмки'),
+//                     SizedBox(height: 24),
+//                     _sectionTitle(tr(context, 'Шаг 1: Выберите время съёмки', '1-қадам: Түсіру уақытын таңдаңыз')),
 //                     Row(
 //                       children: [
 //                         _buildTypeButton(
 //                           value: 'before',
-//                           title: 'ДО работы',
+//                           title: tr(context, 'ДО работы', 'Жұмысқа ДЕЙІН'),
 //                           icon: Icons.photo_camera_back_outlined,
 //                         ),
-//                         const SizedBox(width: 12),
+//                         SizedBox(width: 12),
 //                         _buildTypeButton(
 //                           value: 'after',
-//                           title: 'ПОСЛЕ работы',
+//                           title: tr(context, 'ПОСЛЕ работы', 'Жұмыстан СОҢ'),
 //                           icon: Icons.task_alt_rounded,
 //                         ),
 //                       ],
 //                     ),
-//                     const SizedBox(height: 24),
-//                     _sectionTitle('Шаг 2: Сделайте фотографии'),
+//                     SizedBox(height: 24),
+//                     _sectionTitle(tr(context, 'Шаг 2: Сделайте фотографии', '2-қадам: Суретке түсіріңіз')),
 //                     _photoCard(),
-//                     const SizedBox(height: 24),
-//                     _sectionTitle('Шаг 3: Напишите комментарий (если нужно)'),
+//                     SizedBox(height: 24),
+//                     _sectionTitle(tr(context, 'Шаг 3: Напишите комментарий (если нужно)', '3-қадам: Пікір жазыңыз (қажет болса)')),
 //                     _commentField(),
-//                     const SizedBox(height: 24),
+//                     SizedBox(height: 24),
 //                   ],
 //                 ),
 //               ),
 //               SafeArea(
 //                 top: false,
 //                 child: Padding(
-//                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+//                   padding: EdgeInsets.fromLTRB(16, 8, 16, 20),
 //                   child: InkWell(
 //                     onTap: _sending ? null : _sendReport,
 //                     borderRadius: BorderRadius.circular(22),
@@ -904,22 +905,22 @@
 //                             color: (_sending ? Colors.grey : Colors.green)
 //                                 .withOpacity(0.3),
 //                             blurRadius: 15,
-//                             offset: const Offset(0, 8),
+//                             offset: Offset(0, 8),
 //                           ),
 //                         ],
 //                       ),
 //                       child: Center(
 //                         child: _sending
-//                             ? const CircularProgressIndicator(
+//                             ? CircularProgressIndicator(
 //                                 color: Colors.white)
 //                             : Row(
 //                                 mainAxisAlignment: MainAxisAlignment.center,
 //                                 children: [
-//                                   const Icon(Icons.send_rounded,
+//                                   Icon(Icons.send_rounded,
 //                                       color: Colors.white),
-//                                   const SizedBox(width: 12),
+//                                   SizedBox(width: 12),
 //                                   Text(
-//                                     'Отправить отчёт',
+//                                     tr(context, 'Отправить отчёт', 'Есеп жіберу'),
 //                                     style:
 //                                         _theme.textTheme.titleMedium?.copyWith(
 //                                       color: Colors.white,

@@ -40,7 +40,7 @@ class _DashboardHomeState extends State<DashboardHome> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('Главная'),
+        title: Text('Главная'),
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -48,7 +48,7 @@ class _DashboardHomeState extends State<DashboardHome> {
           future: _loadDataFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
+              return Center(
                   child: CircularProgressIndicator(color: Colors.green));
             } else if (snapshot.hasError) {
               final errorStr = snapshot.error.toString();
@@ -59,27 +59,27 @@ class _DashboardHomeState extends State<DashboardHome> {
               } else {
                 return Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: EdgeInsets.all(20),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error, size: 60, color: Colors.red),
-                        const SizedBox(height: 16),
-                        const Text(
+                        Icon(Icons.error, size: 60, color: Colors.red),
+                        SizedBox(height: 16),
+                        Text(
                           'Ошибка загрузки данных',
                           style: TextStyle(
                               fontSize: 18, fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                         Text(
                           errorStr,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.grey),
+                          style: TextStyle(color: Colors.grey),
                         ),
-                        const SizedBox(height: 24),
+                        SizedBox(height: 24),
                         ElevatedButton(
                           onPressed: _refresh,
-                          child: const Text('Повторить'),
+                          child: Text('Повторить'),
                         ),
                       ],
                     ),
@@ -88,15 +88,15 @@ class _DashboardHomeState extends State<DashboardHome> {
               }
             } else {
               return SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16.0),
+                physics: AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.all(16.0),
                 child: Column(
                   children: [
                     const SlotCard(),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
 
 
-                    const Row(
+                    Row(
                       children: [
                         Text(
                           'Статистика',
@@ -112,13 +112,13 @@ class _DashboardHomeState extends State<DashboardHome> {
                       ],
                     ),
 
-                    const SizedBox(
+                    SizedBox(
                       height: 10,
                     ),
                     
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(16.0),
+                      padding: EdgeInsets.all(16.0),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16.0),
@@ -127,12 +127,12 @@ class _DashboardHomeState extends State<DashboardHome> {
                             color: Colors.grey.withOpacity(0.15),
                             spreadRadius: 1,
                             blurRadius: 12,
-                            offset: const Offset(0, 6),
+                            offset: Offset(0, 6),
                           ),
                         ],
                       ),
 
-                      child: const Column(
+                      child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Row(
@@ -232,7 +232,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                       ),
                     ),
 
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
                   
                     const ReportCard(),
                   ],
@@ -256,20 +256,20 @@ class NoInternetWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32.0),
+        padding: EdgeInsets.all(32.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(30),
+              padding: EdgeInsets.all(30),
               decoration: BoxDecoration(
                 color: Colors.grey[200],
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.wifi_off, size: 80, color: Colors.grey),
+              child: Icon(Icons.wifi_off, size: 80, color: Colors.grey),
             ),
-            const SizedBox(height: 32),
-            const Text(
+            SizedBox(height: 32),
+            Text(
               'Нет подключения к интернету',
               style: TextStyle(
                   fontSize: 22,
@@ -277,23 +277,23 @@ class NoInternetWidget extends StatelessWidget {
                   color: Colors.black87),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
-            const Text(
+            SizedBox(height: 16),
+            Text(
               'Проверьте соединение с сетью и попробуйте снова',
               style: TextStyle(fontSize: 16, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 40),
+            SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh, color: Colors.white),
-                label: const Text('Повторить',
+                icon: Icon(Icons.refresh, color: Colors.white),
+                label: Text('Повторить',
                     style: TextStyle(color: Colors.white, fontSize: 16)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green[700],
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),

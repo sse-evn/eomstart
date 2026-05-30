@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
@@ -168,8 +169,8 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     if (_hasClaimedToday[brand] == true) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Вы уже получали промокод этого бренда сегодня'),
+          SnackBar(
+            content: Text(tr(context, 'Вы уже получали промокод этого бренда сегодня', 'Бұл брендтің промокодын бүгін алдыңыз')),
             backgroundColor: Colors.orange,
           ),
         );
@@ -200,8 +201,8 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(alreadyClaimedToday
-                ? 'Вы уже получали промокод для $brand сегодня: $codeText'
-                : 'Получено: $codeText'),
+                ? tr(context, 'Вы уже получали промокод для $brand сегодня: $codeText', 'Сіз бүгін $brand үшін промокодты алдыңыз: $codeText')
+                : tr(context, 'Получено: $codeText', 'Алынды: $codeText')),
             backgroundColor: alreadyClaimedToday ? Colors.orange : Colors.green,
           ),
         );
@@ -221,15 +222,15 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
           });
           
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Вы уже получали промокод этого бренда сегодня'),
+            SnackBar(
+              content: Text(tr(context, 'Вы уже получали промокод этого бренда сегодня', 'Бұл брендтің промокодын бүгін алдыңыз')),
               backgroundColor: Colors.orange,
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Ошибка: ${e.message}'),
+              content: Text(tr(context, 'Ошибка: ${e.message}', 'Қате: ${e.message}')),
               backgroundColor: Colors.red,
             ),
           );
@@ -239,7 +240,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка: $e'),
+            content: Text(tr(context, 'Ошибка: $e', 'Қате: $e')),
             backgroundColor: Colors.red,
           ),
         );
@@ -255,8 +256,8 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   void _handleUnauthorized() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Сессия истекла. Требуется вход'),
+      SnackBar(
+        content: Text(tr(context, 'Сессия истекла. Требуется вход', 'Сессия аяқталды. Кіру қажет')),
         backgroundColor: Colors.red,
       ),
     );
@@ -269,7 +270,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Промокоды', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(tr(context, 'Промокоды', 'Промокодтар'), style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: RefreshIndicator(
@@ -280,10 +281,10 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
           await _loadBoltAccount();
         },
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           children: [
             _buildStatusHeader(theme),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             ...['JET', 'YANDEX', 'WHOOSH', 'BOLT'].map((brand) {
               final isClaimed = _hasClaimedToday[brand] ?? false;
               final hasActiveBrand = _activeBrand != null && _activeBrand!.isNotEmpty;
@@ -292,19 +293,19 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
               if (brand == 'BOLT') {
                 final hasAccount = _boltAccount != null;
                 if (_activeBrand != 'BOLT' && !hasAccount) {
-                  return const SizedBox.shrink();
+                  return SizedBox.shrink();
                 }
                 return _buildBoltAccountCard(isDark);
               }
               
               // 1. Если админ не указал бренд, и мы его не брали - скрываем
               if (!hasActiveBrand && !isClaimed) {
-                return const SizedBox.shrink();
+                return SizedBox.shrink();
               }
               
               // 2. Если админ указал ДРУГОЙ бренд, и мы его не брали - скрываем
               if (hasActiveBrand && brand != _activeBrand && !isClaimed) {
-                return const SizedBox.shrink();
+                return SizedBox.shrink();
               }
               
               return _buildSimpleBrandCard(brand, theme, isDark);
@@ -321,7 +322,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     bool alreadyClaimed = hasActiveBrand && (_hasClaimedToday[_activeBrand!] ?? false);
     
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: alreadyClaimed 
             ? Colors.green.withOpacity(0.1)
@@ -345,15 +346,15 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                 ? Colors.green 
                 : (hasActiveBrand ? Colors.orange : Colors.red),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Text(
               alreadyClaimed
-                  ? 'Промокод для $_activeBrand успешно получен!'
+                  ? tr(context, 'Промокод для $_activeBrand успешно получен!', '$_activeBrand үшін промокод сәтті алынды!')
                   : (hasActiveBrand 
-                      ? 'Сегодня работаем с $_activeBrand' 
-                      : 'Промокоды на сегодня не назначены'),
-              style: const TextStyle(fontWeight: FontWeight.bold),
+                      ? tr(context, 'Сегодня работаем с $_activeBrand', 'Бүгін $_activeBrand жұмыс істейміз') 
+                      : tr(context, 'Промокоды на сегодня не назначены', 'Бүгінге промокодтар берілмеген')),
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -368,7 +369,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     final brandColor = _getBrandColor(brand);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: isClaimed 
             ? brandColor.withOpacity(isDark ? 0.15 : 0.05) 
@@ -382,16 +383,16 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            offset: Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         children: [
           ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             leading: Container(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: brandColor.withOpacity(0.2),
                 shape: BoxShape.circle,
@@ -400,21 +401,21 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
             ),
             title: Text(
               brand,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
             subtitle: Text(
               isClaimed 
-                  ? 'ВАШ ПРОМОКОД ПОЛУЧЕН' 
-                  : 'Доступен 1 раз за смену',
+                  ? tr(context, 'ВАШ ПРОМОКОД ПОЛУЧЕН', 'СІЗДІҢ ПРОМОКОД АЛЫНДЫ') 
+                  : tr(context, 'Доступен 1 раз за смену', 'Ауысымда 1 рет қолжетімді'),
               style: TextStyle(
                 color: isClaimed ? Colors.green : Colors.grey,
                 fontWeight: isClaimed ? FontWeight.bold : FontWeight.normal,
               ),
             ),
             trailing: isLoading
-                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
                 : (isClaimed 
-                    ? const Icon(Icons.stars_rounded, color: Colors.green, size: 32)
+                    ? Icon(Icons.stars_rounded, color: Colors.green, size: 32)
                     : (_isShiftActive == true 
                         ? ElevatedButton(
                             onPressed: () => _claimPromo(brand),
@@ -423,30 +424,30 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            child: const Text('ПОЛУЧИТЬ'),
+                            child: Text(tr(context, 'ПОЛУЧИТЬ', 'АЛУ')),
                           )
-                        : const Icon(Icons.lock_outline, size: 24, color: Colors.grey))),
+                        : Icon(Icons.lock_outline, size: 24, color: Colors.grey))),
           ),
           if (isClaimed && codes.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Column(
                 children: [
                   const Divider(height: 24),
-                  const Text(
-                    'СКОПИРУЙТЕ И ИСПОЛЬЗУЙТЕ:',
+                  Text(
+                    tr(context, 'СКОПИРУЙТЕ И ИСПОЛЬЗУЙТЕ:', 'КӨШІРІП АЛЫП ҚОЛДАНЫҢЫЗ:'),
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   if (brand == 'YANDEX' && codes.length >= 2) ...[
-                    _buildLabeledCodeRow(codes[0], '🔴 Бесплатный старт', Colors.red, isDark),
-                    const SizedBox(height: 4),
-                    _buildLabeledCodeRow(codes[1], '🟢 Бесплатные минуты', Colors.green, isDark),
+                    _buildLabeledCodeRow(codes[0], tr(context, '🔴 Бесплатный старт', '🔴 Тегін старт'), Colors.red, isDark),
+                    SizedBox(height: 4),
+                    _buildLabeledCodeRow(codes[1], tr(context, '🟢 Бесплатные минуты', '🟢 Тегін минуттар'), Colors.green, isDark),
                   ] else
                     ...codes.map((code) => _buildProminentCodeRow(code, brandColor, isDark)),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Действует до конца смены',
+                  SizedBox(height: 8),
+                  Text(
+                    tr(context, 'Действует до конца смены', 'Ауысым соңына дейін жарамды'),
                     style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
                   ),
                 ],
@@ -455,17 +456,17 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
           if (_isShiftActive == false && !isClaimed)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.red.withOpacity(0.1),
-                borderRadius: const BorderRadius.only(
+                borderRadius: BorderRadius.only(
                   bottomLeft: Radius.circular(16),
                   bottomRight: Radius.circular(16),
                 ),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
-                  'НУЖНО ОТКРЫТЬ СМЕНУ',
+                  tr(context, 'НУЖНО ОТКРЫТЬ СМЕНУ', 'АУЫСЫМ АШУ КЕРЕК'),
                   style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -477,8 +478,8 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   Widget _buildProminentCodeRow(String code, Color brandColor, bool isDark) {
     return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.only(top: 8),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? Colors.white10 : Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -504,7 +505,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
               Clipboard.setData(ClipboardData(text: code));
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Промокод $code скопирован!'),
+                  content: Text(tr(context, 'Промокод $code скопирован!', '$code промокоды көшірілді!')),
                   backgroundColor: brandColor,
                   behavior: SnackBarBehavior.floating,
                 ),
@@ -518,8 +519,8 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
 
   Widget _buildLabeledCodeRow(String code, String label, Color color, bool isDark) {
     return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.only(top: 8),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? Colors.white10 : Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -537,7 +538,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
               letterSpacing: 1,
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Row(
             children: [
               Expanded(
@@ -558,7 +559,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                   Clipboard.setData(ClipboardData(text: code));
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Промокод $code скопирован!'),
+                      content: Text(tr(context, 'Промокод $code скопирован!', '$code промокоды көшірілді!')),
                       backgroundColor: color,
                       behavior: SnackBarBehavior.floating,
                     ),
@@ -575,9 +576,9 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
   Color _getBrandColor(String brand) {
     switch (brand) {
       case 'JET': return Colors.purple;
-      case 'YANDEX': return const Color(0xFFFFB300);
-      case 'WHOOSH': return const Color(0xFFFFD100);
-      case 'BOLT': return const Color(0xFF32BB78);
+      case 'YANDEX': return Color(0xFFFFB300);
+      case 'WHOOSH': return Color(0xFFFFD100);
+      case 'BOLT': return Color(0xFF32BB78);
       default: return Colors.blue;
     }
   }
@@ -598,7 +599,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
     const brandColor = Color(0xFF32BB78);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: (hasAccount && !isLocked)
             ? brandColor.withOpacity(isDark ? 0.15 : 0.05)
@@ -612,30 +613,30 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            offset: Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         children: [
           ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             leading: Container(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: brandColor.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.bolt, color: brandColor, size: 28),
+              child: Icon(Icons.bolt, color: brandColor, size: 28),
             ),
-            title: const Text(
+            title: Text(
               'BOLT',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
             subtitle: Text(
               isLocked 
-                  ? 'АККАУНТ НАЗНАЧЕН (СКРЫТ)' 
-                  : (hasAccount ? 'АККАУНТ НАЗНАЧЕН' : 'Аккаунт не назначен'),
+                  ? tr(context, 'АККАУНТ НАЗНАЧЕН (СКРЫТ)', 'АККАУНТ БЕРІЛДІ (ЖАСЫРЫН)') 
+                  : (hasAccount ? tr(context, 'АККАУНТ НАЗНАЧЕН', 'АККАУНТ БЕРІЛДІ') : tr(context, 'Аккаунт не назначен', 'Аккаунт тағайындалмаған')),
               style: TextStyle(
                 color: hasAccount ? (isLocked ? Colors.orange : Colors.green) : Colors.grey,
                 fontWeight: hasAccount ? FontWeight.bold : FontWeight.normal,
@@ -643,24 +644,24 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
             ),
             trailing: hasAccount
                 ? (isLocked 
-                    ? const Icon(Icons.lock_clock, color: Colors.orange, size: 32)
-                    : const Icon(Icons.check_circle, color: Colors.green, size: 32))
-                : const Icon(Icons.lock_outline, size: 24, color: Colors.grey),
+                    ? Icon(Icons.lock_clock, color: Colors.orange, size: 32)
+                    : Icon(Icons.check_circle, color: Colors.green, size: 32))
+                : Icon(Icons.lock_outline, size: 24, color: Colors.grey),
           ),
           if (hasAccount && !isLocked) ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Column(
                 children: [
                   const Divider(height: 24),
-                  const Text(
-                    'ДАННЫЕ ДЛЯ ВХОДА:',
+                  Text(
+                    tr(context, 'ДАННЫЕ ДЛЯ ВХОДА:', 'КІРУ ДЕРЕКТЕРІ:'),
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   // Login
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: isDark ? Colors.white10 : Colors.white,
                       borderRadius: BorderRadius.circular(12),
@@ -668,31 +669,31 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.person_outline, color: brandColor, size: 20),
-                        const SizedBox(width: 10),
-                        const Text('Логин: ', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                        Icon(Icons.person_outline, color: brandColor, size: 20),
+                        SizedBox(width: 10),
+                        Text(tr(context, 'Логин: ', 'Логин: '), style: TextStyle(fontSize: 13, color: Colors.grey)),
                         Expanded(
                           child: Text(
                             _boltAccount!['login'] ?? '',
-                            style: const TextStyle(fontFamily: 'monospace', fontSize: 18, fontWeight: FontWeight.w900, color: brandColor, letterSpacing: 1),
+                            style: TextStyle(fontFamily: 'monospace', fontSize: 18, fontWeight: FontWeight.w900, color: brandColor, letterSpacing: 1),
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.copy_rounded, color: brandColor, size: 22),
+                          icon: Icon(Icons.copy_rounded, color: brandColor, size: 22),
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: _boltAccount!['login'] ?? ''));
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Логин скопирован'), backgroundColor: brandColor, behavior: SnackBarBehavior.floating),
+                              SnackBar(content: Text(tr(context, 'Логин скопирован', 'Логин көшірілді')), backgroundColor: brandColor, behavior: SnackBarBehavior.floating),
                             );
                           },
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   // Password
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: isDark ? Colors.white10 : Colors.white,
                       borderRadius: BorderRadius.circular(12),
@@ -700,21 +701,21 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.lock_outline, color: brandColor, size: 20),
-                        const SizedBox(width: 10),
-                        const Text('Пароль: ', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                        Icon(Icons.lock_outline, color: brandColor, size: 20),
+                        SizedBox(width: 10),
+                        Text(tr(context, 'Пароль: ', 'Құпия сөз: '), style: TextStyle(fontSize: 13, color: Colors.grey)),
                         Expanded(
                           child: Text(
                             _boltAccount!['password'] ?? '',
-                            style: const TextStyle(fontFamily: 'monospace', fontSize: 18, fontWeight: FontWeight.w900, color: brandColor, letterSpacing: 1),
+                            style: TextStyle(fontFamily: 'monospace', fontSize: 18, fontWeight: FontWeight.w900, color: brandColor, letterSpacing: 1),
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.copy_rounded, color: brandColor, size: 22),
+                          icon: Icon(Icons.copy_rounded, color: brandColor, size: 22),
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: _boltAccount!['password'] ?? ''));
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Пароль скопирован'), backgroundColor: brandColor, behavior: SnackBarBehavior.floating),
+                              SnackBar(content: Text(tr(context, 'Пароль скопирован', 'Құпия сөз көшірілді')), backgroundColor: brandColor, behavior: SnackBarBehavior.floating),
                             );
                           },
                         ),
@@ -722,10 +723,10 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                     ),
                   ),
                   if (_boltAccount!['description'] != null && (_boltAccount!['description'] as String).isNotEmpty) ...[
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Text(
                       _boltAccount!['description'],
-                      style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey),
+                      style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey),
                     ),
                   ],
                 ],
@@ -734,17 +735,17 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
           ] else if (isLocked)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.red.withOpacity(0.1),
-                borderRadius: const BorderRadius.only(
+                borderRadius: BorderRadius.only(
                   bottomLeft: Radius.circular(16),
                   bottomRight: Radius.circular(16),
                 ),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
-                  'СНАЧАЛА ОТКРОЙТЕ СМЕНУ',
+                  tr(context, 'СНАЧАЛА ОТКРОЙТЕ СМЕНУ', 'АЛДЫМЕН АУЫСЫМДЫ АШЫҢЫЗ'),
                   style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -752,17 +753,17 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
           else
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.orange.withOpacity(0.1),
-                borderRadius: const BorderRadius.only(
+                borderRadius: BorderRadius.only(
                   bottomLeft: Radius.circular(16),
                   bottomRight: Radius.circular(16),
                 ),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
-                  'Обратитесь к администратору',
+                  tr(context, 'Обратитесь к администратору', 'Администраторға хабарласыңыз'),
                   style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:collection/collection.dart';
 import '../../../core/components/calendar_widget.dart';
@@ -36,7 +37,7 @@ class _ReportCardState extends State<ReportCard> {
         List.generate(9, (i) => now.subtract(Duration(days: 4 - i)));
 
     return Container(
-      padding: const EdgeInsets.all(16.0),
+      padding: EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16.0),
@@ -45,7 +46,7 @@ class _ReportCardState extends State<ReportCard> {
             color: Colors.grey.withOpacity(0.15),
             spreadRadius: 1,
             blurRadius: 12,
-            offset: const Offset(0, 6),
+            offset: Offset(0, 6),
           ),
         ],
       ),
@@ -53,12 +54,12 @@ class _ReportCardState extends State<ReportCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildToggleMode(),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               IconButton(
-                icon: const Icon(Icons.refresh, size: 20),
+                icon: Icon(Icons.refresh, size: 20),
                 onPressed: _isRefreshing
                     ? null
                     : () async {
@@ -85,8 +86,8 @@ class _ReportCardState extends State<ReportCard> {
                   backgroundColor: Colors.transparent,
                   color: Colors.green,
                 )
-              : const SizedBox(height: 2),
-          const SizedBox(height: 10),
+              : SizedBox(height: 2),
+          SizedBox(height: 10),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             transitionBuilder: (child, animation) {
@@ -113,7 +114,7 @@ class _ReportCardState extends State<ReportCard> {
             child: GestureDetector(
               onTap: () => setState(() => _currentMode = ReportMode.day),
               child: Padding(
-                padding: const EdgeInsets.all(4.0),
+                padding: EdgeInsets.all(4.0),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInOut,
@@ -143,7 +144,7 @@ class _ReportCardState extends State<ReportCard> {
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
                       ),
-                      child: const Text('День'),
+                      child: Text(tr(context, 'День', 'Күн')),
                     ),
                   ),
                 ),
@@ -154,7 +155,7 @@ class _ReportCardState extends State<ReportCard> {
             child: GestureDetector(
               onTap: () => setState(() => _currentMode = ReportMode.period),
               child: Padding(
-                padding: const EdgeInsets.all(4.0),
+                padding: EdgeInsets.all(4.0),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInOut,
@@ -184,7 +185,7 @@ class _ReportCardState extends State<ReportCard> {
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
                       ),
-                      child: const Text('Период'),
+                      child: Text(tr(context, 'Период', 'Кезең')),
                     ),
                   ),
                 ),
@@ -195,7 +196,7 @@ class _ReportCardState extends State<ReportCard> {
             child: GestureDetector(
               onTap: () => setState(() => _currentMode = ReportMode.bot),
               child: Padding(
-                padding: const EdgeInsets.all(4.0),
+                padding: EdgeInsets.all(4.0),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInOut,
@@ -225,7 +226,7 @@ class _ReportCardState extends State<ReportCard> {
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
                       ),
-                      child: const Text('Бот'),
+                      child: Text(tr(context, 'Бот', 'Бот')),
                     ),
                   ),
                 ),
@@ -253,7 +254,7 @@ class _ReportCardState extends State<ReportCard> {
               selectedDate: provider.selectedDate,
               onDateSelected: provider.selectDate,
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             shiftData != null ? _buildShiftDetails(shiftData) : _buildNoData(),
           ],
         );
@@ -266,7 +267,7 @@ class _ReportCardState extends State<ReportCard> {
 
   Widget _buildShiftDetails(ShiftData data) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -274,27 +275,27 @@ class _ReportCardState extends State<ReportCard> {
           BoxShadow(
             color: Colors.grey.withOpacity(0.1),
             blurRadius: 8,
-            offset: const Offset(0, 4),
+            offset: Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Данные за день',
+          Text(
+            tr(context, 'Данные за день', 'Күндік деректер'),
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: Colors.green,
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           const Divider(height: 1, thickness: 1, color: Colors.grey),
-          InfoRow(label: 'По задачнику ТС', value: data.newTasks.toString()),
-          InfoRow(label: 'Выбранный слот', value: data.selectedSlot),
-          InfoRow(label: 'Время работы', value: data.workedTime),
-          InfoRow(label: 'Период работы', value: data.workPeriod),
+          InfoRow(label: tr(context, 'По задачнику ТС', 'ТС тапсырмасы бойынша'), value: data.newTasks.toString()),
+          InfoRow(label: tr(context, 'Выбранный слот', 'Таңдалған слот'), value: data.selectedSlot),
+          InfoRow(label: tr(context, 'Время работы', 'Жұмыс уақыты'), value: data.workedTime),
+          InfoRow(label: tr(context, 'Период работы', 'Жұмыс кезеңі'), value: data.workPeriod),
         ],
       ),
     );
@@ -303,14 +304,14 @@ class _ReportCardState extends State<ReportCard> {
   Widget _buildNoData() {
     return Container(
       height: 120,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.grey[100],
         borderRadius: BorderRadius.circular(16),
       ),
-      child: const Center(
+      child: Center(
         child: Text(
-          'Данные за этот день отсутствуют',
+          tr(context, 'Данные за этот день отсутствуют', 'Бұл күн үшін деректер жоқ'),
           style: TextStyle(
             color: Colors.grey,
             fontSize: 16,

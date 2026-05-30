@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'dart:ui' as ui;
 import '../../../core/services/advice_service.dart';
 
@@ -15,9 +16,9 @@ class DashboardInterestingThings extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Text(
-            'СОВЕТЫ',
+            tr(context, 'СОВЕТЫ', 'КЕҢЕСТЕР'),
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w900,
@@ -26,7 +27,7 @@ class DashboardInterestingThings extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         _buildTipCard(context, advice),
       ],
     );
@@ -57,11 +58,11 @@ class DashboardInterestingThings extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(20),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: colorScheme.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(16),
@@ -69,38 +70,27 @@ class DashboardInterestingThings extends StatelessWidget {
                   child: Icon(Icons.lightbulb_outline_rounded,
                       color: colorScheme.primary),
                 ),
-                const SizedBox(width: 16),
+                SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Совет дня',
+                        tr(context, 'Совет дня', 'Күн кеңесі'),
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w900,
                           color: colorScheme.onSurface,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       Text(
-                        advice.text,
+                        tr(context, advice.text, advice.translation ?? advice.text),
                         style: TextStyle(
                           fontSize: 13,
                           color: colorScheme.onSurface.withOpacity(0.7),
                         ),
                       ),
-                      if (advice.translation != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          advice.translation!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic,
-                            color: colorScheme.onSurface.withOpacity(0.5),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),

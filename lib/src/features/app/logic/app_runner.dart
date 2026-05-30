@@ -18,6 +18,7 @@ import 'package:permission_handler/permission_handler.dart';
 // Providers
 import 'package:micro_mobility_app/src/core/providers/settings_provider.dart';
 import 'package:micro_mobility_app/src/core/providers/shift_provider.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 
 // Services
 import 'package:micro_mobility_app/src/core/services/api_service.dart';
@@ -51,6 +52,7 @@ final class AppRunner {
         ],
         child: MultiProvider(
           providers: [
+            ChangeNotifierProvider(create: (_) => LanguageProvider()),
             ChangeNotifierProvider(create: (_) => SettingsProvider()),
             ChangeNotifierProvider(
               create: (_) => ShiftProvider(

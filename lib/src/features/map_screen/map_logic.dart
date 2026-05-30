@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_geojson/flutter_map_geojson.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
@@ -83,14 +84,14 @@ class MapLogic {
         properties['name']?.toString() ??
         '';
 
-    // Если это "ГРАНИЦА", рисуем маленькую точку без текста
-    if (label.toUpperCase() == 'ГРАНИЦА') {
+    // Если это tr(context, "ГРАНИЦА", "ШЕКАРА"), рисуем маленькую точку без текста
+    if (label.toUpperCase() == tr(context, 'ГРАНИЦА', 'ШЕКАРА')) {
       return Marker(
         point: point,
         width: 10,
         height: 10,
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: Colors.blue,
             shape: BoxShape.circle,
           ),
@@ -101,10 +102,10 @@ class MapLogic {
     // Специальные иконки для некоторых типов объектов
     IconData? specialIcon;
     Color? iconColor;
-    if (label.contains('Парковка')) {
+    if (label.contains(tr(context, 'Парковка', 'Тұрақ'))) {
       specialIcon = Icons.local_parking_rounded;
       iconColor = Colors.blue;
-    } else if (label.contains('Ремонт')) {
+    } else if (label.contains(tr(context, 'Ремонт', 'Жөндеу'))) {
       specialIcon = Icons.build_rounded;
       iconColor = Colors.orange;
     }
@@ -122,7 +123,7 @@ class MapLogic {
             Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w900,
                 color: Colors.white,
@@ -216,7 +217,7 @@ class MapLogic {
 
       await _loadAndParseGeoJson();
     } catch (e) {
-      _showErrorSnackBar('Ошибка инициализации: $e');
+      _showErrorSnackBar(tr(context, 'Ошибка инициализации: $e', 'Іске қосу қатесі: $e'));
     } finally {
       if (!_disposed) {
         isLoading = false;
@@ -231,7 +232,7 @@ class MapLogic {
   //   }
 
   //   try {
-  //     debugPrint('🔄 Предзагрузка тайлов для офлайн-режима...');
+  //     debugPrint(tr(context, '🔄 Предзагрузка тайлов для офлайн-режима...', '🔄 Оффлайн режимге тайлдарды жүктеу...'));
   //     await tileProvider!.prefetch(
   //       center: currentLocation!,
   //       minZoom: 14,
@@ -239,9 +240,9 @@ class MapLogic {
   //       radius: 25,
   //     );
   //     _tilesPrefetched = true;
-  //     debugPrint('✅ Тайлы успешно закэшированы');
+  //     debugPrint(tr(context, '✅ Тайлы успешно закэшированы', '✅ Тайлдар сәтті кэштелді'));
   //   } catch (e) {
-  //     debugPrint('⚠️ Не удалось предзагрузить тайлы: $e');
+  //     debugPrint(tr(context, '⚠️ Не удалось предзагрузить тайлы: $e', '⚠️ Тайлдарды алдын ала жүктеу мүмкін болмады: $e'));
   //     // Не показываем ошибку пользователю — это фоновая операция
   //   }
   // }
@@ -263,12 +264,12 @@ class MapLogic {
 
       final locations = await _apiService.getLastLocations(token);
 
-      // Исключаем себя из списка "других", если хотим (но на бэкенде это обычно все активные)
+      // Исключаем себя из списка tr(context, "других", "басқа"), если хотим (но на бэкенде это обычно все активные)
       // Для простоты оставим всех, в UI отфильтруем или покажем как есть
       otherScoutsLocations = locations;
       _notify();
     } catch (e) {
-      debugPrint('Ошибка получения локаций команды: $e');
+      debugPrint(tr(context, 'Ошибка получения локаций команды: $e', 'Команда локациясын алу қатесі: $e'));
     }
   }
 
@@ -286,7 +287,7 @@ class MapLogic {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (isManual)
-          _showErrorSnackBar('Включите GPS для определения местоположения');
+          _showErrorSnackBar(tr(context, 'Включите GPS для определения местоположения', 'Орналасқан жерді анықтау үшін GPS қосыңыз'));
         if (isManual) {
           isLocating = false;
           _notify();
@@ -299,7 +300,7 @@ class MapLogic {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           if (isManual)
-            _showErrorSnackBar('Нет разрешения на доступ к геопозиции');
+            _showErrorSnackBar(tr(context, 'Нет разрешения на доступ к геопозиции', 'Геолокацияға рұқсат жоқ'));
           if (isManual) {
             isLocating = false;
             _notify();
@@ -337,8 +338,8 @@ class MapLogic {
         _isFirstLocationFix = false;
       }
     } catch (e) {
-      debugPrint('Ошибка геолокации: $e');
-      if (isManual) _showErrorSnackBar('Не удалось определить местоположение');
+      debugPrint(tr(context, 'Ошибка геолокации: $e', 'Геолокация қатесі: $e'));
+      if (isManual) _showErrorSnackBar(tr(context, 'Не удалось определить местоположение', 'Орналасқан жерді анықтау мүмкін болмады'));
     } finally {
       if (isManual && !_disposed) {
         isLocating = false;
@@ -356,7 +357,7 @@ class MapLogic {
       cachedJson = await storage.read(key: _MAPS_CACHE_KEY);
       cachedTimestampStr = await storage.read(key: _MAPS_CACHE_TIMESTAMP_KEY);
     } catch (e) {
-      debugPrint('Ошибка чтения кеша карт: $e');
+      debugPrint(tr(context, 'Ошибка чтения кеша карт: $e', 'Карта кэшін оқу қатесі: $e'));
     }
 
     final cachedValid = _isCacheValid(cachedJson, cachedTimestampStr, now);
@@ -369,7 +370,7 @@ class MapLogic {
 
     try {
       final token = await storage.read(key: 'jwt_token');
-      if (token == null) throw Exception('Токен отсутствует');
+      if (token == null) throw Exception(tr(context, 'Токен отсутствует', 'Токен жоқ'));
 
       final response = await _authenticatedGet(AppConfig.adminMapsUrl, token);
       if (response.statusCode == 200) {
@@ -398,7 +399,7 @@ class MapLogic {
         _applyFirstMapIfNoneSelected();
         _notify();
       } else {
-        _showErrorSnackBar('Ошибка загрузки списка карт: $e');
+        _showErrorSnackBar(tr(context, 'Ошибка загрузки списка карт: $e', 'Карталар тізімін жүктеу қатесі: $e'));
       }
     }
   }
@@ -417,7 +418,7 @@ class MapLogic {
         selectedMapId = int.tryParse(savedId) ?? -1;
       }
     } catch (e) {
-      debugPrint('Ошибка загрузки сохраненного ID карты: $e');
+      debugPrint(tr(context, 'Ошибка загрузки сохраненного ID карты: $e', 'Сақталған карта ID жүктеу қатесі: $e'));
     }
   }
 
@@ -442,19 +443,19 @@ class MapLogic {
           selectedMapId = firstMap['id'] as int;
           geoJsonString = await _loadGeoJsonFromServer(selectedMapId);
         } else {
-          throw Exception('Нет доступных карт');
+          throw Exception(tr(context, 'Нет доступных карт', 'Қолжетімді карталар жоқ'));
         }
       } else {
-        throw Exception('Нет доступных карт');
+        throw Exception(tr(context, 'Нет доступных карт', 'Қолжетімді карталар жоқ'));
       }
 
       _polygonProperties.clear();
       geoJsonParser.parseGeoJsonAsString(geoJsonString);
       _notify();
     } catch (e) {
-      debugPrint('Ошибка парсинга GeoJSON: $e');
+      debugPrint(tr(context, 'Ошибка парсинга GeoJSON: $e', 'GeoJSON оқу қатесі: $e'));
       _showErrorSnackBar(
-          'Не удалось загрузить зоны для этой карты. Попробуйте обновить.');
+          tr(context, 'Не удалось загрузить зоны для этой карты. Попробуйте обновить.', 'Бұл картаның аймақтарын жүктеу мүмкін болмады. Жаңартуды көріңіз.'));
     }
   }
 
@@ -463,29 +464,29 @@ class MapLogic {
     if (await localFile.exists()) {
       final content = await localFile.readAsString();
       if (content.isNotEmpty && content.trim().startsWith('{')) {
-        debugPrint('✅ Загружено из офлайн-кеша: ${localFile.path}');
+        debugPrint(tr(context, '✅ Загружено из офлайн-кеша: ${localFile.path}', '✅ Оффлайн кэштен жүктелді: ${localFile.path}'));
         isMapLoadedOffline = true;
         return content;
       } else {
         debugPrint(
-            '⚠️ Кэшированный файл пуст или не в формате JSON. Удаление.');
+            tr(context, '⚠️ Кэшированный файл пуст или не в формате JSON. Удаление.', '⚠️ Кэш файлы бос немесе JSON емес. Жойылуда.'));
         await localFile.delete();
       }
     }
 
     final token = await storage.read(key: 'jwt_token');
-    if (token == null) throw Exception('Нет токена');
+    if (token == null) throw Exception(tr(context, 'Нет токена', 'Токен жоқ'));
 
     final mapMetaResponse =
         await _authenticatedGet(AppConfig.getMapByIdUrl(mapId), token);
     if (mapMetaResponse.statusCode != 200) {
       throw Exception(
-          'Не удалось получить метаданные карты (${mapMetaResponse.statusCode})');
+          tr(context, 'Не удалось получить метаданные карты (${mapMetaResponse.statusCode})', 'Карта метадеректерін алу мүмкін болмады (${mapMetaResponse.statusCode})'));
     }
 
     final meta = jsonDecode(mapMetaResponse.body) as Map<String, dynamic>;
     if (!meta.containsKey('file_name')) {
-      throw Exception('Неверный формат метаданных');
+      throw Exception(tr(context, 'Неверный формат метаданных', 'Метадеректер пішімі қате'));
     }
 
     final fileUrl = AppConfig.getMapFileUrl(meta['file_name'] as String);
@@ -496,7 +497,7 @@ class MapLogic {
       isMapLoadedOffline = false;
       return fileResponse.body;
     } else {
-      throw Exception('Пустой или ошибочный GeoJSON-файл');
+      throw Exception(tr(context, 'Пустой или ошибочный GeoJSON-файл', 'GeoJSON файлы бос немесе қате'));
     }
   }
 
@@ -519,7 +520,7 @@ class MapLogic {
     final file = await _getLocalMapFile(mapId);
     await file.create(recursive: true);
     await file.writeAsString(content, flush: true);
-    debugPrint('✅ Карта $mapId сохранена в: ${file.path}');
+    debugPrint(tr(context, '✅ Карта $mapId сохранена в: ${file.path}', '✅ $mapId картасы сақталды: ${file.path}'));
   }
 
   Future<void> onMapChanged(int newMapId) async {
@@ -535,7 +536,7 @@ class MapLogic {
       final geoJsonString = await _loadGeoJsonFromServer(newMapId);
       geoJsonParser.parseGeoJsonAsString(geoJsonString);
     } catch (e) {
-      _showErrorSnackBar('Ошибка загрузки карты: $e');
+      _showErrorSnackBar(tr(context, 'Ошибка загрузки карты: $e', 'Картаны жүктеу қатесі: $e'));
     } finally {
       if (!_disposed) {
         isLoading = false;
@@ -549,20 +550,20 @@ class MapLogic {
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) {
-        _showErrorSnackBar('Не авторизован');
+        _showErrorSnackBar(tr(context, 'Не авторизован', 'Авторизациядан өтпеген'));
         return;
       }
 
       final mapMetaResponse =
           await _authenticatedGet(AppConfig.getMapByIdUrl(mapId), token);
       if (mapMetaResponse.statusCode != 200) {
-        _showErrorSnackBar('Не удалось получить данные карты');
+        _showErrorSnackBar(tr(context, 'Не удалось получить данные карты', 'Карта деректерін алу мүмкін болмады'));
         return;
       }
 
       final meta = jsonDecode(mapMetaResponse.body) as Map<String, dynamic>;
       if (!meta.containsKey('file_name')) {
-        _showErrorSnackBar('Неверный формат данных карты');
+        _showErrorSnackBar(tr(context, 'Неверный формат данных карты', 'Карта деректерінің пішімі қате'));
         return;
       }
 
@@ -572,13 +573,13 @@ class MapLogic {
       if (fileResponse.statusCode == 200 && fileResponse.body.isNotEmpty) {
         await _saveMapFileLocally(mapId, fileResponse.body);
         _showSuccessSnackBar(
-            'Карта успешно сохранена для оффлайн использования');
+            tr(context, 'Карта успешно сохранена для оффлайн использования', 'Карта оффлайн режимі үшін сәтті сақталды'));
       } else {
-        _showErrorSnackBar('Пустой или повреждённый GeoJSON-файл');
+        _showErrorSnackBar(tr(context, 'Пустой или повреждённый GeoJSON-файл', 'Бос немесе зақымдалған GeoJSON файлы'));
       }
     } catch (e) {
-      debugPrint('Ошибка при сохранении карты: $e');
-      _showErrorSnackBar('Ошибка сохранения карты: $e');
+      debugPrint(tr(context, 'Ошибка при сохранении карты: $e', 'Картаны сақтау кезіндегі қате: $e'));
+      _showErrorSnackBar(tr(context, 'Ошибка сохранения карты: $e', 'Картаны сақтау қатесі: $e'));
     }
   }
 
@@ -591,8 +592,8 @@ class MapLogic {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
             return Container(
-              padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
                 color: Color(0xFF1A1A1A),
                 borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
               ),
@@ -610,18 +611,18 @@ class MapLogic {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Настройки слоев',
+                  SizedBox(height: 24),
+                  Text(
+                    tr(context, 'Настройки слоев', 'Қабаттар баптауы'),
                     style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: Colors.white),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   _buildSwitchTile(
-                    title: 'Рабочие зоны',
-                    subtitle: 'Красные зоны',
+                    title: tr(context, 'Рабочие зоны', 'Жұмыс аймақтары'),
+                    subtitle: tr(context, 'Красные зоны', 'Қызыл аймақтар'),
                     value: showRestrictedZones,
                     color: Colors.red.withOpacity(0.6),
                     onChanged: (v) {
@@ -631,8 +632,8 @@ class MapLogic {
                     },
                   ),
                   _buildSwitchTile(
-                    title: 'Зоны парковки',
-                    subtitle: 'Розовые зоны',
+                    title: tr(context, 'Зоны парковки', 'Тұрақ аймақтары'),
+                    subtitle: tr(context, 'Розовые зоны', 'Қызғылт аймақтар'),
                     value: showParkingZones,
                     color: Colors.pink.withOpacity(0.6),
                     onChanged: (v) {
@@ -642,8 +643,8 @@ class MapLogic {
                     },
                   ),
                   _buildSwitchTile(
-                    title: 'Ограничения скорости',
-                    subtitle: 'Зеленые и желтые зоны',
+                    title: tr(context, 'Ограничения скорости', 'Жылдамдық шектеулері'),
+                    subtitle: tr(context, 'Зеленые и желтые зоны', 'Жасыл және сары аймақтар'),
                     value: showSpeedLimitZones,
                     gradient: const LinearGradient(
                         colors: [Colors.green, Colors.yellow]),
@@ -654,8 +655,8 @@ class MapLogic {
                     },
                   ),
                   _buildSwitchTile(
-                    title: 'Границы',
-                    subtitle: 'Синие линии',
+                    title: tr(context, 'Границы', 'Шекаралар'),
+                    subtitle: tr(context, 'Синие линии', 'Көк сызықтар'),
                     value: showBoundaries,
                     color: Colors.blue,
                     height: 4,
@@ -685,10 +686,10 @@ class MapLogic {
   }) {
     return SwitchListTile(
       title: Text(title,
-          style: const TextStyle(
+          style: TextStyle(
               color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
       subtitle: Text(subtitle,
-          style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          style: TextStyle(color: Colors.white54, fontSize: 12)),
       value: value,
       contentPadding: EdgeInsets.zero,
       onChanged: onChanged,
@@ -741,7 +742,7 @@ class MapLogic {
         if (i < _polygonProperties.length) {
           return _polygonProperties[i];
         }
-        return {'description': 'Зона без описания'};
+        return {'description': tr(context, 'Зона без описания', 'Сипаттамасы жоқ аймақ')};
       }
     }
     return null;

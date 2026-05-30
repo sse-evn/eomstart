@@ -1,5 +1,6 @@
 // // lib/screens/profile_screen.dart
 // import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 // import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 // import 'package:flutter_svg/flutter_svg.dart';
 // import 'package:micro_mobility_app/src/core/services/api_service.dart';
@@ -37,7 +38,7 @@
 //   Future<Map<String, dynamic>> _loadProfile() async {
 //     try {
 //       final token = await _storage.read(key: 'jwt_token');
-//       if (token == null) throw Exception('Токен не найден');
+//       if (token == null) throw Exception(tr(context, 'Токен не найден', 'Токен табылмады'));
 //       final profile = await _apiService.getUserProfile(token);
 //       // Сохраняем роль для UI
 //       final role = (profile['role'] ?? 'user').toString().toLowerCase();
@@ -51,7 +52,7 @@
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Ошибка: $e'),
+//             content: Text(tr(context, 'Ошибка: $e', 'Қате: $e')),
 //             backgroundColor: Colors.red,
 //             behavior: SnackBarBehavior.floating,
 //           ),
@@ -86,8 +87,8 @@
 //     } catch (e) {
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
-//           const SnackBar(
-//             content: Text('Ошибка выхода'),
+//           SnackBar(
+//             content: Text(tr(context, 'Ошибка выхода', 'Шығу қатесі')),
 //             backgroundColor: Colors.red,
 //             behavior: SnackBarBehavior.floating,
 //           ),
@@ -117,8 +118,8 @@
 //         _showUpdateDialog(currentVersion);
 //       } else if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
-//           const SnackBar(
-//             content: Text('У вас установлена последняя версия'),
+//           SnackBar(
+//             content: Text(tr(context, 'У вас установлена последняя версия', 'Сізде соңғы нұсқа орнатылған')),
 //             backgroundColor: Colors.green,
 //             behavior: SnackBarBehavior.floating,
 //           ),
@@ -128,7 +129,7 @@
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Ошибка проверки обновлений: $e'),
+//             content: Text(tr(context, 'Ошибка проверки обновлений: $e', 'Жаңартуларды тексеру қатесі: $e')),
 //             backgroundColor: Colors.orange,
 //             behavior: SnackBarBehavior.floating,
 //           ),
@@ -155,7 +156,7 @@
 //         // return response['has_update'] == true;
 //       }
 //     } catch (e) {
-//       debugPrint('Ошибка проверки версии: $e');
+//       debugPrint(tr(context, 'Ошибка проверки версии: $e', 'Нұсқаны тексеру қатесі: $e'));
 //     }
 //     return false; // Пока без автоматической проверки
 //   }
@@ -166,13 +167,13 @@
 //       context: context,
 //       builder: (BuildContext context) {
 //         return AlertDialog(
-//           title: const Text('Доступно обновление'),
-//           content: const Text(
-//               'Доступна новая версия приложения. Рекомендуем обновить для получения последних улучшений и исправлений.'),
+//           title: Text(tr(context, 'Доступно обновление', 'Жаңарту қолжетімді')),
+//           content: Text(
+//               tr(context, 'Доступна новая версия приложения. Рекомендуем обновить для получения последних улучшений и исправлений.', 'Қосымшаның жаңа нұсқасы қолжетімді. Соңғы өзгерістерді алу үшін жаңартуды ұсынамыз.')),
 //           actions: [
 //             TextButton(
 //               onPressed: () => Navigator.of(context).pop(),
-//               child: const Text('Позже'),
+//               child: Text(tr(context, 'Позже', 'Кейінірек')),
 //             ),
 //             ElevatedButton(
 //               onPressed: () {
@@ -182,7 +183,7 @@
 //               style: ElevatedButton.styleFrom(
 //                 backgroundColor: Colors.green[700],
 //               ),
-//               child: const Text('Обновить'),
+//               child: Text(tr(context, 'Обновить', 'Жаңарту')),
 //             ),
 //           ],
 //         );
@@ -204,13 +205,13 @@
 //       if (await canLaunchUrl(Uri.parse(downloadUrl))) {
 //         await launchUrl(Uri.parse(downloadUrl));
 //       } else {
-//         throw 'Не удалось открыть ссылку для загрузки';
+//         throw tr(context, 'Не удалось открыть ссылку для загрузки', 'Жүктеу сілтемесін ашу мүмкін болмады');
 //       }
 //     } catch (e) {
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Ошибка загрузки обновления: $e'),
+//             content: Text(tr(context, 'Ошибка загрузки обновления: $e', 'Жаңартуды жүктеу қатесі: $e')),
 //             backgroundColor: Colors.red,
 //             behavior: SnackBarBehavior.floating,
 //           ),
@@ -223,7 +224,7 @@
 //   Widget build(BuildContext context) {
 //     return Scaffold(
 //       appBar: AppBar(
-//         title: const Text('Профиль'),
+//         title: Text('Профиль'),
 //         centerTitle: true,
 //         backgroundColor: Colors.green[700],
 //         automaticallyImplyLeading: false,
@@ -233,7 +234,7 @@
 //         child: LayoutBuilder(
 //           builder: (context, constraints) {
 //             return SingleChildScrollView(
-//               physics: const AlwaysScrollableScrollPhysics(),
+//               physics: AlwaysScrollableScrollPhysics(),
 //               child: ConstrainedBox(
 //                 constraints: BoxConstraints(
 //                   minHeight: constraints.maxHeight,
@@ -257,14 +258,14 @@
 //                         return _ProfileHeader(user: snapshot.data!);
 //                       },
 //                     ),
-//                     const SizedBox(height: 24),
+//                     SizedBox(height: 24),
 //                     // === Мои задания (только для скаутов) ===
 //                     // 4. Добавляем новый пункт меню, видимый только для скаутов
 //                     // if (_userRole == 'scout') ...[
-//                     //   _buildSectionHeader('Задания'),
+//                     //   _buildSectionHeader(tr(context, 'Задания', 'Тапсырмалар')),
 //                     //   _SettingsItem(
 //                     //     icon: Icons.assignment, // Иконка заданий
-//                     //     title: 'Мои задания',
+//                     //     title: tr(context, 'Мои задания', 'Менің тапсырмаларым'),
 //                     //     // Переход к экрану заданий
 //                     //     onTap: () {
 //                     //       Navigator.push(
@@ -283,11 +284,11 @@
 //                     // === Админ-панель (для superadmin, coordinator, supervisor) ===
 //                     if (['superadmin', 'coordinator', 'supervisor']
 //                         .contains(_userRole)) ...[
-//                       _buildSectionHeader('Админ'),
+//                       _buildSectionHeader(tr(context, 'Админ', 'Админ')),
                       
 //                       _SettingsItem(
 //                         icon: Icons.admin_panel_settings,
-//                         title: 'Админ-панель',
+//                         title: tr(context, 'Админ-панель', 'Админ-панель'),
 //                         route: '/admin', // Убедись, что маршрут существует
 //                       ),
 //                     ],
@@ -295,24 +296,24 @@
 //                     const Divider(color: Colors.grey,),
 
 //                     // === Настройки ===
-//                     _buildSectionHeader('Настройки'),
+//                     _buildSectionHeader(tr(context, 'Настройки', 'Баптаулар')),
 //                     _SettingsItem(
 //                       icon: Icons.settings,
-//                       title: 'Настройки',
+//                       title: tr(context, 'Настройки', 'Баптаулар'),
 //                       route:
 //                           '/settings', // Убедитесь, что маршрут существует или реализуйте onTap
 //                     ),
                     
 //                     const Divider(color: Colors.grey,),
 //                     // === Обновление приложения ===
-//                     _buildSectionHeader('Приложение'),
+//                     _buildSectionHeader(tr(context, 'Приложение', 'Қосымша')),
 //                     _SettingsItem(
 //                       icon: _isCheckingForUpdates
 //                           ? Icons.downloading
 //                           : Icons.system_update,
 //                       title: _isCheckingForUpdates
-//                           ? 'Проверка обновлений...'
-//                           : 'Проверить обновления',
+//                           ? tr(context, 'Проверка обновлений...', 'Жаңартуларды тексеру...')
+//                           : tr(context, 'Проверить обновления', 'Жаңартуларды тексеру'),
 //                       onTap: _checkForUpdates,
 //                       color:
 //                           _isCheckingForUpdates ? Colors.orange : Colors.blue,
@@ -320,7 +321,7 @@
       
 //                     _SettingsItem(
 //                       icon: Icons.info,
-//                       title: 'О приложении',
+//                       title: tr(context, 'О приложении', 'Қосымша туралы'),
 //                       route:
 //                           '/about', // Убедитесь, что маршрут существует или реализуйте onTap
 //                     ),
@@ -328,11 +329,11 @@
 //                     const Divider(color: Colors.grey,),
 //                     _SettingsItem(
 //                       icon: Icons.logout,
-//                       title: 'Выйти',
+//                       title: tr(context, 'Выйти', 'Шығу'),
 //                       color: Colors.red,
 //                       onTap: _logout,
 //                     ),
-//                     const SizedBox(height: 32),
+//                     SizedBox(height: 32),
 //                   ],
 //                 ),
 //               ),
@@ -345,7 +346,7 @@
 
 //   Widget _buildSectionHeader(String title) {
 //     return Padding(
-//       padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+//       padding: EdgeInsets.fromLTRB(24, 24, 24, 16),
 //       child: Text(
 //         title,
 //         style: TextStyle(
@@ -371,11 +372,11 @@
 //     final role = _safeString(user['role']).toLowerCase();
 //     final fullName = (lastName.isNotEmpty || firstName.isNotEmpty)
 //         ? '$lastName $firstName'.trim()
-//         : (username.isNotEmpty ? username : 'Пользователь');
+//         : (username.isNotEmpty ? username : tr(context, 'Пользователь', 'Қолданушы'));
 //     final avatarUrl = _safeString(user['avatarUrl']);
 //     return Container(
 //       width: double.infinity,
-//       padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+//       padding: EdgeInsets.symmetric(vertical: 40, horizontal: 24),
 //       decoration: BoxDecoration(
 //         gradient: LinearGradient(
 //           begin: Alignment.topLeft,
@@ -385,7 +386,7 @@
 //             Colors.blueGrey,
 //           ],
 //         ),
-//         borderRadius: const BorderRadius.only(
+//         borderRadius: BorderRadius.only(
 //           bottomLeft: Radius.circular(30),
 //           bottomRight: Radius.circular(30),
 //         ),
@@ -394,7 +395,7 @@
 //             color: Colors.grey.withOpacity(0.3),
 //             spreadRadius: 2,
 //             blurRadius: 8,
-//             offset: const Offset(0, 3),
+//             offset: Offset(0, 3),
 //           ),
 //         ],
 //       ),
@@ -409,26 +410,26 @@
 //                 ? SvgPicture.asset('assets/images/no_avatar.svg')
 //                 : null,
 //           ),
-//           const SizedBox(height: 20),
+//           SizedBox(height: 20),
 //           Text(
 //             fullName,
 //             textAlign: TextAlign.center,
-//             style: const TextStyle(
+//             style: TextStyle(
 //               fontSize: 26,
 //               fontWeight: FontWeight.bold,
 //               color: Colors.white,
 //             ),
 //           ),
-//           const SizedBox(height: 8),
+//           SizedBox(height: 8),
 //           Container(
-//             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+//             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
 //             decoration: BoxDecoration(
 //               color: Colors.white.withOpacity(0.2),
 //               borderRadius: BorderRadius.circular(20),
 //             ),
 //             child: Text(
 //               _formatRole(role),
-//               style: const TextStyle(
+//               style: TextStyle(
 //                 fontSize: 16,
 //                 color: Colors.white,
 //                 fontWeight: FontWeight.w500,
@@ -447,11 +448,11 @@
 
 //   String _formatRole(String role) {
 //     return {
-//           'user': 'Пользователь',
-//           'scout': 'Скаут',
-//           'supervisor': 'Супервайзер',
-//           'coordinator': 'Координатор',
-//           'superadmin': 'Суперадмин',
+//           'user': tr(context, 'Пользователь', 'Қолданушы'),
+//           'scout': tr(context, 'Скаут', 'Скаут'),
+//           'supervisor': tr(context, 'Супервайзер', 'Супервайзер'),
+//           'coordinator': tr(context, 'Координатор', 'Координатор'),
+//           'superadmin': tr(context, 'Суперадмин', 'Суперадмин'),
 //         }[role] ??
 //         role.toUpperCase();
 //   }
@@ -465,7 +466,7 @@
 //   Widget build(BuildContext context) {
 //     return Container(
 //       width: double.infinity,
-//       padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+//       padding: EdgeInsets.symmetric(vertical: 40, horizontal: 24),
 //       decoration: BoxDecoration(
 //         gradient: LinearGradient(
 //           begin: Alignment.topLeft,
@@ -475,7 +476,7 @@
 //             Colors.green[600]!.withOpacity(0.5),
 //           ],
 //         ),
-//         borderRadius: const BorderRadius.only(
+//         borderRadius: BorderRadius.only(
 //           bottomLeft: Radius.circular(30),
 //           bottomRight: Radius.circular(30),
 //         ),
@@ -489,13 +490,13 @@
 //               color: Colors.white.withOpacity(0.3),
 //               shape: BoxShape.circle,
 //             ),
-//             child: const Icon(
+//             child: Icon(
 //               Icons.person,
 //               size: 60,
 //               color: Colors.white,
 //             ),
 //           ),
-//           const SizedBox(height: 20),
+//           SizedBox(height: 20),
 //           Container(
 //             width: 200,
 //             height: 28,
@@ -504,7 +505,7 @@
 //               borderRadius: BorderRadius.circular(14),
 //             ),
 //           ),
-//           const SizedBox(height: 12),
+//           SizedBox(height: 12),
 //           Container(
 //             width: 120,
 //             height: 24,
@@ -527,10 +528,10 @@
 //   Widget build(BuildContext context) {
 //     return Container(
 //       width: double.infinity,
-//       padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+//       padding: EdgeInsets.symmetric(vertical: 60, horizontal: 24),
 //       decoration: BoxDecoration(
 //         color: Colors.red.withOpacity(0.1),
-//         borderRadius: const BorderRadius.only(
+//         borderRadius: BorderRadius.only(
 //           bottomLeft: Radius.circular(30),
 //           bottomRight: Radius.circular(30),
 //         ),
@@ -538,20 +539,20 @@
 //       child: Column(
 //         children: [
 //           Container(
-//             padding: const EdgeInsets.all(20),
-//             decoration: const BoxDecoration(
+//             padding: EdgeInsets.all(20),
+//             decoration: BoxDecoration(
 //               color: Colors.red,
 //               shape: BoxShape.circle,
 //             ),
-//             child: const Icon(
+//             child: Icon(
 //               Icons.error,
 //               color: Colors.white,
 //               size: 48,
 //             ),
 //           ),
-//           const SizedBox(height: 16),
-//           const Text(
-//             'Не удалось загрузить профиль',
+//           SizedBox(height: 16),
+//           Text(
+//             tr(context, 'Не удалось загрузить профиль', 'Профильді жүктеу мүмкін болмады'),
 //             style: TextStyle(
 //               color: Colors.red,
 //               fontWeight: FontWeight.bold,
@@ -559,12 +560,12 @@
 //             ),
 //             textAlign: TextAlign.center,
 //           ),
-//           const SizedBox(height: 16),
+//           SizedBox(height: 16),
 //           ElevatedButton(
 //             onPressed: () {
 //               ScaffoldMessenger.of(context).showSnackBar(
-//                 const SnackBar(
-//                   content: Text('Повторяем...'),
+//                 SnackBar(
+//                   content: Text(tr(context, 'Повторяем...', 'Қайталаудамыз...')),
 //                   backgroundColor: Colors.green,
 //                   behavior: SnackBarBehavior.floating,
 //                 ),
@@ -574,7 +575,7 @@
 //               backgroundColor: Colors.red,
 //               foregroundColor: Colors.white,
 //             ),
-//             child: const Text('Повторить'),
+//             child: Text('Повторить'),
 //           ),
 //         ],
 //       ),
@@ -613,11 +614,11 @@
 //                   }
 //                 : null),
 //         child: Padding(
-//           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+//           padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
 //           child: Row(
 //             children: [
 //               Container(
-//                 padding: const EdgeInsets.all(12),
+//                 padding: EdgeInsets.all(12),
 //                 decoration: BoxDecoration(
 //                   color: (color ?? Colors.green[700]!).withOpacity(0.1),
 //                   borderRadius: BorderRadius.circular(12),
@@ -627,7 +628,7 @@
 //                   color: color ?? Colors.green[700],
 //                 ),
 //               ),
-//               const SizedBox(width: 16),
+//               SizedBox(width: 16),
 //               Expanded(
 //                 child: Text(
 //                   title,

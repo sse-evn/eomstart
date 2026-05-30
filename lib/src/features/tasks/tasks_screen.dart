@@ -78,7 +78,7 @@
 //   Widget build(BuildContext context) {
 //     return Scaffold(
 //       appBar: AppBar(
-//         title: const Text('Мои задания'),
+//         title: Text('Мои задания'),
 //         centerTitle: true,
 //         backgroundColor: Colors.green[700],
 //         // Опционально: убрать кнопку "Назад", если это главный экран для этой роли
@@ -89,7 +89,7 @@
 //         child: LayoutBuilder(
 //           builder: (context, constraints) {
 //             return SingleChildScrollView(
-//               physics: const AlwaysScrollableScrollPhysics(),
+//               physics: AlwaysScrollableScrollPhysics(),
 //               child: ConstrainedBox(
 //                 constraints: BoxConstraints(
 //                   minHeight: constraints.maxHeight,
@@ -100,7 +100,7 @@
 //                     // === Заголовок ===
 //                     _buildHeader(),
 
-//                     const SizedBox(height: 24),
+//                     SizedBox(height: 24),
 
 //                     // === Основной контент ===
 //                     if (_isLoading) ...[
@@ -113,7 +113,7 @@
 //                       _buildTasksList(),
 //                     ],
 
-//                     const SizedBox(height: 32),
+//                     SizedBox(height: 32),
 //                   ],
 //                 ),
 //               ),
@@ -127,7 +127,7 @@
 //   Widget _buildHeader() {
 //     return Container(
 //       width: double.infinity,
-//       padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 24),
+//       padding: EdgeInsets.symmetric(vertical: 30, horizontal: 24),
 //       decoration: BoxDecoration(
 //         gradient: LinearGradient(
 //           begin: Alignment.topLeft,
@@ -137,7 +137,7 @@
 //             Colors.green[600]!,
 //           ],
 //         ),
-//         borderRadius: const BorderRadius.only(
+//         borderRadius: BorderRadius.only(
 //           bottomLeft: Radius.circular(30),
 //           bottomRight: Radius.circular(30),
 //         ),
@@ -146,11 +146,11 @@
 //             color: Colors.grey.withOpacity(0.3),
 //             spreadRadius: 2,
 //             blurRadius: 8,
-//             offset: const Offset(0, 3),
+//             offset: Offset(0, 3),
 //           ),
 //         ],
 //       ),
-//       child: const Column(
+//       child: Column(
 //         children: [
 //           Icon(
 //             Icons.assignment,
@@ -182,12 +182,12 @@
 
 //   Widget _buildTasksList() {
 //     return Padding(
-//       padding: const EdgeInsets.symmetric(horizontal: 16),
+//       padding: EdgeInsets.symmetric(horizontal: 16),
 //       child: ListView.builder(
 //         shrinkWrap:
 //             true, // Важно для использования внутри SingleChildScrollView
 //         physics:
-//             const NeverScrollableScrollPhysics(), // Отключаем прокрутку самого ListView
+//             NeverScrollableScrollPhysics(), // Отключаем прокрутку самого ListView
 //         itemCount: _myTasks.length,
 //         itemBuilder: (context, index) {
 //           final task = _myTasks[index];
@@ -205,7 +205,7 @@
 
 //   @override
 //   Widget build(BuildContext context) {
-//     return const Padding(
+//     return Padding(
 //       padding: EdgeInsets.all(50),
 //       child: Center(
 //         child: Column(
@@ -234,10 +234,10 @@
 //   Widget build(BuildContext context) {
 //     return Container(
 //       width: double.infinity,
-//       padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+//       padding: EdgeInsets.symmetric(vertical: 60, horizontal: 24),
 //       decoration: BoxDecoration(
 //         color: Colors.red.withOpacity(0.1),
-//         borderRadius: const BorderRadius.only(
+//         borderRadius: BorderRadius.only(
 //           bottomLeft: Radius.circular(30),
 //           bottomRight: Radius.circular(30),
 //         ),
@@ -245,19 +245,19 @@
 //       child: Column(
 //         children: [
 //           Container(
-//             padding: const EdgeInsets.all(20),
-//             decoration: const BoxDecoration(
+//             padding: EdgeInsets.all(20),
+//             decoration: BoxDecoration(
 //               color: Colors.red,
 //               shape: BoxShape.circle,
 //             ),
-//             child: const Icon(
+//             child: Icon(
 //               Icons.error,
 //               color: Colors.white,
 //               size: 48,
 //             ),
 //           ),
-//           const SizedBox(height: 16),
-//           const Text(
+//           SizedBox(height: 16),
+//           Text(
 //             'Ошибка загрузки',
 //             style: TextStyle(
 //               color: Colors.red,
@@ -266,11 +266,11 @@
 //             ),
 //             textAlign: TextAlign.center,
 //           ),
-//           const SizedBox(height: 8),
+//           SizedBox(height: 8),
 //           Text(
 //             message,
 //             textAlign: TextAlign.center,
-//             style: const TextStyle(
+//             style: TextStyle(
 //               color: Colors.red,
 //               fontSize: 14,
 //             ),
@@ -287,7 +287,7 @@
 //   @override
 //   Widget build(BuildContext context) {
 //     return Padding(
-//       padding: const EdgeInsets.all(32),
+//       padding: EdgeInsets.all(32),
 //       child: Column(
 //         mainAxisAlignment: MainAxisAlignment
 //             .center, // Центрируем по вертикали внутри своего пространства
@@ -297,8 +297,8 @@
 //             size: 80,
 //             color: Colors.grey[400],
 //           ),
-//           const SizedBox(height: 20),
-//           const Text(
+//           SizedBox(height: 20),
+//           Text(
 //             'Нет заданий',
 //             style: TextStyle(
 //               fontSize: 22,
@@ -306,8 +306,8 @@
 //               color: Colors.grey,
 //             ),
 //           ),
-//           const SizedBox(height: 10),
-//           const Text(
+//           SizedBox(height: 10),
+//           Text(
 //             'Вам пока не назначено ни одного задания.',
 //             textAlign: TextAlign.center,
 //             style: TextStyle(
@@ -340,13 +340,13 @@
 //     final createdBy = task['created_by'] as String?;
 
 //     return Card(
-//       margin: const EdgeInsets.only(bottom: 20),
+//       margin: EdgeInsets.only(bottom: 20),
 //       elevation: 4,
 //       shape: RoundedRectangleBorder(
 //         borderRadius: BorderRadius.circular(16),
 //       ),
 //       child: Padding(
-//         padding: const EdgeInsets.all(20),
+//         padding: EdgeInsets.all(20),
 //         child: Column(
 //           crossAxisAlignment: CrossAxisAlignment.start,
 //           children: [
@@ -357,16 +357,16 @@
 //                 Expanded(
 //                   child: Text(
 //                     title,
-//                     style: const TextStyle(
+//                     style: TextStyle(
 //                       fontSize: 20,
 //                       fontWeight: FontWeight.bold,
 //                     ),
 //                   ),
 //                 ),
-//                 const SizedBox(width: 12),
+//                 SizedBox(width: 12),
 //                 Container(
 //                   padding:
-//                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+//                       EdgeInsets.symmetric(horizontal: 12, vertical: 6),
 //                   decoration: BoxDecoration(
 //                     color: _getStatusColor(status).withOpacity(0.2),
 //                     borderRadius: BorderRadius.circular(20),
@@ -382,18 +382,18 @@
 //                 ),
 //               ],
 //             ),
-//             const SizedBox(height: 12),
+//             SizedBox(height: 12),
 
 //             // Описание
 //             if (description.isNotEmpty) ...[
 //               Text(
 //                 description,
-//                 style: const TextStyle(
+//                 style: TextStyle(
 //                   fontSize: 15,
 //                   color: Colors.grey,
 //                 ),
 //               ),
-//               const SizedBox(height: 12),
+//               SizedBox(height: 12),
 //             ],
 
 //             // Приоритет
@@ -401,7 +401,7 @@
 //               children: [
 //                 Icon(_getPriorityIcon(priority),
 //                     size: 18, color: _getPriorityColor(priority)),
-//                 const SizedBox(width: 6),
+//                 SizedBox(width: 6),
 //                 Text(
 //                   _getPriorityText(priority),
 //                   style: TextStyle(
@@ -411,7 +411,7 @@
 //                 )
 //               ],
 //             ),
-//             const SizedBox(height: 8),
+//             SizedBox(height: 8),
 
 //             // Информация о создателе и датах
 //             Column(
@@ -420,31 +420,31 @@
 //                 if (createdBy != null) ...[
 //                   Text(
 //                     'От: $createdBy',
-//                     style: const TextStyle(fontSize: 13, color: Colors.blue),
+//                     style: TextStyle(fontSize: 13, color: Colors.blue),
 //                   ),
-//                   const SizedBox(height: 4),
+//                   SizedBox(height: 4),
 //                 ],
 //                 if (createdAt != null) ...[
 //                   Text(
 //                     'Создано: ${_formatDateTime(createdAt)}',
-//                     style: const TextStyle(fontSize: 12, color: Colors.grey),
+//                     style: TextStyle(fontSize: 12, color: Colors.grey),
 //                   ),
 //                 ],
 //                 if (deadline != null) ...[
-//                   const SizedBox(height: 4),
+//                   SizedBox(height: 4),
 //                   Text(
 //                     'Дедлайн: ${_formatDateTime(deadline)}',
 //                     style:
-//                         const TextStyle(fontSize: 12, color: Colors.deepOrange),
+//                         TextStyle(fontSize: 12, color: Colors.deepOrange),
 //                   ),
 //                 ],
 //               ],
 //             ),
-//             const SizedBox(height: 12),
+//             SizedBox(height: 12),
 
 //             // Фото если есть
 //             if (imageUrl != null && imageUrl.isNotEmpty) ...[
-//               const SizedBox(height: 12),
+//               SizedBox(height: 12),
 //               Container(
 //                 height: 120, // Фиксированная высота для предсказуемости
 //                 width: double.infinity,
@@ -475,7 +475,7 @@
 //                     errorBuilder: (context, error, stackTrace) {
 //                       return Container(
 //                         color: Colors.grey[200],
-//                         child: const Center(
+//                         child: Center(
 //                           child: Icon(Icons.broken_image, color: Colors.grey),
 //                         ),
 //                       );

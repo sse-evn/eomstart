@@ -1,16 +1,16 @@
-import 'package:flutter/foundation.dart';
+import 'dart:io' show InternetAddress, SocketException;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:micro_mobility_app/src/features/home/widgets/slot_card.dart';
-import 'package:micro_mobility_app/src/features/home/widgets/dashboard_stats.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:micro_mobility_app/src/core/providers/shift_provider.dart';
 import 'package:micro_mobility_app/src/features/home/bloc/shift_bloc.dart';
 import 'package:micro_mobility_app/src/features/home/bloc/shift_state.dart';
-import 'package:provider/provider.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:micro_mobility_app/src/features/home/widgets/dashboard_stats.dart';
+import 'package:micro_mobility_app/src/features/home/widgets/slot_card.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:io' show InternetAddress, SocketException, Platform;
-import 'package:app_tracking_transparency/app_tracking_transparency.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class DashboardHome extends StatefulWidget {
@@ -99,37 +99,29 @@ class _DashboardHomeState extends State<DashboardHome> {
   Future<void> _requestAllPermissionsForce() async {
     if (!mounted) return;
 
-    if (defaultTargetPlatform != TargetPlatform.android && 
-        defaultTargetPlatform != TargetPlatform.iOS) {
-      return;
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyRequested =
+        prefs.getBool('permissions_requested_once') ?? false;
+
+    if (alreadyRequested) return;
+    await prefs.setBool('permissions_requested_once', true);
+
+    // Запрашиваем геопозицию
+    LocationPermission locPerm = await Geolocator.checkPermission();
+    if (locPerm == LocationPermission.denied) {
+      await Geolocator.requestPermission();
     }
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final alreadyRequested = prefs.getBool('permissions_requested_once') ?? false;
+    // Запрашиваем камеру
+    PermissionStatus camStatus = await Permission.camera.status;
+    if (camStatus.isDenied) {
+      await Permission.camera.request();
+    }
 
-      if (alreadyRequested) return;
-      await prefs.setBool('permissions_requested_once', true);
-
-      // Запрашиваем геопозицию
-      LocationPermission locPerm = await Geolocator.checkPermission();
-      if (locPerm == LocationPermission.denied) {
-        await Geolocator.requestPermission();
-      }
-
-      // Запрашиваем камеру
-      PermissionStatus camStatus = await Permission.camera.status;
-      if (camStatus.isDenied) {
-        await Permission.camera.request();
-      }
-
-      // Запрашиваем уведомления
-      PermissionStatus notifStatus = await Permission.notification.status;
-      if (notifStatus.isDenied) {
-        await Permission.notification.request();
-      }
-    } catch (e) {
-      debugPrint('Error requesting permissions: $e');
+    // Запрашиваем уведомления
+    PermissionStatus notifStatus = await Permission.notification.status;
+    if (notifStatus.isDenied) {
+      await Permission.notification.request();
     }
   }
 
@@ -138,7 +130,7 @@ class _DashboardHomeState extends State<DashboardHome> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('Главная'),
+        title: Text(tr(context, 'Главная', 'Басты бет')),
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -151,7 +143,7 @@ class _DashboardHomeState extends State<DashboardHome> {
             }
 
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
+              return Center(
                   child: CircularProgressIndicator(color: Colors.green));
             } else if (snapshot.hasError) {
               final errorStr = snapshot.error.toString();
@@ -162,27 +154,28 @@ class _DashboardHomeState extends State<DashboardHome> {
               } else {
                 return Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: EdgeInsets.all(20),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error, size: 60, color: Colors.red),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Ошибка загрузки данных',
+                        Icon(Icons.error, size: 60, color: Colors.red),
+                        SizedBox(height: 16),
+                        Text(
+                          tr(context, 'Ошибка загрузки данных',
+                              'Деректерді жүктеу қатесі'),
                           style: TextStyle(
                               fontSize: 18, fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                         Text(
                           errorStr,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.grey),
+                          style: TextStyle(color: Colors.grey),
                         ),
-                        const SizedBox(height: 24),
+                        SizedBox(height: 24),
                         ElevatedButton(
                           onPressed: _refresh,
-                          child: const Text('Повторить'),
+                          child: Text(tr(context, 'Повторить', 'Қайталау')),
                         ),
                       ],
                     ),
@@ -197,39 +190,41 @@ class _DashboardHomeState extends State<DashboardHome> {
                       final hasActiveShift = shiftState is ShiftActive;
 
                       return SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(
+                        physics: AlwaysScrollableScrollPhysics(),
+                        padding: EdgeInsets.symmetric(
                             horizontal: 16.0, vertical: 8.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (hasActiveShift) ...[
                               _buildActiveShiftBanner(context),
-                              const SizedBox(height: 20),
+                              SizedBox(height: 20),
                             ],
                             Text(
                               'Ассалаумағалейкум, ${provider.profile?['firstName'] ?? 'Пользователь'}!',
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xDD61E045),
-                                  ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xDD61E045)),
                             ),
-                            const SizedBox(height: 4),
+                            SizedBox(height: 4),
                             Text(
-                              'Хорошего рабочего дня!',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              tr(context, 'Хорошего рабочего дня!',
+                                  'Жұмыс күніңіз сәтті өтсін!'),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
                                     color: Colors.grey[600],
                                   ),
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24),
                             const SlotCard(),
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24),
                             const DashboardInterestingThings(),
-                            if (provider.lastReportTime != null) ...[
-                              const SizedBox(height: 24),
-                              _buildLastReportCard(context, provider.lastReportTime!),
-                            ],
-                            const SizedBox(height: 32),
+                            SizedBox(height: 32),
                           ],
                         ),
                       );
@@ -246,7 +241,7 @@ class _DashboardHomeState extends State<DashboardHome> {
 
   Widget _buildActiveShiftBanner(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Colors.green[700]!, Colors.green[500]!],
@@ -258,7 +253,7 @@ class _DashboardHomeState extends State<DashboardHome> {
           BoxShadow(
             color: Colors.green.withOpacity(0.3),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            offset: Offset(0, 4),
           ),
         ],
       ),
@@ -267,7 +262,7 @@ class _DashboardHomeState extends State<DashboardHome> {
           Container(
             width: 12,
             height: 12,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
               boxShadow: [
@@ -275,10 +270,10 @@ class _DashboardHomeState extends State<DashboardHome> {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          const Expanded(
+          SizedBox(width: 12),
+          Expanded(
             child: Text(
-              'СМЕНА ОТКРЫТА',
+              tr(context, 'СМЕНА ОТКРЫТА', 'АУЫСЫМ АШЫЛДЫ'),
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -287,67 +282,7 @@ class _DashboardHomeState extends State<DashboardHome> {
               ),
             ),
           ),
-          const Icon(Icons.timer_outlined, color: Colors.white, size: 18),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLastReportCard(BuildContext context, DateTime lastReportTime) {
-    final t = lastReportTime;
-    final timeStr =
-        "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}";
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.green.withOpacity(0.15),
-          width: 1.2,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.done_all_rounded,
-              color: Colors.green,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Отчёт доставлен',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Последняя отправка: в $timeStr',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          Icon(Icons.timer_outlined, color: Colors.white, size: 18),
         ],
       ),
     );
@@ -364,21 +299,22 @@ class NoInternetWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32.0),
+        padding: EdgeInsets.all(32.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(30),
+              padding: EdgeInsets.all(30),
               decoration: BoxDecoration(
                 color: Colors.grey[200],
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.wifi_off, size: 80, color: Colors.grey),
+              child: Icon(Icons.wifi_off, size: 80, color: Colors.grey),
             ),
-            const SizedBox(height: 32),
-            const Text(
-              'Нет подключения к интернету',
+            SizedBox(height: 32),
+            Text(
+              tr(context, 'Нет подключения к интернету',
+                  'Интернет байланысы жоқ'),
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -386,23 +322,24 @@ class NoInternetWidget extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Проверьте соединение с сетью и попробуйте снова',
+            SizedBox(height: 16),
+            Text(
+              tr(context, 'Проверьте соединение с сетью и попробуйте снова',
+                  'Желіге қосылуды тексеріп, қайтадан байқап көріңіз'),
               style: TextStyle(fontSize: 16, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 40),
+            SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh, color: Colors.white),
-                label: const Text('Повторить',
+                icon: Icon(Icons.refresh, color: Colors.white),
+                label: Text(tr(context, 'Повторить', 'Қайталау'),
                     style: TextStyle(color: Colors.white, fontSize: 16)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green[700],
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),

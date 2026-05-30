@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
@@ -50,7 +51,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     setState(() => _isLoading = true);
     try {
       _token = await _storage.read(key: 'jwt_token');
-      if (_token == null) throw Exception('Требуется авторизация');
+      if (_token == null) throw Exception(tr(context, 'Требуется авторизация', 'Авторизация қажет'));
 
       final provider = Provider.of<ShiftProvider>(context, listen: false);
       final activeShift = await provider.getActiveShift();
@@ -65,7 +66,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
       final profile = await _retryApiCall(() => _apiService.getUserProfile(_token!));
       String? positionFromProfile;
-      for (var key in ['position', 'job_title', 'role', 'dolzhnost', 'должность']) {
+      for (var key in ['position', 'job_title', 'role', 'dolzhnost', tr(context, 'должность', 'лауазымы')]) {
         if (profile.containsKey(key) && profile[key] != null) {
           positionFromProfile = profile[key].toString();
           break;
@@ -92,7 +93,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         setState(() {
           _zones = uniqueZones;
           _timeSlots = serverTimeSlots.toSet().toList();
-          _position = positionFromProfile ?? 'Не указана';
+          _position = positionFromProfile ?? tr(context, 'Не указана', 'Көрсетілмеген');
           _zone = defaultZone;
           _selectedTime = _timeSlots.isNotEmpty ? _timeSlots.first : null;
         });
@@ -100,8 +101,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     } catch (e) {
       if (mounted) {
         final errorMessage = e.toString().contains('502')
-            ? 'Сервер временно недоступен (502). Пожалуйста, попробуйте позже.'
-            : 'Не удалось загрузить данные: ${e.toString()}';
+            ? tr(context, 'Сервер временно недоступен (502). Пожалуйста, попробуйте позже.', 'Сервер уақытша қолжетімсіз (502). Кейінірек қайталап көріңіз.')
+            : tr(context, 'Не удалось загрузить данные: ${e.toString()}', 'Деректерді жүктеу мүмкін болмады: ${e.toString()}');
         _showError(errorMessage);
       }
     } finally {
@@ -139,7 +140,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       );
       if (photoPath != null && mounted) setState(() => _selfie = XFile(photoPath));
     } catch (e) {
-      if (mounted) _showError('Не удалось открыть камеру');
+      if (mounted) _showError(tr(context, 'Не удалось открыть камеру', 'Камераны ашу мүмкін болмады'));
     }
   }
 
@@ -169,27 +170,27 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       // Ждем изменения состояния BLoC
       final nextState = await bloc.stream.firstWhere(
         (state) => state is ShiftActive || state is ShiftError
-      ).timeout(const Duration(seconds: 15), onTimeout: () => ShiftError('Превышено время ожидания ответа от сервера'));
+      ).timeout(const Duration(seconds: 15), onTimeout: () => ShiftError(tr(context, 'Превышено время ожидания ответа от сервера', 'Сервер жауабын күту уақыты асып кетті')));
 
       if (mounted) {
         setState(() => _isLoading = false);
         if (nextState is ShiftActive) {
           Navigator.pop(context, true);
-          _showSuccess('Смена успешно открыта');
+          _showSuccess(tr(context, 'Смена успешно открыта', 'Ауысым сәтті ашылды'));
         } else if (nextState is ShiftError) {
-          _showError('Ошибка открытия смены: ${nextState.message}');
+          _showError(tr(context, 'Ошибка открытия смены: ${nextState.message}', 'Ауысымды ашу қатесі: ${nextState.message}'));
         }
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showError('Ошибка: ${e.toString()}');
+        _showError(tr(context, 'Ошибка: ${e.toString()}', 'Қате: ${e.toString()}'));
       }
     }
   }
 
   Future<void> _endShift() async {
-    if (_token == null) { _showError('Требуется авторизация'); return; }
+    if (_token == null) { _showError(tr(context, 'Требуется авторизация', 'Авторизация қажет')); return; }
     try {
       final bloc = BlocProvider.of<ShiftBloc>(context);
       bloc.add(EndShiftRequested());
@@ -201,10 +202,10 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           _activeShift = null;
         });
         Navigator.pop(context, true);
-        _showSuccess('Запрос на завершение смены отправлен');
+        _showSuccess(tr(context, 'Запрос на завершение смены отправлен', 'Ауысымды аяқтау сұрауы жіберілді'));
       }
     } catch (e) {
-      if (mounted) _showError('Ошибка при отправке запроса: ${e.toString()}');
+      if (mounted) _showError(tr(context, 'Ошибка при отправке запроса: ${e.toString()}', 'Сұрау жіберу қатесі: ${e.toString()}'));
     }
   }
 
@@ -245,13 +246,13 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           top: 10,
         ),
         decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          color: isDarkMode ? Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.2),
               blurRadius: 20,
-              offset: const Offset(0, -5),
+              offset: Offset(0, -5),
             )
           ],
         ),
@@ -262,7 +263,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             Container(
               width: 40,
               height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
+              margin: EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
                 color: Colors.grey.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(2),
@@ -270,7 +271,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             ),
             
             Text(
-              _hasActiveShift ? 'Завершить смену' : 'Начать новую смену',
+              _hasActiveShift ? tr(context, 'Завершить смену', 'Ауысымды аяқтау') : tr(context, 'Начать новую смену', 'Жаңа ауысым бастау'),
               style: TextStyle(
                 fontSize: 22, 
                 fontWeight: FontWeight.w900, 
@@ -279,11 +280,11 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             
             Flexible(
               child: _isLoading
-                ? const Padding(
+                ? Padding(
                     padding: EdgeInsets.all(40.0),
                     child: CircularProgressIndicator(),
                   )
@@ -296,9 +297,9 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                           _buildActiveShiftInfo(theme) 
                         else 
                           _buildNewShiftForm(theme, isDarkMode),
-                        const SizedBox(height: 24),
+                        SizedBox(height: 24),
                         _buildActionButton(theme),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                       ],
                     ),
                   ),
@@ -312,7 +313,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   Future<File> _processSelfieWithOverlay(File imageFile) async {
     final now = DateTime.now();
     final timeStr = '${now.day}.${now.month}.${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    String locationStr = 'Гео: недоступно';
+    String locationStr = tr(context, 'Гео: недоступно', 'Гео: қолжетімсіз');
     Position? currentPosition;
 
     try {
@@ -322,18 +323,18 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
           currentPosition = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium, timeLimit: const Duration(seconds: 8));
-          locationStr = 'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}';
+          locationStr = tr(context, 'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}', 'Гео: ${currentPosition.latitude.toStringAsFixed(5)}, ${currentPosition.longitude.toStringAsFixed(5)}');
         } else {
-          locationStr = 'Гео: доступ запрещён';
+          locationStr = tr(context, 'Гео: доступ запрещён', 'Гео: рұқсат жоқ');
         }
       } else {
-        locationStr = 'Гео: сервис отключён';
+        locationStr = tr(context, 'Гео: сервис отключён', 'Гео: сервис өшірілген');
       }
-    } catch (_) { locationStr = 'Гео: ошибка'; }
+    } catch (_) { locationStr = tr(context, 'Гео: ошибка', 'Гео: қате'); }
 
     final bytes = await imageFile.readAsBytes();
     final original = img.decodeImage(bytes);
-    if (original == null) throw Exception('Не удалось декодировать изображение');
+    if (original == null) throw Exception(tr(context, 'Не удалось декодировать изображение', 'Суретті оқу мүмкін болмады'));
     
     final oriented = img.bakeOrientation(original);
     final resized = img.copyResize(oriented, width: 800);
@@ -369,7 +370,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           }
         }
       } catch (e) {
-        debugPrint('Ошибка загрузки мини-карты: $e');
+        debugPrint(tr(context, 'Ошибка загрузки мини-карты: $e', 'Мини-картаны жүктеу қатесі: $e'));
       }
     }
 
@@ -397,9 +398,9 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   }
 
   Widget _buildActiveShiftInfo(ThemeData theme) {
-    if (_activeShift == null) return const SizedBox.shrink();
+    if (_activeShift == null) return SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.red.withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
@@ -410,23 +411,23 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         children: [
           Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
-              const SizedBox(width: 12),
-              Text('Внимание!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red[800])),
+              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+              SizedBox(width: 12),
+              Text(tr(context, 'Внимание!', 'Назар аударыңыз!'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red[800])),
             ],
           ),
-          const SizedBox(height: 12),
-          const Text('У вас уже есть активная смена. Вы не можете начать новую, пока не завершите текущую.', 
+          SizedBox(height: 12),
+          Text(tr(context, 'У вас уже есть активная смена. Вы не можете начать новую, пока не завершите текущую.', 'Сізде белсенді ауысым бар. Ағымдағыны аяқтамай жаңасын бастай алмайсыз.'), 
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Divider(color: Colors.red.withOpacity(0.1)),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           if (_activeShift['slot_time_range'] != null) 
-            _buildInfoRow(Icons.access_time, 'Время', _activeShift['slot_time_range']),
+            _buildInfoRow(Icons.access_time, tr(context, 'Время', 'Уақыты'), _activeShift['slot_time_range']),
           if (_activeShift['zone'] != null) 
-            _buildInfoRow(Icons.location_on_outlined, 'Зона', _activeShift['zone']),
+            _buildInfoRow(Icons.location_on_outlined, tr(context, 'Зона', 'Аймақ'), _activeShift['zone']),
           if (_activeShift['position'] != null) 
-            _buildInfoRow(Icons.work_outline, 'Должность', _activeShift['position']),
+            _buildInfoRow(Icons.work_outline, tr(context, 'Должность', 'Лауазым'), _activeShift['position']),
         ]
       ),
     );
@@ -434,14 +435,14 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: EdgeInsets.only(bottom: 8.0),
       child: Row(
         children: [
           Icon(icon, size: 16, color: Colors.grey[600]),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-          const SizedBox(width: 8),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          SizedBox(width: 8),
+          Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         ],
       ),
     );
@@ -454,7 +455,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         // Selfie Area
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[50],
             borderRadius: BorderRadius.circular(24),
@@ -464,19 +465,19 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.camera_alt_outlined, size: 20),
-                  const SizedBox(width: 10),
-                  const Text('Фото-подтверждение', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  Icon(Icons.camera_alt_outlined, size: 20),
+                  SizedBox(width: 10),
+                  Text(tr(context, 'Фото-подтверждение', 'Сурет-растау'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                 ],
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               _selfie != null ? _buildSelfiePreview() : _buildSelfiePlaceholder(isDarkMode),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               _buildSelfieButton(isDarkMode),
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         
         // Time Slot Area
         if (_timeSlots.isEmpty) 
@@ -484,7 +485,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         else 
           _buildTimeSlotsSelection(isDarkMode),
         
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         
         // Zone and Position
         LayoutBuilder(
@@ -495,14 +496,14 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                 children: [
                   _buildInputWrapper(
                     isDarkMode,
-                    'Зона',
+                    tr(context, 'Зона', 'Аймақ'),
                     Icons.location_on_outlined,
                     _buildZoneDropdown(isDarkMode),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   _buildInputWrapper(
                     isDarkMode,
-                    'Должность',
+                    tr(context, 'Должность', 'Лауазым'),
                     Icons.work_outline,
                     _buildPositionField(isDarkMode),
                   ),
@@ -514,16 +515,16 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                 Expanded(
                   child: _buildInputWrapper(
                     isDarkMode,
-                    'Зона',
+                    tr(context, 'Зона', 'Аймақ'),
                     Icons.location_on_outlined,
                     _buildZoneDropdown(isDarkMode),
                   ),
                 ),
-                const SizedBox(width: 16),
+                SizedBox(width: 16),
                 Expanded(
                   child: _buildInputWrapper(
                     isDarkMode,
-                    'Должность',
+                    tr(context, 'Должность', 'Лауазым'),
                     Icons.work_outline,
                     _buildPositionField(isDarkMode),
                   ),
@@ -541,11 +542,11 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          padding: EdgeInsets.only(left: 4, bottom: 8),
           child: Row(
             children: [
               Icon(icon, size: 14, color: Colors.grey[600]),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[600])),
             ],
           ),
@@ -557,10 +558,10 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
   Widget _buildPositionField(bool isDarkMode) {
     return TextFormField(
-      initialValue: _position ?? 'Не указана',
+      initialValue: _position ?? tr(context, 'Не указана', 'Көрсетілмеген'),
       readOnly: true,
       decoration: InputDecoration(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
@@ -568,12 +569,12 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         filled: true,
         fillColor: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100],
       ),
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
     );
   }
 
   Widget _buildNoTimeSlotsWarning(bool isDarkMode) => Container(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.orange.withOpacity(0.1),
           borderRadius: BorderRadius.circular(24),
@@ -582,26 +583,26 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), shape: BoxShape.circle),
-              child: const Icon(Icons.access_time_filled, color: Colors.orange, size: 28),
+              child: Icon(Icons.access_time_filled, color: Colors.orange, size: 28),
             ),
-            const SizedBox(height: 16),
-            const Text('Сейчас не время начала смены', 
+            SizedBox(height: 16),
+            Text(tr(context, 'Сейчас не время начала смены', 'Қазір ауысым бастау уақыты емес'), 
               textAlign: TextAlign.center, 
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.orange)),
-            const SizedBox(height: 8),
-            Text('Начало смены доступно только в пределах выбранных слотов.', 
+            SizedBox(height: 8),
+            Text(tr(context, 'Начало смены доступно только в пределах выбранных слотов.', 'Ауысымды бастау тек таңдалған слоттар ішінде мүмкін.'), 
               textAlign: TextAlign.center, 
               style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Text('Пожалуйста, дождитесь начала вашей смены.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              child: Text(tr(context, 'Слоты: 06:40–15:00, 14:40–23:00', 'Слоттар: 06:40–15:00, 14:40–23:00'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
             ),
           ],
         ),
@@ -609,7 +610,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
 
   Widget _buildTimeSlotsSelection(bool isDarkMode) => Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[50],
           borderRadius: BorderRadius.circular(24),
@@ -620,12 +621,12 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           children: [
             Row(
               children: [
-                const Icon(Icons.history_toggle_off, size: 20),
-                const SizedBox(width: 10),
-                const Text('Выберите слот', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                Icon(Icons.history_toggle_off, size: 20),
+                SizedBox(width: 10),
+                Text(tr(context, 'Выберите слот', 'Слотты таңдаңыз'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               ],
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Wrap(
               spacing: 8.0,
               runSpacing: 8.0,
@@ -635,12 +636,12 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                   onTap: _isLoading ? null : () { if (mounted) setState(() => _selectedTime = slot); },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
                       color: isSelected ? Colors.green : (isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: isSelected ? Colors.green : (isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[300]!)),
-                      boxShadow: isSelected ? [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))] : [],
+                      boxShadow: isSelected ? [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 8, offset: Offset(0, 4))] : [],
                     ),
                     child: Text(slot, 
                       style: TextStyle(
@@ -677,9 +678,9 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             child: IconButton(
               onPressed: () { if (mounted) setState(() => _selfie = null); },
               icon: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                child: const Icon(Icons.close, color: Colors.white, size: 14),
+                padding: EdgeInsets.all(4),
+                decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                child: Icon(Icons.close, color: Colors.white, size: 14),
               ),
             ),
           ),
@@ -698,8 +699,8 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.person_outline, size: 64, color: isDarkMode ? Colors.grey[700] : Colors.grey[300]),
-            const SizedBox(height: 8),
-            Text('Нет фото', style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            Text(tr(context, 'Нет фото', 'Сурет жоқ'), style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.bold)),
           ],
         ),
       );
@@ -708,12 +709,12 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
     width: double.infinity,
     child: ElevatedButton.icon(
           onPressed: _isLoading ? null : _takeSelfie,
-          icon: const Icon(Icons.add_a_photo_outlined, size: 20),
-          label: const Text('Сделать селфи', style: TextStyle(fontWeight: FontWeight.bold)),
+          icon: Icon(Icons.add_a_photo_outlined, size: 20),
+          label: Text(tr(context, 'Сделать селфи', 'Селфи жасау'), style: TextStyle(fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            padding: EdgeInsets.symmetric(vertical: 16),
             elevation: 0,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
@@ -723,7 +724,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
   Widget _buildZoneDropdown(bool isDarkMode) {
     final validZone = _zones.contains(_zone) ? _zone : (_zones.isNotEmpty ? _zones.first : null);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100],
         borderRadius: BorderRadius.circular(16),
@@ -736,14 +737,14 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           items: _zones.map((item) => DropdownMenuItem(
             value: item, 
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(item, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Text(item, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600))
             )
           )).toList(),
           onChanged: _isLoading ? null : (String? value) { if (mounted && value != null) setState(() => _zone = value); },
-          dropdownColor: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+          dropdownColor: isDarkMode ? Color(0xFF2C2C2C) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+          icon: Icon(Icons.keyboard_arrow_down_rounded),
         ),
       ),
     );
@@ -762,7 +763,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
             BoxShadow(
               color: (isEnded ? Colors.red : Colors.green).withOpacity(0.3),
               blurRadius: 12,
-              offset: const Offset(0, 6),
+              offset: Offset(0, 6),
             )
         ],
       ),
@@ -772,20 +773,20 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
           backgroundColor: isEnded ? Colors.red : (canSubmit ? Colors.green : Colors.grey[300]),
           foregroundColor: Colors.white,
           disabledBackgroundColor: theme.brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.grey[200],
-          padding: const EdgeInsets.symmetric(vertical: 18),
+          padding: EdgeInsets.symmetric(vertical: 18),
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         ),
         child: _isLoading
-            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center, 
                 children: [
                   Icon(isEnded ? Icons.power_settings_new : Icons.verified_user_outlined, size: 20),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
                   Text(
-                    isEnded ? 'Завершить смену' : (canSubmit ? 'Начать смену' : 'Заполните данные'), 
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.2),
+                    isEnded ? tr(context, 'Завершить смену', 'Ауысымды аяқтау') : (canSubmit ? tr(context, 'Начать смену', 'Ауысымды бастау') : tr(context, 'Заполните данные', 'Деректерді толтырыңыз')), 
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.2),
                   ),
                 ],
               ),

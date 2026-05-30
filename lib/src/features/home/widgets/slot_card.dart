@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/src/features/home/bloc/shift_bloc.dart';
@@ -18,7 +19,7 @@ class SlotCard extends StatelessWidget {
     return BlocBuilder<ShiftBloc, ShiftState>(
       builder: (context, state) {
         if (state is ShiftLoading) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(child: CircularProgressIndicator());
         }
 
         final theme = Theme.of(context);
@@ -43,8 +44,8 @@ class SlotCard extends StatelessWidget {
                           colors: isDarkMode
                               ? [Colors.green[900]!, Colors.green[800]!]
                               : [
-                                  const Color.fromARGB(255, 10, 80, 79),
-                                  const Color.fromARGB(255, 63, 114, 66)
+                                  Color.fromARGB(255, 10, 80, 79),
+                                  Color.fromARGB(255, 63, 114, 66)
                                 ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -55,10 +56,10 @@ class SlotCard extends StatelessWidget {
                 child: Column(
                   children: [
                     if (hasActiveShift)
-                      _buildActiveShiftUI(activeShift, theme, isDarkMode)
+                      _buildActiveShiftUI(context, activeShift, theme, isDarkMode)
                     else
                       _buildInactiveShiftUI(context, theme, isDarkMode),
-                    const SizedBox(height: 20),
+                    SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -80,26 +81,26 @@ class SlotCard extends StatelessWidget {
   }
 
   Widget _buildActiveShiftUI(
-      ActiveShift activeShift, ThemeData theme, bool isDarkMode) {
+      BuildContext context, ActiveShift activeShift, ThemeData theme, bool isDarkMode) {
     final String serverTime = activeShift.startTime != null
         ? '${activeShift.startTime!.toLocal().hour.toString().padLeft(2, '0')}:${activeShift.startTime!.toLocal().minute.toString().padLeft(2, '0')}'
         : '--:--';
 
     final String slotTime = activeShift.slotTimeRange.isNotEmpty
         ? activeShift.slotTimeRange
-        : 'Не указан';
+        : tr(context, 'Не указан', 'Көрсетілмеген');
 
     final duration = activeShift.startTime != null 
         ? DateTime.now().difference(activeShift.startTime!)
         : const Duration();
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
-    final durationStr = '$hoursч $minutesм';
+    final durationStr = tr(context, '$hoursч $minutesм', '$hoursсағ $minutesмин');
 
     final breakTime = BreakTimeUtils.getCurrentBreakTime(activeShift.zone);
 
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -110,16 +111,16 @@ class SlotCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'АКТИВНАЯ СМЕНА',
+                    tr(context, 'АКТИВНАЯ СМЕНА', 'БЕЛСЕНДІ АУЫСЫМ'),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: Colors.white.withOpacity(0.9),
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  SizedBox(height: 6),
                   Text(
-                    'Вы на смене',
+                    tr(context, 'Вы на смене', 'Сіз ауысымдасыз'),
                     style: theme.textTheme.headlineSmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -130,9 +131,9 @@ class SlotCard extends StatelessWidget {
               _buildSelfiePreview(activeShift),
             ],
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
@@ -142,33 +143,33 @@ class SlotCard extends StatelessWidget {
               children: [
                 Flexible(
                   child:
-                      _buildInfoItem('Начало', serverTime, theme, Colors.white),
+                      _buildInfoItem(tr(context, 'Начало', 'Басталуы'), serverTime, theme, Colors.white),
                 ),
                 Flexible(
                   child:
-                      _buildInfoItem('Длит.', durationStr, theme, Colors.white),
+                      _buildInfoItem(tr(context, 'Длит.', 'Ұзақт.'), durationStr, theme, Colors.white),
                 ),
                 Flexible(
-                  child: _buildInfoItem('Слот', slotTime, theme, Colors.white),
+                  child: _buildInfoItem(tr(context, 'Слот', 'Слот'), slotTime, theme, Colors.white),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          _buildBreakStatusUI(activeShift.zone, theme, isDarkMode),
+          SizedBox(height: 16),
+          _buildBreakStatusUI(context, activeShift.zone, theme, isDarkMode),
         ],
       ),
     );
   }
 
-  Widget _buildBreakStatusUI(String zone, ThemeData theme, bool isDarkMode) {
+  Widget _buildBreakStatusUI(BuildContext context, String zone, ThemeData theme, bool isDarkMode) {
     final status = BreakTimeUtils.getBreakStatus(zone);
     final bool isInside = status['isInside'] == true;
     final String label = status['label'] ?? '';
     final String range = status['range'] ?? '';
 
     if (range.isEmpty && !isInside) {
-      return const SizedBox.shrink();
+      return SizedBox.shrink();
     }
 
     return Container(
@@ -176,7 +177,7 @@ class SlotCard extends StatelessWidget {
         color: isDarkMode ? Colors.black26 : Colors.white.withOpacity(0.2),
         borderRadius: BorderRadius.circular(12),
       ),
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(12),
       child: Row(
         children: [
           Icon(
@@ -184,7 +185,7 @@ class SlotCard extends StatelessWidget {
             size: 30,
             color: isInside ? Colors.greenAccent : Colors.white70,
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               children: [
@@ -206,7 +207,7 @@ class SlotCard extends StatelessWidget {
                 if (isInside && status['remainingMinutes'] != null)
                   Text(
                     'Осталось: ${status['remainingMinutes']} мин',
-                    style: const TextStyle(color: Colors.greenAccent, fontSize: 11),
+                    style: TextStyle(color: Colors.greenAccent, fontSize: 11),
                   ),
               ],
             ),
@@ -238,12 +239,12 @@ class SlotCard extends StatelessWidget {
             ? Image.network(
                 photoUrl,
                 loadingBuilder: (ctx, child, loading) =>
-                    loading == null ? child : const CircularProgressIndicator(),
+                    loading == null ? child : CircularProgressIndicator(),
                 errorBuilder: (_, __, ___) =>
-                    const Icon(Icons.error, color: Colors.white),
+                    Icon(Icons.error, color: Colors.white),
                 fit: BoxFit.cover,
               )
-            : const Icon(Icons.person, color: Colors.white),
+            : Icon(Icons.person, color: Colors.white),
       ),
     );
   }
@@ -254,7 +255,7 @@ class SlotCard extends StatelessWidget {
       onTap: () => _openSlotSetupModal(context),
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDarkMode
               ? Colors.green[900]!.withOpacity(0.3)
@@ -268,7 +269,7 @@ class SlotCard extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: isDarkMode ? Colors.green[800]! : Colors.green[100]!,
                 shape: BoxShape.circle,
@@ -279,10 +280,10 @@ class SlotCard extends StatelessWidget {
                 size: 32,
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: 16),
             Expanded(
               child: Text(
-                'Начать новую смену',
+                tr(context, 'Начать новую смену', 'Жаңа ауысым бастау'),
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: isDarkMode ? Colors.green[100]! : Colors.green[800]!,
@@ -309,7 +310,7 @@ class SlotCard extends StatelessWidget {
           style: theme.textTheme.bodySmall
               ?.copyWith(color: color.withOpacity(0.8), fontSize: 11),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: 4),
         Text(
           value,
           style: theme.textTheme.titleLarge?.copyWith(
@@ -323,7 +324,7 @@ class SlotCard extends StatelessWidget {
   }
 
   // ✅ ИСПРАВЛЕНО: Правильный контекст для showModalBottomSheet
-  // Используем context из build, а не из Consumer — это решает проблему "не открывается"
+  // Используем context из build, а не из Consumer — это решает проблему tr(context, "не открывается", "ашылмайды")
   Future<void> _openSlotSetupModal(BuildContext context) async {
     try {
       // 🚨 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Используем контекст, переданный в build, а не context из Consumer
@@ -346,7 +347,7 @@ class SlotCard extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка открытия смены: $e'),
+            content: Text(tr(context, 'Ошибка открытия смены: $e', 'Ауысым ашу қатесі: $e')),
             backgroundColor: Colors.red,
           ),
         );

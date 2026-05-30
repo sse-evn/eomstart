@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:flutter/services.dart';
 
 enum CameraOverlayType {
@@ -291,16 +292,16 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
               child: Center(
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     widget.overlayType == CameraOverlayType.landscape
-                        ? 'Сделайте фото самоката для отчета'
-                        : 'Сделайте селфи в каске/шлеме',
-                    style: const TextStyle(
+                        ? tr(context, 'Сделайте фото самоката для отчета', 'Есепке самокат суретін түсіріңіз')
+                        : tr(context, 'Сделайте селфи в каске/шлеме', 'Каскада/шлемде селфи жасаңыз'),
+                    style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold),
@@ -315,7 +316,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
               left: 20,
               child: IconButton(
                 icon:
-                    const Icon(Icons.arrow_back, color: Colors.white, size: 30),
+                    Icon(Icons.arrow_back, color: Colors.white, size: 30),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -346,7 +347,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
                   onTap: _toggleZoom,
                   child: Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.black54,
                       borderRadius: BorderRadius.circular(20),
@@ -358,7 +359,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
                           : _currentZoomLevel == 1.0
                               ? '1.0x'
                               : '${_currentZoomLevel.toStringAsFixed(1)}x',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
@@ -388,7 +389,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
                       child: Container(
                         width: 60,
                         height: 60,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white,
                         ),
@@ -432,7 +433,7 @@ class LandscapeOverlayPainter extends CustomPainter {
 
     final path = Path()
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
-      ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(16)))
+      ..addRRect(RRect.fromRectAndRadius(rect, Radius.circular(16)))
       ..fillType = PathFillType.evenOdd;
 
     canvas.drawPath(path, paint);
@@ -443,7 +444,7 @@ class LandscapeOverlayPainter extends CustomPainter {
       ..strokeWidth = 3;
 
     canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(16)), borderPaint);
+        RRect.fromRectAndRadius(rect, Radius.circular(16)), borderPaint);
   }
 
   @override

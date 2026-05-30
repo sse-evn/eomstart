@@ -10,6 +10,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:micro_mobility_app/src/core/themes/theme.dart';
 import 'package:micro_mobility_app/src/core/providers/theme_provider.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:micro_mobility_app/src/core/providers/shift_provider.dart';
 import 'package:micro_mobility_app/src/features/auth_screen/login_screen.dart';
 import 'package:micro_mobility_app/src/core/config/app_config.dart';
@@ -84,7 +85,7 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
         });
       }
     } catch (e) {
-      debugPrint('Ошибка загрузки статуса геотрекинга: $e');
+      debugPrint(tr(context, 'Ошибка загрузки статуса геотрекинга: $e', 'Геотрекинг мәртебесін жүктеу қатесі: $e'));
       if (mounted) {
         setState(() {
           _isLoadingGeoStatus = false;
@@ -114,8 +115,8 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
           if (!success) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Для работы геотрекинга необходим доступ к геолокации. Пожалуйста, разрешите его в настройках.'),
+                SnackBar(
+                  content: Text(tr(context, 'Для работы геотрекинга необходим доступ к геолокации. Пожалуйста, разрешите его в настройках.', 'Геотрекинг жұмыс істеуі үшін геолокация рұқсаты қажет. Баптаулардан рұқсат беріңіз.')),
                   backgroundColor: Colors.orange,
                   behavior: SnackBarBehavior.floating,
                 ),
@@ -126,9 +127,9 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
           // Нельзя включить — нет смены
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
+              SnackBar(
                 content:
-                    Text('Невозможно включить трекинг: нет активной смены'),
+                    Text(tr(context, 'Невозможно включить трекинг: нет активной смены', 'Трекинг қосу мүмкін емес: белсенді ауысым жоқ')),
                 backgroundColor: Colors.orange,
                 behavior: SnackBarBehavior.floating,
               ),
@@ -145,11 +146,11 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
         await stopBackgroundTracking();
       }
     } catch (e) {
-      debugPrint('Ошибка переключения геотрекинга: $e');
+      debugPrint(tr(context, 'Ошибка переключения геотрекинга: $e', 'Геотрекингті ауыстыру қатесі: $e'));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка при изменении статуса трекинга: $e'),
+            content: Text(tr(context, 'Ошибка при изменении статуса трекинга: $e', 'Трекинг мәртебесін өзгерту қатесі: $e')),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -192,8 +193,8 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ошибка выхода'),
+          SnackBar(
+            content: Text(tr(context, 'Ошибка выхода', 'Шығу қатесі')),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -218,8 +219,8 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
         _showUpdateDialog(currentVersion);
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('У вас установлена последняя версия'),
+          SnackBar(
+            content: Text(tr(context, 'У вас установлена последняя версия', 'Сізде соңғы нұсқа орнатылған')),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
           ),
@@ -229,7 +230,7 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка проверки обновлений: $e'),
+            content: Text(tr(context, 'Ошибка проверки обновлений: $e', 'Жаңартуларды тексеру қатесі: $e')),
             backgroundColor: Colors.orange,
             behavior: SnackBarBehavior.floating,
           ),
@@ -276,7 +277,7 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
             return _isNewerVersion(serverVersion, currentVersion);
           }
         } catch (e) {
-          debugPrint('Ошибка проверки версии iOS на бэкенде: $e');
+          debugPrint(tr(context, 'Ошибка проверки версии iOS на бэкенде: $e', 'Серверде iOS нұсқасын тексеру қатесі: $e'));
         }
       } else if (Platform.isAndroid) {
         // Для Android пробуем запросить актуальную версию с бэкенда
@@ -298,7 +299,7 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
         }
       }
     } catch (e) {
-      debugPrint('Ошибка проверки версии: $e');
+      debugPrint(tr(context, 'Ошибка проверки версии: $e', 'Нұсқаны тексеру қатесі: $e'));
     }
     return false;
   }
@@ -326,13 +327,13 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Доступно обновление'),
-          content: const Text(
-              'Доступна новая версия приложения. Рекомендуем обновить для получения последних улучшений и исправлений.'),
+          title: Text(tr(context, 'Доступно обновление', 'Жаңарту қолжетімді')),
+          content: Text(
+              tr(context, 'Доступна новая версия приложения. Рекомендуем обновить для получения последних улучшений и исправлений.', 'Қосымшаның жаңа нұсқасы қолжетімді. Соңғы өзгерістерді алу үшін жаңартуды ұсынамыз.')),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Позже'),
+              child: Text(tr(context, 'Позже', 'Кейінірек')),
             ),
             ElevatedButton(
               onPressed: () {
@@ -342,7 +343,7 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green[700],
               ),
-              child: const Text('Обновить'),
+              child: Text(tr(context, 'Обновить', 'Жаңарту')),
             ),
           ],
         );
@@ -366,13 +367,13 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
           mode: LaunchMode.externalApplication,
         );
       } else {
-        throw 'Не удалось открыть ссылку для загрузки';
+        throw tr(context, 'Не удалось открыть ссылку для загрузки', 'Жүктеу сілтемесін ашу мүмкін болмады');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка загрузки обновления: $e'),
+            content: Text(tr(context, 'Ошибка загрузки обновления: $e', 'Жаңартуды жүктеу қатесі: $e')),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -387,6 +388,75 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
 
 
 
+  void _showSettingsModal() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Настройки / Баптаулар',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 20),
+              ListTile(
+                leading: Icon(Icons.language, color: Colors.purple),
+                title: Text('Язык / Тіл'),
+                trailing: Consumer<LanguageProvider>(
+                  builder: (context, languageProvider, child) {
+                    return DropdownButton<String>(
+                      value: languageProvider.locale,
+                      underline: SizedBox(),
+                      items: const [
+                        DropdownMenuItem(value: 'ru', child: Text('Русский')),
+                        DropdownMenuItem(value: 'kk', child: Text('Қазақша')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          languageProvider.setLocale(val);
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(tr(context, 'Язык изменен', tr(context, 'Тіл ауыстырылды', 'Тіл ауыстырылды'))),
+                              backgroundColor: Colors.blue,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
+                    );
+                  },
+                ),
+              ),
+              ListTile(
+                leading: Icon(_isCheckingForUpdates ? Icons.downloading : Icons.system_update, color: Colors.blue),
+                title: Text(_isCheckingForUpdates ? tr(context, 'Проверка обновлений...', 'Жаңартуларды тексеру...') : tr(context, 'Проверить обновления / Жаңартуларды тексеру', 'Жаңартуларды тексеру')),
+                onTap: () {
+                  Navigator.pop(context);
+                  _checkForUpdates();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.info, color: Colors.grey),
+                title: Text(tr(context, 'О приложении / Қосымша туралы', 'Қосымша туралы')),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/about');
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   ///
   /// UI
   ///
@@ -395,7 +465,7 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Профиль'),
+        title: Text(tr(context, 'Профиль', 'Профиль')),
         automaticallyImplyLeading: false,
       ),
       body: RefreshIndicator(
@@ -408,7 +478,7 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                 themeProvider.themeData.brightness == Brightness.dark;
 
             if (!provider.hasLoadedProfile) {
-              return const Center(child: CircularProgressIndicator());
+              return Center(child: CircularProgressIndicator());
             }
 
             final profile = provider.profile ?? {};
@@ -418,7 +488,7 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
             return LayoutBuilder(
               builder: (context, constraints) {
                 return SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
+                  physics: AlwaysScrollableScrollPhysics(),
                   child: ConstrainedBox(
                     constraints:
                         BoxConstraints(minHeight: constraints.maxHeight),
@@ -426,9 +496,9 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _ProfileHeader(user: profile),
-                        const SizedBox(height: 10),
+                        SizedBox(height: 10),
                         Padding(
-                          padding: const EdgeInsets.all(16.0),
+                          padding: EdgeInsets.all(16.0),
                           child: Container(
                             width: double.infinity,
                             decoration: BoxDecoration(
@@ -439,28 +509,28 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                                   color: colorScheme.shadow,
                                   spreadRadius: 1,
                                   blurRadius: 12,
-                                  offset: const Offset(0, 6),
+                                  offset: Offset(0, 6),
                                 ),
                               ],
                             ),
-                            padding: const EdgeInsets.all(10),
+                            padding: EdgeInsets.all(10),
                             child: Column(
                               children: [
                                 if (['superadmin', 'coordinator', 'supervisor']
                                     .contains(userRole)) ...[
-                                  const _SettingsItem(
+                                  _SettingsItem(
                                     icon: Icons.admin_panel_settings,
-                                    title: 'Админ-панель',
+                                    title: tr(context, 'Админ-панель', 'Админ-панель'),
                                     route: '/admin',
                                   ),
                                 ],
-                                const SizedBox(height: 10),
+                                SizedBox(height: 10),
                                 Material(
                                   color: Colors.transparent,
                                   child: Row(
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.all(12),
+                                        padding: EdgeInsets.all(12),
                                         decoration: BoxDecoration(
                                           color: (Colors.green[700]!)
                                               .withOpacity(0.1),
@@ -471,17 +541,17 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                                           isDarkMode
                                               ? Icons.dark_mode
                                               : Icons.light_mode,
-                                          color: const Color.fromARGB(
+                                          color: Color.fromARGB(
                                               255, 134, 136, 33),
                                         ),
                                       ),
-                                      const SizedBox(width: 16),
+                                      SizedBox(width: 16),
                                       Expanded(
                                         child: Text(
                                           isDarkMode
-                                              ? 'Темная тема'
-                                              : 'Светлая тема',
-                                          style: const TextStyle(
+                                              ? tr(context, 'Темная тема', 'Қараңғы тақырып')
+                                              : tr(context, 'Светлая тема', 'Жарық тақырып'),
+                                          style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w500,
                                           ),
@@ -498,14 +568,14 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                                     ],
                                   ),
                                 ),
-                                const SizedBox(height: 10),
+                                SizedBox(height: 10),
                                 if (!_isLoadingGeoStatus) ...[
                                   Material(
                                     color: Colors.transparent,
                                     child: Row(
                                       children: [
                                         Container(
-                                          padding: const EdgeInsets.all(12),
+                                          padding: EdgeInsets.all(12),
                                           decoration: BoxDecoration(
                                             color: (Colors.blue[700]!)
                                                 .withOpacity(0.1),
@@ -517,10 +587,10 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                                             color: Colors.blue[700],
                                           ),
                                         ),
-                                        const SizedBox(width: 16),
-                                        const Expanded(
+                                        SizedBox(width: 16),
+                                        Expanded(
                                           child: Text(
-                                            'Отправка геоданных',
+                                            tr(context, 'Отправка геоданных', 'Геодеректерді жіберу'),
                                             style: TextStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.w500,
@@ -539,21 +609,21 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                                   Material(
                                     color: Colors.transparent,
                                     child: Padding(
-                                      padding: const EdgeInsets.symmetric(
+                                      padding: EdgeInsets.symmetric(
                                           vertical: 16.0),
                                       child: Row(
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
                                         children: [
-                                          const SizedBox(
+                                          SizedBox(
                                             width: 20,
                                             height: 20,
                                             child: CircularProgressIndicator(
                                                 strokeWidth: 2),
                                           ),
-                                          const SizedBox(width: 8),
+                                          SizedBox(width: 8),
                                           Text(
-                                            'Загрузка статуса...',
+                                            tr(context, 'Загрузка статуса...', 'Мәртебені жүктеу...'),
                                             style: TextStyle(
                                               color: Colors.grey[600],
                                               fontSize: 14,
@@ -564,38 +634,25 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                                     ),
                                   ),
                                 ],
-                                const SizedBox(height: 10),
-                                const _SettingsItem(
+                                SizedBox(height: 10),
+                                _SettingsItem(
                                   icon: Icons.card_giftcard,
-                                  title: 'Промокод',
+                                  title: tr(context, 'Промокод', 'Промокод'),
                                   route: '/promo',
                                   color: Color(0xFFAA81AA),
                                 ),
-                                const SizedBox(height: 10),
                                 _SettingsItem(
-                                  icon: _isCheckingForUpdates
-                                      ? Icons.downloading
-                                      : Icons.system_update,
-                                  title: _isCheckingForUpdates
-                                      ? 'Проверка обновлений...'
-                                      : 'Проверить обновления',
-                                  onTap: _checkForUpdates,
-                                  color: _isCheckingForUpdates
-                                      ? Colors.orange
-                                      : Colors.blue,
-                                ),
-                                const SizedBox(height: 10),
-                                const _SettingsItem(
-                                  icon: Icons.info,
-                                  title: 'О приложении',
-                                  route: '/about',
+                                  icon: Icons.settings,
+                                  title: 'Настройки / Баптаулар',
+                                  color: Colors.grey[700],
+                                  onTap: _showSettingsModal,
                                 ),
                               ],
                             ),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: EdgeInsets.symmetric(horizontal: 16),
                           child: Container(
                             width: double.infinity,
                             decoration: BoxDecoration(
@@ -606,20 +663,20 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                                   color: colorScheme.shadow,
                                   spreadRadius: 1,
                                   blurRadius: 12,
-                                  offset: const Offset(0, 6),
+                                  offset: Offset(0, 6),
                                 ),
                               ],
                             ),
-                            padding: const EdgeInsets.all(10),
+                            padding: EdgeInsets.all(10),
                             child: _SettingsItem(
                               icon: Icons.logout,
-                              title: 'Выйти',
+                              title: tr(context, 'Выйти', 'Шығу'),
                               color: Colors.red,
                               onTap: _logout,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 32),
+                        SizedBox(height: 32),
                       ],
                     ),
                   ),
@@ -646,11 +703,11 @@ class _ProfileHeader extends StatelessWidget {
     final role = _safeString(user['role']).toLowerCase();
     final fullName = (lastName.isNotEmpty || firstName.isNotEmpty)
         ? '$lastName $firstName'.trim()
-        : (username.isNotEmpty ? username : 'Пользователь');
+        : (username.isNotEmpty ? username : tr(context, 'Пользователь', 'Қолданушы'));
     final avatarUrl = _safeString(user['avatarUrl']);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 24),
+      padding: EdgeInsets.symmetric(vertical: 30, horizontal: 24),
       child: Column(
         children: [
           CircleAvatar(
@@ -662,25 +719,25 @@ class _ProfileHeader extends StatelessWidget {
                 ? SvgPicture.asset('assets/images/no_avatar.svg')
                 : null,
           ),
-          const SizedBox(height: 15),
+          SizedBox(height: 15),
           Text(
             fullName,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.blueGrey,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              _formatRole(role),
-              style: const TextStyle(
+              _formatRole(context, role),
+              style: TextStyle(
                 fontSize: 16,
                 color: Colors.white,
                 fontWeight: FontWeight.w500,
@@ -697,13 +754,13 @@ class _ProfileHeader extends StatelessWidget {
     return value.toString().trim();
   }
 
-  String _formatRole(String role) {
+  String _formatRole(BuildContext context, String role) {
     return {
-          'user': 'Пользователь',
-          'scout': 'Скаут',
-          'supervisor': 'Супервайзер',
-          'coordinator': 'Координатор',
-          'superadmin': 'Суперадмин'
+          'user': tr(context, 'Пользователь', 'Қолданушы'),
+          'scout': tr(context, 'Скаут', 'Скаут'),
+          'supervisor': tr(context, 'Супервайзер', 'Супервайзер'),
+          'coordinator': tr(context, 'Координатор', 'Координатор'),
+          'superadmin': tr(context, 'Суперадмин', 'Суперадмин')
         }[role] ??
         role.toUpperCase();
   }
@@ -737,7 +794,7 @@ class _SettingsItem extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: (color ?? Colors.green[700]!).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
@@ -747,11 +804,11 @@ class _SettingsItem extends StatelessWidget {
                 color: color ?? Colors.green[700],
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: 16),
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),

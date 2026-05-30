@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart'; // Добавляем этот пакет
 
 class AboutScreen extends StatefulWidget {
@@ -31,42 +32,42 @@ class _AboutScreenState extends State<AboutScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('О приложении'),
+        title: Text(tr(context, 'О приложении', 'Қосымша туралы')),
         backgroundColor: Colors.green[700],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const SizedBox(height: 40),
+            SizedBox(height: 40),
             // Иконка приложения
             Icon(Icons.bike_scooter_outlined,
                 size: 80, color: Colors.green[700]),
-            const SizedBox(height: 40),
-            const Text(
-              'Приложение для оператора микромобильности',
+            SizedBox(height: 40),
+            Text(
+              tr(context, 'Приложение для оператора микромобильности', 'Микромобильділік операторына арналған қосымша'),
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Text(
-              'Версия: $_version',
-              style: const TextStyle(fontSize: 16),
+              tr(context, 'Версия: $_version', 'Нұсқасы: $_version'),
+              style: TextStyle(fontSize: 16),
             ),
             Text(
-              'Сборка: $_buildNumber',
-              style: const TextStyle(fontSize: 16),
+              tr(context, 'Сборка: $_buildNumber', 'Құрастыру: $_buildNumber'),
+              style: TextStyle(fontSize: 16),
             ),
-            const SizedBox(height: 40),
-            const Text(
-              'Разработано @evn, @theYernar',
+            SizedBox(height: 40),
+            Text(
+              tr(context, 'Разработано @evn, @theYernar', 'Әзірлеген @evn, @theYernar'),
               style: TextStyle(fontSize: 14, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
-            const Text(
-              '© 2026 Все права защищены',
+            SizedBox(height: 8),
+            Text(
+              tr(context, '© 2026 Все права защищены', '© 2026 Барлық құқықтар қорғалған'),
               style: TextStyle(fontSize: 12, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
