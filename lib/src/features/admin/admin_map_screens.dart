@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+
+import 'tabs/employee_map_tab.dart';
 import 'tabs/map_upload_tab.dart';
 import 'tabs/zone_management_tab.dart';
-import 'tabs/employee_map_tab.dart';
 
 class MapAndZoneScreen extends StatefulWidget {
   const MapAndZoneScreen({super.key});
@@ -19,9 +20,9 @@ class _MapAndZoneScreenState extends State<MapAndZoneScreen> {
         children: [
           TabBar(
             tabs: [
-              Tab(icon: Icon(Icons.location_on), text: 'Онлайн'),
               Tab(icon: Icon(Icons.map), text: 'Карты'),
               Tab(icon: Icon(Icons.grid_3x3), text: 'Зоны'),
+              Tab(icon: Icon(Icons.location_on), text: 'Онлайн'),
             ],
           ),
           Expanded(

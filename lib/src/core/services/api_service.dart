@@ -780,6 +780,7 @@ class ApiService {
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
         },
       );
     }, token);
@@ -1268,7 +1269,11 @@ class ApiService {
       final response = await _authorizedRequest(
         (t) => http.get(
           Uri.parse(AppConfig.lastLocationsUrl),
-          headers: {'Authorization': 'Bearer $t', 'Content-Type': 'application/json'},
+          headers: {
+            'Authorization': 'Bearer $t', 
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          },
         ),
         token,
       );
@@ -1288,7 +1293,11 @@ class ApiService {
       final response = await _authorizedRequest(
         (t) => http.get(
           Uri.parse(url),
-          headers: {'Authorization': 'Bearer $t', 'Content-Type': 'application/json'},
+          headers: {
+            'Authorization': 'Bearer $t', 
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          },
         ),
         token,
       );

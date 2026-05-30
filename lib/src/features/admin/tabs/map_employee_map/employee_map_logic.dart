@@ -247,29 +247,37 @@ class EmployeeMapLogic {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/map_$mapId.geojson');
 
+      // Загружаем актуальный GeoJSON каждый раз
+      final metaResponse = await http.get(
+        Uri.parse(AppConfig.getMapByIdUrl(mapId)),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        },
+      );
+      
       String content = '';
-      if (await file.exists()) {
-        content = await file.readAsString();
-      }
-
-      if (content.isEmpty) {
-        // Если нет локальной, пробуем скачать (минимум логики из MapLogic)
-        final metaResponse = await http.get(
-          Uri.parse(AppConfig.getMapByIdUrl(mapId)),
-          headers: {'Authorization': 'Bearer $token'},
+      if (metaResponse.statusCode == 200) {
+        final meta = jsonDecode(metaResponse.body);
+        final fileUrl = AppConfig.getMapFileUrl(meta['file_name']);
+        final fileRes = await http.get(
+          Uri.parse(fileUrl),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+          },
         );
-        if (metaResponse.statusCode == 200) {
-          final meta = jsonDecode(metaResponse.body);
-          final fileUrl = AppConfig.getMapFileUrl(meta['file_name']);
-          final fileRes = await http.get(
-            Uri.parse(fileUrl),
-            headers: {'Authorization': 'Bearer $token'},
-          );
-          if (fileRes.statusCode == 200) {
-            content = fileRes.body;
-            await file.writeAsString(content);
-          }
+        if (fileRes.statusCode == 200) {
+          content = utf8.decode(fileRes.bodyBytes);
+          // Сохраняем локально на всякий случай
+          await file.writeAsString(content);
+        } else if (await file.exists()) {
+          // Если сеть недоступна, берем из кэша
+          content = await file.readAsString();
         }
+      } else if (await file.exists()) {
+        // Если сервер вернул ошибку, берем из кэша
+        content = await file.readAsString();
       }
 
       if (content.isNotEmpty) {
