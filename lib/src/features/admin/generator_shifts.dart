@@ -390,7 +390,7 @@ class _GeneratorShiftScreenState extends State<GeneratorShiftScreen> {
     final primaryColor = theme.primaryColor;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: Colors.transparent,
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator())
         : SingleChildScrollView(

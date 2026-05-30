@@ -1,4 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart' as flutter_secure_storage;
+import 'package:micro_mobility_app/src/core/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
@@ -251,7 +253,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 ),
 
               // Треки перемещений всех активных сотрудников за сегодня (как в 2GIS)
-              if (!_logic.isHistoryMode)
+              if (!_logic.isHistoryMode && _logic.showRoutes)
                 PolylineLayer(
                   polylines: _logic.activeEmployeesPaths.entries.map((entry) {
                     final userId = entry.key;
@@ -388,91 +390,64 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
             left: 20,
             child: _buildDateSelector(),
           ),
-          DraggableScrollableSheet(
-            controller: _sheetController,
-            initialChildSize: 0.20,
-            minChildSize: 0.15,
-            maxChildSize: 0.75,
-            snap: true,
-            snapSizes: const [0.15, 0.40, 0.75],
-            builder: (context, scrollController) {
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  final showHeader = constraints.maxHeight > 80;
-                  return Container(
-                    decoration: BoxDecoration(
-                      color:
-                          isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-                      borderRadius:
-                          const BorderRadius.vertical(top: Radius.circular(28)),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 20),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        GestureDetector(
-                          onTap: _toggleSheet,
-                          behavior: HitTestBehavior.opaque,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(height: 12),
-                              Container(
-                                width: 40,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[400],
-                                  borderRadius: BorderRadius.circular(2.5),
-                                ),
-                              ),
-                              if (showHeader) ...[
-                                const SizedBox(height: 8),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        _logic.isHistoryMode
-                                            ? 'Архив смен (${_logic.historyShifts.length})'
-                                            : 'Сотрудники (${_logic.employeeLocations.length})',
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 16),
-                                      ),
-                                      if (!_logic.isHistoryMode)
-                                        TextButton(
-                                          onPressed:
-                                              _logic.fetchEmployeeLocations,
-                                          child: const Text('Обновить',
-                                              style: TextStyle(
-                                                  color: Colors.green,
-                                                  fontWeight: FontWeight.bold)),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
+          if (_logic.selectedLiveEmployee == null && _logic.selectedShift == null)
+            Positioned(
+              bottom: 40,
+              left: 30,
+              right: 30,
+              child: GestureDetector(
+                onTap: () => _showEmployeeListModal(context, isDarkMode),
+                child: Container(
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.withOpacity(0.3),
+                        blurRadius: 24,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 8),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 12,
+                      )
+                    ],
+                    border: Border.all(color: Colors.green.withOpacity(0.4), width: 1.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.15),
+                          shape: BoxShape.circle,
                         ),
-                        Expanded(
-                          child: _logic.isHistoryMode
-                              ? _buildHistoryList(scrollController, isDarkMode)
-                              : _buildLiveList(scrollController, isDarkMode),
+                        child: const Icon(Icons.people_alt, color: Colors.green, size: 26),
+                      ),
+                      const SizedBox(width: 14),
+                      Text(
+                        _logic.isHistoryMode
+                            ? 'Смены (${_logic.historyShifts.length})'
+                            : 'Сотрудники (${_logic.employeeLocations.length})',
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                      ),
+                      const SizedBox(width: 14),
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.1),
+                          shape: BoxShape.circle,
                         ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+                        child: const Icon(Icons.keyboard_arrow_up, color: Colors.grey, size: 24),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
           // Shift Details UI (Overlay)
           if (_logic.selectedShift != null) _buildShiftDetailPanel(isDarkMode),
@@ -533,7 +508,10 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: InkWell(
-        onTap: () => _logic.zoomToEmployee(emp),
+        onTap: () {
+          Navigator.pop(context);
+          _logic.zoomToEmployee(emp);
+        },
         borderRadius: BorderRadius.circular(20),
         child: Container(
           padding: const EdgeInsets.all(12),
@@ -553,6 +531,16 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                     Text(emp.name ?? 'ID ${emp.userId}',
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(isOnline ? Icons.wifi : Icons.wifi_off, 
+                          size: 14, color: isOnline ? Colors.green : Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(isOnline ? 'В сети' : 'Был(а): ${DateFormat('HH:mm').format(emp.timestamp.toLocal())}',
+                            style: TextStyle(color: isOnline ? Colors.green : Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -580,7 +568,10 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                         color: _logic.selectedEmployeeId == emp.userId
                             ? Colors.orange
                             : Colors.grey),
-                    onPressed: () => _showHistory(emp),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showHistory(emp);
+                    },
                     constraints: const BoxConstraints(),
                     padding: EdgeInsets.zero,
                   ),
@@ -680,7 +671,10 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: InkWell(
-            onTap: () => _logic.selectShift(shift),
+            onTap: () {
+              Navigator.pop(context);
+              _logic.selectShift(shift);
+            },
             borderRadius: BorderRadius.circular(20),
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -707,7 +701,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 16)),
                         Text(
-                          '${DateFormat('HH:mm').format(shift.startTime ?? DateTime.now())} - ${shift.endTime != null ? DateFormat('HH:mm').format(shift.endTime!) : "..."}',
+                          '${DateFormat('HH:mm').format((shift.startTime ?? DateTime.now()).toLocal())} - ${shift.endTime != null ? DateFormat('HH:mm').format(shift.endTime!.toLocal()) : "..."}',
                           style:
                               TextStyle(color: Colors.grey[600], fontSize: 12),
                         ),
@@ -724,10 +718,75 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     );
   }
 
+  void _showEmployeeListModal(BuildContext context, bool isDarkMode) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.5,
+          minChildSize: 0.3,
+          maxChildSize: 0.9,
+          builder: (_, controller) {
+            return Container(
+              decoration: BoxDecoration(
+                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400],
+                      borderRadius: BorderRadius.circular(2.5),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _logic.isHistoryMode
+                              ? 'Архив смен (${_logic.historyShifts.length})'
+                              : 'Сотрудники (${_logic.employeeLocations.length})',
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                        ),
+                        if (!_logic.isHistoryMode)
+                          IconButton(
+                            icon: const Icon(Icons.refresh, color: Colors.green),
+                            onPressed: () {
+                              _logic.fetchEmployeeLocations();
+                              setState(() {});
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: _logic.isHistoryMode
+                        ? _buildHistoryList(controller, isDarkMode)
+                        : _buildLiveList(controller, isDarkMode),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildShiftDetailPanel(bool isDarkMode) {
     final shift = _logic.selectedShift!;
     return Positioned(
-      bottom: 100, // Над BottomSheet
+      bottom: 20, // Опускаем вниз, так как BottomSheet скрыт
       left: 20,
       right: 20,
       child: Container(
@@ -765,7 +824,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                               TextStyle(color: Colors.grey[400], fontSize: 13)),
                       const SizedBox(height: 4),
                       Text(
-                        'Смена: ${DateFormat('HH:mm').format(shift.startTime ?? DateTime.now())} - ${shift.endTime != null ? DateFormat('HH:mm').format(shift.endTime!) : "В процессе"}',
+                        'Смена: ${DateFormat('HH:mm').format((shift.startTime ?? DateTime.now()).toLocal())} - ${shift.endTime != null ? DateFormat('HH:mm').format(shift.endTime!.toLocal()) : "В процессе"}',
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 13),
                       ),
@@ -793,7 +852,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     final isOnline = _logic.isEmployeeOnline(emp.timestamp);
     
     return Positioned(
-      bottom: 100, // Над BottomSheet
+      bottom: 20, // Опускаем вниз, так как BottomSheet скрыт
       left: 20,
       right: 20,
       child: Container(
@@ -825,7 +884,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                           Icon(isOnline ? Icons.wifi : Icons.wifi_off, 
                             size: 14, color: isOnline ? Colors.green : Colors.grey),
                           const SizedBox(width: 4),
-                          Text(isOnline ? 'В сети' : 'Был(а): ${DateFormat('HH:mm').format(emp.timestamp)}',
+                          Text(isOnline ? 'В сети' : 'Был(а): ${DateFormat('HH:mm').format(emp.timestamp.toLocal())}',
                               style: TextStyle(color: isOnline ? Colors.green : Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
                         ],
                       ),
@@ -853,9 +912,101 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showPersonalNotificationDialog(emp.userId, emp.name),
+                icon: const Icon(Icons.send_rounded, size: 18),
+                label: const Text('Отправить пуш', style: TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent.withOpacity(0.1),
+                  foregroundColor: Colors.blueAccent,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  void _showPersonalNotificationDialog(String userIdStr, String? userName) {
+    final TextEditingController msgController = TextEditingController();
+    bool isSending = false;
+    final userId = int.tryParse(userIdStr) ?? 0;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  const Icon(Icons.send_rounded, color: Colors.blueAccent),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Сообщение для ${userName ?? 'ID $userId'}', style: const TextStyle(fontSize: 16))),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: msgController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'Почему стоим на месте?',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSending ? null : () => Navigator.pop(ctx),
+                  child: const Text('Отмена'),
+                ),
+                ElevatedButton(
+                  onPressed: isSending ? null : () async {
+                    final msg = msgController.text.trim();
+                    if (msg.isEmpty) return;
+
+                    setDialogState(() => isSending = true);
+                    try {
+                      final token = await const flutter_secure_storage.FlutterSecureStorage().read(key: 'jwt_token');
+                      if (token != null) {
+                        await ApiService().sendAdminNotification(token, msg, userId: userId);
+                        if (mounted) {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(content: Text('Сообщение отправлено!'), backgroundColor: Colors.green),
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      setDialogState(() => isSending = false);
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white),
+                  child: isSending 
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Отправить'),
+                ),
+              ],
+            );
+          }
+        );
+      },
     );
   }
 
@@ -957,6 +1108,11 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
               }),
               _buildLayerToggle('Маркеры GeoJSON', _logic.showMarkers, (v) {
                 _logic.toggleLayer('markers');
+                setModalState(() {});
+                setState(() {});
+              }),
+              _buildLayerToggle('Маршруты сотрудников', _logic.showRoutes, (v) {
+                _logic.toggleLayer('routes');
                 setModalState(() {});
                 setState(() {});
               }),

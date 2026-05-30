@@ -601,7 +601,7 @@ class _SlotSetupModalState extends State<SlotSetupModal> {
                 color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Text('Слоты: 06:40–15:00, 14:40–23:00', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              child: const Text('Пожалуйста, дождитесь начала вашей смены.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
             ),
           ],
         ),

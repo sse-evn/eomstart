@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:micro_mobility_app/src/core/services/api_service.dart';
 import 'package:micro_mobility_app/src/core/config/app_config.dart';
 import 'package:micro_mobility_app/src/features/admin/promo_codes_admin_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/shift_history_screen.dart';
@@ -7,6 +9,7 @@ import 'package:micro_mobility_app/src/features/admin/admin_map_screens.dart';
 import 'package:micro_mobility_app/src/features/admin/scooter_reports_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/generator_shifts.dart';
 import 'package:micro_mobility_app/src/features/admin/widgets/admin_users_list.dart';
+import 'package:micro_mobility_app/src/features/admin/tabs/slot_management_tab.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -18,13 +21,15 @@ class AdminPanelScreen extends StatefulWidget {
 class _AdminPanelScreenState extends State<AdminPanelScreen> {
   int _currentIndex = 0;
 
-  final List<String> _titles = [
+  List<String> get _titles => [
     'Пользователи',
-    'Генератор смен',
     'Карта',
     'Смены',
-    'Промокоды',
+    'Управление',
   ];
+
+  Widget? _subScreen;
+  String? _subTitle;
 
   @override
   void initState() {
@@ -36,6 +41,144 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     super.dispose();
   }
 
+  Widget _buildSettingsMenu() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ListTile(
+            leading: const Icon(Icons.calendar_today_outlined, color: Colors.blue),
+            title: const Text('Генератор смен', style: TextStyle(fontWeight: FontWeight.bold)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => setState(() {
+              _subScreen = const GeneratorShiftScreen();
+              _subTitle = 'Генератор смен';
+            }),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ListTile(
+            leading: const Icon(Icons.local_offer_outlined, color: Colors.orange),
+            title: const Text('Промокоды', style: TextStyle(fontWeight: FontWeight.bold)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => setState(() {
+              _subScreen = const AdminPromoScreen();
+              _subTitle = 'Промокоды';
+            }),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ListTile(
+            leading: const Icon(Icons.av_timer_outlined, color: Colors.green),
+            title: const Text('Слоты времени', style: TextStyle(fontWeight: FontWeight.bold)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => setState(() {
+              _subScreen = const SlotManagementTab();
+              _subTitle = 'Управление слотами';
+            }),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ListTile(
+            leading: const Icon(Icons.campaign_outlined, color: Colors.redAccent),
+            title: const Text('Массовая рассылка', style: TextStyle(fontWeight: FontWeight.bold)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              _showMassNotificationDialog(context);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showMassNotificationDialog(BuildContext context) {
+    final TextEditingController msgController = TextEditingController();
+    bool isSending = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.campaign, color: Colors.redAccent),
+                  SizedBox(width: 8),
+                  Text('Рассылка курьерам', style: TextStyle(fontSize: 18)),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Сообщение получат все курьеры, находящиеся сейчас на смене (через Telegram-бота).',
+                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: msgController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'Начался дождь, будьте аккуратнее...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSending ? null : () => Navigator.pop(ctx),
+                  child: const Text('Отмена'),
+                ),
+                ElevatedButton(
+                  onPressed: isSending ? null : () async {
+                    final msg = msgController.text.trim();
+                    if (msg.isEmpty) return;
+
+                    setDialogState(() => isSending = true);
+                    try {
+                      final token = await const FlutterSecureStorage().read(key: 'jwt_token');
+                      if (token != null) {
+                        await ApiService().sendAdminNotification(token, msg);
+                        if (mounted) {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(content: Text('Уведомления успешно отправлены!'), backgroundColor: Colors.green),
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      setDialogState(() => isSending = false);
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+                  child: isSending 
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Отправить всем'),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -43,55 +186,55 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
     Widget currentBody;
 
-    switch (_currentIndex) {
-      case 0:
-        currentBody = const AdminUsersList();
-        break;
-      case 1:
-        currentBody = const GeneratorShiftScreen();
-        break;
-      case 2:
-        currentBody = const MapAndZoneScreen();
-        break;
-      case 3:
-        currentBody = DefaultTabController(
-          length: 3,
-          child: Column(
-            children: [
-              Material(
-                color: primaryColor,
-                child: const TabBar(
-                  tabs: [
-                    Tab(text: 'Активные', icon: Icon(Icons.play_arrow, size: 18)),
-                    Tab(text: 'История', icon: Icon(Icons.history, size: 18)),
-                    Tab(text: 'Надзор', icon: Icon(Icons.report_problem_outlined, size: 18)),
-                  ],
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white70,
-                  indicator: UnderlineTabIndicator(
-                    borderSide: BorderSide(color: Colors.white, width: 2.0),
+    if (_subScreen != null) {
+      currentBody = _subScreen!;
+    } else {
+      switch (_currentIndex) {
+        case 0:
+          currentBody = const AdminUsersList();
+          break;
+        case 1:
+          currentBody = const MapAndZoneScreen();
+          break;
+        case 2:
+          currentBody = DefaultTabController(
+            length: 3,
+            child: Column(
+              children: [
+                Material(
+                  color: primaryColor,
+                  child: const TabBar(
+                    tabs: [
+                      Tab(text: 'Активные', icon: Icon(Icons.play_arrow, size: 18)),
+                      Tab(text: 'История', icon: Icon(Icons.history, size: 18)),
+                      Tab(text: 'Надзор', icon: Icon(Icons.report_problem_outlined, size: 18)),
+                    ],
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white70,
+                    indicator: UnderlineTabIndicator(
+                      borderSide: BorderSide(color: Colors.white, width: 2.0),
+                    ),
                   ),
                 ),
-              ),
-              const Expanded(
-                child: TabBarView(
-                  children: [
-                    // ✅ Экраны просто перестраиваются при setState
-                    ShiftMonitoringScreen(),
-                    ShiftHistoryScreen(),
-                    ScooterReportsScreen(),
-                  ],
+                const Expanded(
+                  child: TabBarView(
+                    children: [
+                      ShiftMonitoringScreen(),
+                      ShiftHistoryScreen(),
+                      ScooterReportsScreen(),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-        break;
-      case 4:
-        currentBody = const AdminPromoScreen();
-        break;
-      default:
-        currentBody = const AdminUsersList();
+              ],
+            ),
+          );
+          break;
+        case 3:
+          currentBody = _buildSettingsMenu();
+          break;
+        default:
+          currentBody = const AdminUsersList();
+      }
     }
 
     return GestureDetector(
@@ -103,8 +246,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           backgroundColor: theme.scaffoldBackgroundColor,
           surfaceTintColor: Colors.transparent,
           centerTitle: false,
+          leading: _subScreen != null
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () {
+                    setState(() {
+                      _subScreen = null;
+                      _subTitle = null;
+                    });
+                  },
+                )
+              : null,
           title: Text(
-            _titles[_currentIndex],
+            _subTitle ?? _titles[_currentIndex],
             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: -0.5),
           ),
           actions: [
@@ -153,6 +307,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             onTap: (index) {
               setState(() {
                 _currentIndex = index;
+                _subScreen = null;
+                _subTitle = null;
               });
             },
             type: BottomNavigationBarType.fixed,
@@ -169,11 +325,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 label: 'Пользователи',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.calendar_today_outlined),
-                activeIcon: Icon(Icons.calendar_today),
-                label: 'Генератор смен',
-              ),
-              BottomNavigationBarItem(
                 icon: Icon(Icons.map_outlined),
                 activeIcon: Icon(Icons.map),
                 label: 'Карта',
@@ -184,9 +335,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 label: 'Смены',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.local_offer_outlined),
-                activeIcon: Icon(Icons.local_offer),
-                label: 'Промокоды',
+                icon: Icon(Icons.settings_outlined),
+                activeIcon: Icon(Icons.settings),
+                label: 'Управление',
               ),
             ],
           ),

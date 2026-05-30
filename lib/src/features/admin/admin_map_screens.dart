@@ -21,16 +21,16 @@ class _MapAndZoneScreenState extends State<MapAndZoneScreen> {
           TabBar(
             tabs: [
               Tab(icon: Icon(Icons.grid_3x3), text: 'Зоны'),
-              Tab(icon: Icon(Icons.location_on), text: 'Онлайн'),
               Tab(icon: Icon(Icons.map), text: 'Карты'),
+              Tab(icon: Icon(Icons.location_on), text: 'Онлайн'),
             ],
           ),
           Expanded(
             child: TabBarView(
               children: [
-                EmployeeMapTab(),
-                MapUploadTab(),
                 ZoneManagementTab(),
+                MapUploadTab(),
+                EmployeeMapTab(),
               ],
             ),
           ),

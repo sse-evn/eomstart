@@ -1333,4 +1333,70 @@ class ApiService {
       rethrow;
     }
   }
+
+  Future<List<dynamic>> getAdminSlots(String token) async {
+    final response = await http.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/slots'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load slots');
+  }
+
+  Future<void> createAdminSlot(String token, String range) async {
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/slots'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'slot_time_range': range}),
+    );
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw Exception('Failed to create slot');
+    }
+  }
+
+  Future<void> toggleAdminSlot(String token, int id, bool isActive) async {
+    final response = await http.put(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/slots/$id/toggle'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'is_active': isActive}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to toggle slot');
+    }
+  }
+
+  Future<void> deleteAdminSlot(String token, int id) async {
+    final response = await http.delete(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/slots/$id'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete slot');
+    }
+  }
+
+  Future<void> sendAdminNotification(String token, String message, {int? userId}) async {
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/notify'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'message': message,
+        if (userId != null) 'user_id': userId,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to send notification');
+    }
+  }
 }
