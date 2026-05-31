@@ -10,6 +10,7 @@ import 'package:micro_mobility_app/src/features/admin/scooter_reports_screen.dar
 import 'package:micro_mobility_app/src/features/admin/generator_shifts.dart';
 import 'package:micro_mobility_app/src/features/admin/widgets/admin_users_list.dart';
 import 'package:micro_mobility_app/src/features/admin/tabs/slot_management_tab.dart';
+import 'package:micro_mobility_app/src/features/admin/tabs/daily_reports_tab.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -80,6 +81,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             onTap: () => setState(() {
               _subScreen = const SlotManagementTab();
               _subTitle = 'Управление слотами';
+            }),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ListTile(
+            leading: const Icon(Icons.analytics_outlined, color: Colors.purple),
+            title: const Text('Отчеты по сменам', style: TextStyle(fontWeight: FontWeight.bold)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => setState(() {
+              _subScreen = const DailyReportsTab();
+              _subTitle = 'Отчеты по сменам';
             }),
           ),
         ),
