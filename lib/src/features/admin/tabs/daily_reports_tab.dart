@@ -267,6 +267,9 @@ class _DailyReportsTabState extends State<DailyReportsTab> {
       ],
     );
 
+    // Парсинг текста в карточки
+    final chunks = _reportText.split('\n\n').where((s) => s.trim().isNotEmpty).toList();
+
     return Column(
       children: [
         // Панель управления (Top Bar)
@@ -298,45 +301,59 @@ class _DailyReportsTabState extends State<DailyReportsTab> {
                 ),
         ),
         
-        // Основной контент (Текст отчета)
+        // Основной контент (Карточки)
         Expanded(
           child: Container(
             color: isDark ? const Color(0xFF121212) : const Color(0xFFF5F7FA),
             width: double.infinity,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Align(
-                alignment: isSmallScreen ? Alignment.topCenter : Alignment.topLeft,
-                child: Container(
-                  width: double.infinity,
-                  constraints: const BoxConstraints(maxWidth: 1000),
-                  padding: EdgeInsets.all(isSmallScreen ? 16 : 32),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                    border: Border.all(
-                      color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
-                    ),
+            child: _reportText.isEmpty
+                ? const Center(child: Text('Нет данных для отображения'))
+                : ListView.builder(
+                    padding: EdgeInsets.all(isSmallScreen ? 16 : 32),
+                    itemCount: chunks.length,
+                    itemBuilder: (context, index) {
+                      final chunk = chunks[index].trim();
+                      
+                      // Определяем стиль карточки по контенту
+                      bool isAnalytics = chunk.startsWith('📊') || chunk.startsWith('📈') || chunk.startsWith('🔧') || chunk.startsWith('🏆');
+                      bool isSummary = chunk.startsWith('Итог по сервисам');
+                      bool isDate = chunk.startsWith('📅');
+
+                      Color cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+                      if (isAnalytics || isSummary) {
+                        cardColor = isDark ? const Color(0xFF252525) : const Color(0xFFF0F4F8); // Выделяем аналитику
+                      }
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        constraints: const BoxConstraints(maxWidth: 1000),
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.03),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                          border: Border.all(
+                            color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+                          ),
+                        ),
+                        child: SelectableText(
+                          chunk,
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 14 : 16,
+                            height: 1.6,
+                            color: isDark ? Colors.grey[300] : Colors.grey[800],
+                            fontWeight: (isAnalytics || isSummary) && !isDate ? FontWeight.w500 : FontWeight.normal,
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                  child: SelectableText(
-                    _reportText,
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 14 : 16,
-                      height: 1.8,
-                      fontFamily: 'monospace',
-                      color: isDark ? Colors.grey[300] : Colors.grey[800],
-                    ),
-                  ),
-                ),
-              ),
-            ),
           ),
         ),
       ],
