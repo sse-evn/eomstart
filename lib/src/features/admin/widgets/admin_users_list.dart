@@ -770,7 +770,13 @@ class _AdminUsersListState extends State<AdminUsersList> {
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          Text('@$username', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                          Flexible(
+                            child: Text(
+                              '@$username',
+                              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
@@ -793,7 +799,13 @@ class _AdminUsersListState extends State<AdminUsersList> {
                           children: [
                             Icon(Icons.system_update_rounded, size: 12, color: Colors.blueAccent),
                             const SizedBox(width: 4),
-                            Text('v${user['app_version']}', style: TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                            Flexible(
+                              child: Text(
+                                'v${user['app_version']}',
+                                style: const TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ],
