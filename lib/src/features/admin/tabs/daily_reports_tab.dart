@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:micro_mobility_app/src/core/config/app_config.dart';
 
 class DailyReportsTab extends StatefulWidget {
@@ -78,6 +81,8 @@ class _DailyReportsTabState extends State<DailyReportsTab> {
       final url = Uri.parse('${AppConfig.apiBaseUrl}/admin/scooter-reports-summary$queryParams');
       final response = await http.get(url, headers: {'Authorization': 'Bearer $token'});
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final decoded = utf8.decode(response.bodyBytes);
         final data = jsonDecode(decoded);
@@ -88,9 +93,61 @@ class _DailyReportsTabState extends State<DailyReportsTab> {
         throw Exception('Ошибка загрузки: ${response.statusCode}');
       }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _exportToExcel() async {
+    if (_startDate == null || _endDate == null) return;
+    
+    setState(() {
+      _isLoading = true;
+      _error = '';
+    });
+
+    try {
+      final token = await _storage.read(key: 'jwt_token');
+      if (token == null) throw Exception('Токен не найден');
+
+      final startStr = "${_startDate!.year}-${_startDate!.month.toString().padLeft(2, '0')}-${_startDate!.day.toString().padLeft(2, '0')}";
+      final endStr = "${_endDate!.year}-${_endDate!.month.toString().padLeft(2, '0')}-${_endDate!.day.toString().padLeft(2, '0')}";
+      final url = Uri.parse('${AppConfig.apiBaseUrl}/admin/scooter-reports/excel?start_date=$startStr&end_date=$endStr');
+
+      final response = await http.get(
+        url,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/scooter_reports_$startStr.xlsx');
+        await file.writeAsBytes(response.bodyBytes);
+        
+        if (mounted) {
+          await Share.shareXFiles(
+            [XFile(file.path)],
+            text: 'Отчет по самокатам с $startStr по $endStr',
+          );
+        }
+      } else {
+        throw Exception('Ошибка загрузки Excel: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка экспорта: $e'), backgroundColor: Colors.red),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -193,6 +250,16 @@ class _DailyReportsTabState extends State<DailyReportsTab> {
           icon: const Icon(Icons.copy, size: 18),
           label: const Text('Скопировать'),
           style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        FilledButton.icon(
+          onPressed: _exportToExcel,
+          icon: const Icon(Icons.table_view, size: 18),
+          label: const Text('Экспорт в Excel'),
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.green[700],
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
