@@ -18,10 +18,44 @@ class _DailyReportsTabState extends State<DailyReportsTab> {
   String _reportText = '';
   String _error = '';
 
+  DateTime? _startDate;
+  DateTime? _endDate;
+
   @override
   void initState() {
     super.initState();
+    // Default to last 7 days
+    _endDate = DateTime.now();
+    _startDate = _endDate!.subtract(const Duration(days: 7));
     _fetchReport();
+  }
+
+  Future<void> _selectDateRange() async {
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      initialDateRange: _startDate != null && _endDate != null
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+      firstDate: DateTime(2023),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _startDate = picked.start;
+        _endDate = picked.end;
+      });
+      _fetchReport();
+    }
   }
 
   Future<void> _fetchReport() async {
@@ -34,7 +68,14 @@ class _DailyReportsTabState extends State<DailyReportsTab> {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) throw Exception('Токен не найден');
 
-      final url = Uri.parse('${AppConfig.apiBaseUrl}/admin/scooter-reports-summary');
+      String queryParams = '';
+      if (_startDate != null && _endDate != null) {
+        final startStr = '${_startDate!.year}-${_startDate!.month.toString().padLeft(2, '0')}-${_startDate!.day.toString().padLeft(2, '0')}';
+        final endStr = '${_endDate!.year}-${_endDate!.month.toString().padLeft(2, '0')}-${_endDate!.day.toString().padLeft(2, '0')}';
+        queryParams = '?start_date=$startStr&end_date=$endStr';
+      }
+
+      final url = Uri.parse('${AppConfig.apiBaseUrl}/admin/scooter-reports-summary$queryParams');
       final response = await http.get(url, headers: {'Authorization': 'Bearer $token'});
 
       if (response.statusCode == 200) {
@@ -61,6 +102,10 @@ class _DailyReportsTabState extends State<DailyReportsTab> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final isSmallScreen = MediaQuery.of(context).size.width < 600;
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -70,71 +115,164 @@ class _DailyReportsTabState extends State<DailyReportsTab> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Ошибка: $_error', style: const TextStyle(color: Colors.red)),
+            const Icon(Icons.error_outline, color: Colors.red, size: 48),
             const SizedBox(height: 16),
-            ElevatedButton(
+            Text('Произошла ошибка', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text(_error, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 24),
+            FilledButton.icon(
               onPressed: _fetchReport,
-              child: const Text('Повторить'),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Повторить'),
             ),
           ],
         ),
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+    final dateLabel = _startDate != null && _endDate != null
+        ? '${_startDate!.day.toString().padLeft(2, '0')}.${_startDate!.month.toString().padLeft(2, '0')} — ${_endDate!.day.toString().padLeft(2, '0')}.${_endDate!.month.toString().padLeft(2, '0')}'
+        : 'Выберите период';
+
+    // Заголовок и иконка
+    final headerInfo = Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(Icons.analytics, color: theme.colorScheme.primary),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ElevatedButton.icon(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: _reportText));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Отчет скопирован в буфер обмена')),
-                  );
-                },
-                icon: const Icon(Icons.copy),
-                label: const Text('Копировать'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                ),
+              const Text(
+                'Сводка по сменам',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: _fetchReport,
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Обновить',
+              Text(
+                'Агрегированные данные',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).brightness == Brightness.dark 
-                    ? Colors.white.withOpacity(0.05) 
-                    : Colors.grey[100],
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                ),
+        ),
+      ],
+    );
+
+    // Кнопки управления
+    final headerActions = Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      alignment: isSmallScreen ? WrapAlignment.start : WrapAlignment.end,
+      children: [
+        OutlinedButton.icon(
+          onPressed: _selectDateRange,
+          icon: const Icon(Icons.calendar_today, size: 18),
+          label: Text(dateLabel),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        FilledButton.icon(
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: _reportText));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Отчет скопирован в буфер обмена'),
+                backgroundColor: Colors.green,
               ),
-              child: SelectableText(
-                _reportText,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontFamily: 'monospace',
+            );
+          },
+          icon: const Icon(Icons.copy, size: 18),
+          label: const Text('Скопировать'),
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      ],
+    );
+
+    return Column(
+      children: [
+        // Панель управления (Top Bar)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.grey[900] : Colors.white,
+            border: Border(
+              bottom: BorderSide(
+                color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+              ),
+            ),
+          ),
+          child: isSmallScreen
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    headerInfo,
+                    const SizedBox(height: 16),
+                    headerActions,
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: headerInfo),
+                    const SizedBox(width: 16),
+                    headerActions,
+                  ],
+                ),
+        ),
+        
+        // Основной контент (Текст отчета)
+        Expanded(
+          child: Container(
+            color: isDark ? const Color(0xFF121212) : const Color(0xFFF5F7FA),
+            width: double.infinity,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Align(
+                alignment: isSmallScreen ? Alignment.topCenter : Alignment.topLeft,
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxWidth: 1000),
+                  padding: EdgeInsets.all(isSmallScreen ? 16 : 32),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+                    ),
+                  ),
+                  child: SelectableText(
+                    _reportText,
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 14 : 16,
+                      height: 1.8,
+                      fontFamily: 'monospace',
+                      color: isDark ? Colors.grey[300] : Colors.grey[800],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
