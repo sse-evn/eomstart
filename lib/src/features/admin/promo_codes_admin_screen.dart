@@ -508,6 +508,103 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
     }
   }
 
+  Future<void> _uploadMatrixExcel() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'xls'],
+    );
+    if (result == null) return;
+
+    String? dialogBrand = 'WHOOSH';
+
+    final selectedData = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Загрузка матрицы промокодов'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Файл должен иметь даты в первой строке (колонки). Старые невыданные промокоды выбранного бренда будут удалены.',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: dialogBrand,
+                items: ['JET', 'YANDEX', 'WHOOSH', 'BOLT']
+                    .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                    .toList(),
+                onChanged: (v) => setDialogState(() => dialogBrand = v),
+                decoration:
+                    const InputDecoration(labelText: 'Бренд промокодов'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (dialogBrand != null) {
+                  Navigator.pop(ctx, {'brand': dialogBrand!});
+                }
+              },
+              child: const Text('Загрузить'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (selectedData == null) return;
+
+    final file = File(result.files.single.path!);
+    final bytes = await file.readAsBytes();
+
+    setState(() => _isLoading = true);
+
+    try {
+      await _service.uploadPromoMatrixFile(
+        bytes,
+        brand: selectedData['brand']!,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Матрица ${selectedData['brand']} успешно загружена!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadAllData();
+      }
+    } on PromoApiServiceException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode == 401) {
+        _handleUnauthorized();
+      } else if (e.statusCode == 403) {
+        _handleForbidden();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: ${e.message}'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<void> _uploadFromGoogleSheet() async {
     final controller = TextEditingController();
     String? dialogBrand;
@@ -1362,7 +1459,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                   Icon(Icons.description_outlined,
                       color: Colors.green, size: 32),
                   SizedBox(height: 12),
-                  Text('Excel / CSV',
+                  Text('Excel (1 дата)',
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Colors.green,
@@ -1372,7 +1469,34 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
+        Expanded(
+          child: InkWell(
+            onTap: _uploadMatrixExcel,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              decoration: BoxDecoration(
+                color: Colors.purple.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.purple.withOpacity(0.3)),
+              ),
+              child: const Column(
+                children: [
+                  Icon(Icons.grid_view_outlined, color: Colors.purple, size: 32),
+                  SizedBox(height: 12),
+                  Text('Матрица (даты)',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.purple,
+                          fontSize: 10)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
         Expanded(
           child: InkWell(
             onTap: _uploadFromGoogleSheet,
@@ -1388,7 +1512,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
                 children: [
                   Icon(Icons.grid_on_outlined, color: Colors.blue, size: 32),
                   SizedBox(height: 12),
-                  Text('Google Sheets',
+                  Text('Таблицы',
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Colors.blue,
@@ -1398,7 +1522,7 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: InkWell(
             onTap: _clearPromoCodes,

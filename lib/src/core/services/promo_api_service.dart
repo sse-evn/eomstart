@@ -79,6 +79,56 @@ class PromoApiService {
     );
   }
 
+  Future<void> uploadPromoMatrixFile(
+    List<int> fileBytes, {
+    required String brand,
+  }) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw PromoApiServiceException('Не авторизован', statusCode: 401);
+    }
+
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/promo/upload-matrix');
+    final request = http.MultipartRequest('POST', uri);
+
+    request.headers['Authorization'] = 'Bearer $token';
+
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        fileBytes,
+        filename: 'matrix.xlsx',
+        contentType: MediaType(
+          'application',
+          'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ),
+      ),
+    );
+
+    request.fields['brand'] = brand;
+
+    final response = await request.send();
+    final body = await response.stream.bytesToString();
+
+    if (response.statusCode == 200) return;
+
+    if (response.statusCode == 401) {
+      throw PromoApiServiceException('Сессия истекла', statusCode: 401);
+    }
+    if (response.statusCode == 403) {
+      throw PromoApiServiceException(
+        'Доступ запрещён: нужны права администратора',
+        statusCode: 403,
+      );
+    }
+
+    final error = _tryParseJson(body)?['error'] ?? body;
+    throw PromoApiServiceException(
+      'Ошибка загрузки матрицы: $error',
+      statusCode: response.statusCode,
+    );
+  }
+
   Future<void> uploadPromoFromGoogleSheet(String sheetUrl,
       {required String brand, required String validFrom, required String validUntil, String? subtype}) async {
     final token = await _getToken();
