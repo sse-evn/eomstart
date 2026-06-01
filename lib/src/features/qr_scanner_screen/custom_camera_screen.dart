@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
@@ -29,7 +30,9 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
   double _minZoomLevel = 1.0;
   double _maxZoomLevel = 1.0;
   double _currentZoomLevel = 1.0;
-  bool _isUltraWideActive = false;
+  double _baseZoomLevel = 1.0;
+  Offset? _focusPoint;
+  Timer? _focusTimer;
 
   @override
   void initState() {
@@ -62,9 +65,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
         final backCameras = _cameras
             .where((c) => c.lensDirection == CameraLensDirection.back)
             .toList();
-        if (_isUltraWideActive && backCameras.length > 1) {
-          selectedCamera = backCameras[1];
-        } else if (backCameras.isNotEmpty) {
+        if (backCameras.isNotEmpty) {
           selectedCamera = backCameras[0];
         } else {
           selectedCamera = _cameras.first;
@@ -118,7 +119,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
           _isCameraInitialized = true;
           _minZoomLevel = minZoom;
           _maxZoomLevel = maxZoom;
-          _currentZoomLevel = _isUltraWideActive ? 0.5 : 1.0;
+          _currentZoomLevel = 1.0;
         });
       }
     } catch (e) {
@@ -135,6 +136,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
       DeviceOrientation.portraitUp,
     ]);
     // Null out first so any incoming callbacks after dispose() are ignored
+    _focusTimer?.cancel();
     final c = _controller;
     _controller = null;
     c?.dispose();
@@ -183,52 +185,87 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
     }
   }
 
+  void _handleScaleStart(ScaleStartDetails details) {
+    _baseZoomLevel = _currentZoomLevel;
+  }
+
+  Future<void> _handleScaleUpdate(ScaleUpdateDetails details) async {
+    if (_controller == null || !_isCameraInitialized) return;
+    
+    double zoomLevel = (_baseZoomLevel * details.scale).clamp(_minZoomLevel, _maxZoomLevel);
+        
+    if (zoomLevel == _currentZoomLevel) return;
+
+    try {
+      await _controller!.setZoomLevel(zoomLevel);
+      if (mounted) {
+        setState(() {
+          _currentZoomLevel = zoomLevel;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error scaling zoom: $e');
+    }
+  }
+
+  void _handleTapToFocus(TapDownDetails details, BoxConstraints constraints) async {
+    if (_controller == null || !_isCameraInitialized) return;
+
+    final offset = Offset(
+      details.localPosition.dx / constraints.maxWidth,
+      details.localPosition.dy / constraints.maxHeight,
+    );
+
+    setState(() {
+      _focusPoint = details.localPosition;
+    });
+
+    try {
+      await _controller!.setFocusPoint(offset);
+      await _controller!.setExposurePoint(offset);
+    } catch (e) {
+      debugPrint('Error setting focus: $e');
+    }
+
+    _focusTimer?.cancel();
+    _focusTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _focusPoint = null;
+        });
+      }
+    });
+  }
+
   Future<void> _toggleZoom() async {
     if (_controller == null || !_controller!.value.isInitialized) return;
 
-    final backCameras = _cameras
-        .where((c) => c.lensDirection == CameraLensDirection.back)
-        .toList();
-
-    if (widget.overlayType == CameraOverlayType.landscape &&
-        backCameras.length > 1) {
-      // У нас есть поддержка сверхширокоугольного объектива (0.5x) на уровне физических камер!
-      setState(() {
-        _isUltraWideActive = !_isUltraWideActive;
-        _isCameraInitialized = false;
-      });
-
-      // Перезапускаем камеру с новым сенсором
-      final oldController = _controller;
-      _controller = null;
-      await oldController?.dispose();
-
-      await _initCamera();
-    } else {
-      // Обычный цифровой зум для устройств с одной камерой
-      try {
-        double targetZoom = 1.0;
-        if (_currentZoomLevel == 1.0) {
-          if (_minZoomLevel < 1.0) {
-            targetZoom = _minZoomLevel;
-          } else {
-            targetZoom = _maxZoomLevel >= 2.0 ? 2.0 : _maxZoomLevel;
-          }
-        } else if (_currentZoomLevel < 1.0) {
-          targetZoom = 1.0;
+    try {
+      double targetZoom = 1.0;
+      
+      if ((_currentZoomLevel - 1.0).abs() < 0.1) {
+        // Current is ~1.0x -> Go to 2.0x
+        targetZoom = _maxZoomLevel >= 2.0 ? 2.0 : _maxZoomLevel;
+      } else if (_currentZoomLevel > 1.1) {
+        // Current is ~2.0x -> Go to 0.5x (if supported), else 1.0x
+        if (_minZoomLevel < 1.0) {
+          targetZoom = _minZoomLevel; 
         } else {
           targetZoom = 1.0;
         }
-
-        await _controller!.setZoomLevel(targetZoom);
-        if (mounted) {
-          setState(() {
-            _currentZoomLevel = targetZoom;
-          });
-        }
-      } catch (e) {
-        debugPrint('Error toggling zoom: $e');
+      } else {
+        // Current is < 1.0x (e.g. 0.5x) -> Go to 1.0x
+        targetZoom = 1.0;
       }
+
+      await _controller!.setZoomLevel(targetZoom);
+      if (mounted) {
+        setState(() {
+          _currentZoomLevel = targetZoom;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error toggling zoom: $e');
     }
   }
 
@@ -269,7 +306,32 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
                       MediaQuery.of(context).orientation == Orientation.portrait
                           ? 1 / _controller!.value.aspectRatio
                           : _controller!.value.aspectRatio,
-                  child: CameraPreview(_controller!),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return GestureDetector(
+                        onScaleStart: _handleScaleStart,
+                        onScaleUpdate: _handleScaleUpdate,
+                        onTapDown: (details) => _handleTapToFocus(details, constraints),
+                        child: Stack(
+                          children: [
+                            CameraPreview(_controller!),
+                            if (_focusPoint != null)
+                              Positioned(
+                                left: _focusPoint!.dx - 25,
+                                top: _focusPoint!.dy - 25,
+                                child: Container(
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.yellow, width: 2),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -337,7 +399,7 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
                 onPressed: _toggleFlash,
               ),
             ),
-            // Кнопка переключения зума (0.5x / 1.0x / 2.0x)
+            // Кнопка переключения зума (1.0x / 2.0x)
             Positioned(
               bottom: 130,
               left: 0,
@@ -354,11 +416,9 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
                       border: Border.all(color: Colors.white24, width: 1.5),
                     ),
                     child: Text(
-                      _currentZoomLevel < 1.0
-                          ? '0.5x'
-                          : _currentZoomLevel == 1.0
-                              ? '1.0x'
-                              : '${_currentZoomLevel.toStringAsFixed(1)}x',
+                      _currentZoomLevel == 1.0
+                          ? '1.0x'
+                          : '${_currentZoomLevel.toStringAsFixed(1)}x',
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
