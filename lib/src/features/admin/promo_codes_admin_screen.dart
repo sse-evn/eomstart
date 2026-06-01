@@ -1441,113 +1441,121 @@ class _PromoManagementContentState extends State<PromoManagementContent> {
   }
 
   Widget _buildUploadActions(bool isDarkMode) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: InkWell(
-            onTap: _uploadExcel,
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: _uploadExcel,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
-              ),
-              child: const Column(
-                children: [
-                  Icon(Icons.description_outlined,
-                      color: Colors.green, size: 32),
-                  SizedBox(height: 12),
-                  Text('Excel (1 дата)',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                          fontSize: 11)),
-                ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.green.withOpacity(0.3)),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.description_outlined,
+                          color: Colors.green, size: 32),
+                      SizedBox(height: 12),
+                      Text('Excel (1 дата)',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                              fontSize: 11)),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: InkWell(
+                onTap: _uploadMatrixExcel,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.purple.withOpacity(0.3)),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.grid_view_outlined, color: Colors.purple, size: 32),
+                      SizedBox(height: 12),
+                      Text('Матрица (даты)',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.purple,
+                              fontSize: 11)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: InkWell(
-            onTap: _uploadMatrixExcel,
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              decoration: BoxDecoration(
-                color: Colors.purple.withOpacity(0.1),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: _uploadFromGoogleSheet,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.purple.withOpacity(0.3)),
-              ),
-              child: const Column(
-                children: [
-                  Icon(Icons.grid_view_outlined, color: Colors.purple, size: 32),
-                  SizedBox(height: 12),
-                  Text('Матрица (даты)',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.purple,
-                          fontSize: 10)),
-                ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.grid_on_outlined, color: Colors.blue, size: 32),
+                      SizedBox(height: 12),
+                      Text('Таблицы',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                              fontSize: 11)),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: InkWell(
-            onTap: _uploadFromGoogleSheet,
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
+            const SizedBox(width: 12),
+            Expanded(
+              child: InkWell(
+                onTap: _clearPromoCodes,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.blue.withOpacity(0.3)),
-              ),
-              child: const Column(
-                children: [
-                  Icon(Icons.grid_on_outlined, color: Colors.blue, size: 32),
-                  SizedBox(height: 12),
-                  Text('Таблицы',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                          fontSize: 11)),
-                ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.delete_sweep_outlined,
+                          color: Colors.red, size: 32),
+                      SizedBox(height: 12),
+                      Text('Очистить',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                              fontSize: 11)),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: InkWell(
-            onTap: _clearPromoCodes,
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
-              ),
-              child: const Column(
-                children: [
-                  Icon(Icons.delete_sweep_outlined,
-                      color: Colors.red, size: 32),
-                  SizedBox(height: 12),
-                  Text('Очистить',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.red,
-                          fontSize: 11)),
-                ],
-              ),
-            ),
-          ),
+          ],
         ),
       ],
     );

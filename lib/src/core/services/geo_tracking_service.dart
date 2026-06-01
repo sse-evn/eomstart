@@ -28,6 +28,7 @@ Timer? _backgroundTimer;
 StreamSubscription<Position>? _positionStreamSubscription;
 int? _activeShiftId;
 String? _bgAuthToken;
+Position? _latestPosition;
 final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
 bool _serviceIsActuallyRunning = false;
@@ -77,21 +78,29 @@ FutureOr<bool> onStart(ServiceInstance service) async {
     service.stopSelf();
   });
 
+  LocationSettings settings;
   if (defaultTargetPlatform == TargetPlatform.iOS) {
-    _log("Инициализация iOS Location Stream...");
-    _positionStreamSubscription = Geolocator.getPositionStream(
-      locationSettings: AppleSettings(
-        accuracy: LocationAccuracy.best,
-        distanceFilter: 10,
-        allowBackgroundLocationUpdates: true,
-        showBackgroundLocationIndicator: true,
-        pauseLocationUpdatesAutomatically: false,
-        activityType: ActivityType.otherNavigation,
-      ),
-    ).listen((position) {
-      _handleSinglePositionReceived(position);
-    });
+    settings = AppleSettings(
+      accuracy: LocationAccuracy.best,
+      distanceFilter: 0,
+      allowBackgroundLocationUpdates: true,
+      showBackgroundLocationIndicator: true,
+      pauseLocationUpdatesAutomatically: false,
+      activityType: ActivityType.otherNavigation,
+    );
+  } else {
+    settings = const LocationSettings(
+      accuracy: LocationAccuracy.best,
+      distanceFilter: 0,
+    );
   }
+
+  _log("Инициализация Location Stream...");
+  _positionStreamSubscription = Geolocator.getPositionStream(
+    locationSettings: settings,
+  ).listen((position) {
+    _latestPosition = position;
+  });
 
   // Запускаем таймер сбора данных
   _backgroundTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
@@ -144,52 +153,13 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
       return;
     }
 
-    Position position;
+    Position? position = _latestPosition;
     int batteryLevel;
 
-    try {
-      final LocationSettings locationSettings;
-      if (defaultTargetPlatform == TargetPlatform.iOS) {
-        locationSettings = AppleSettings(
-          accuracy: LocationAccuracy.best,
-          distanceFilter: 0,
-          allowBackgroundLocationUpdates: true,
-          showBackgroundLocationIndicator: true,
-          pauseLocationUpdatesAutomatically: false,
-          activityType: ActivityType.otherNavigation,
-          timeLimit: const Duration(seconds: 8),
-        );
-      } else {
-        locationSettings = const LocationSettings(
-          accuracy: LocationAccuracy.best,
-          distanceFilter: 0,
-          timeLimit: Duration(seconds: 10),
-        );
-      }
-
-      position = await Geolocator.getCurrentPosition(
-        locationSettings: locationSettings,
-      );
-    } catch (e) {
-      _log("Ошибка получения лучшей позиции: $e. Пробуем сбалансированную точность...");
-      try {
-        final fallbackSettings = LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          distanceFilter: 0,
-          timeLimit: const Duration(seconds: 5),
-        );
-        position = await Geolocator.getCurrentPosition(
-          locationSettings: fallbackSettings,
-        );
-      } catch (fallbackError) {
-        _log("Ошибка fallback-позиции: $fallbackError. Пробуем последнюю известную...");
-        final lastPos = await Geolocator.getLastKnownPosition();
-        if (lastPos != null) {
-          position = lastPos;
-        } else {
-          return;
-        }
-      }
+    if (position == null) {
+      _log("Stream еще не дал позицию. Пробуем получить последнюю известную...");
+      position = await Geolocator.getLastKnownPosition();
+      if (position == null) return;
     }
 
     try {
@@ -316,22 +286,20 @@ Future<bool> startBackgroundTracking({required int shiftId}) async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       _log("Location services are disabled.");
-      return false;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      _log("Location denied, requesting...");
-      permission = await Geolocator.requestPermission();
+      // Мы не прерываем, чтобы кнопка включилась, а сервис попытается потом.
+    } else {
+      LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        _log("Location denied after request.");
-        return false;
+        _log("Location denied, requesting...");
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _log("Location denied after request.");
+        }
       }
-    }
-    
-    if (permission == LocationPermission.deniedForever) {
-      _log("Location permanently denied.");
-      return false;
+      
+      if (permission == LocationPermission.deniedForever) {
+        _log("Location permanently denied.");
+      }
     }
 
     // Попытка запросить Always доступ, если это возможно, но не критично для запуска
@@ -377,18 +345,23 @@ Future<bool> startBackgroundTracking({required int shiftId}) async {
     _bgAuthToken = token;
   }
 
-  if (!_serviceIsActuallyRunning) {
-    await service.configure(
-      androidConfiguration: AndroidConfiguration(
-        onStart: onStart,
-        autoStart: false,
-        isForegroundMode: true,
-      ),
-      iosConfiguration: IosConfiguration(
-        onForeground: onStart,
-        onBackground: onStart,
-      ),
-    );
+  try {
+    bool isServiceActive = await service.isRunning();
+    if (!isServiceActive) {
+      await service.configure(
+        androidConfiguration: AndroidConfiguration(
+          onStart: onStart,
+          autoStart: false,
+          isForegroundMode: true,
+        ),
+        iosConfiguration: IosConfiguration(
+          onForeground: onStart,
+          onBackground: onStart,
+        ),
+      );
+    }
+  } catch (e) {
+    _log("Ошибка при конфигурации сервиса: $e");
   }
 
   await service.startService();
