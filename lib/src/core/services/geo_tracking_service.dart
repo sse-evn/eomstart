@@ -31,9 +31,146 @@ StreamSubscription<Position>? _positionStreamSubscription;
 int? _activeShiftId;
 String? _bgAuthToken;
 Position? _latestPosition;
+DateTime? _lastSendTime; // Время последней отправки (для iOS throttle)
 final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
 bool _serviceIsActuallyRunning = false;
+int _consecutiveStreamErrors = 0;
+bool _isSending = false; // Предотвращаем одновременную отправку из stream и timer
+
+/// Собирает и отправляет геоданные — общая логика для timer и stream
+Future<void> _collectAndSend(Position position) async {
+  if (_isSending) return; // Другая отправка уже в процессе
+  _isSending = true;
+
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+
+    final currentActiveShiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
+    if (currentActiveShiftId == null) {
+      _log("ShiftID отсутствует — пропускаем.");
+      return;
+    }
+
+    _activeShiftId = currentActiveShiftId;
+
+    final freshToken = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
+    if (freshToken != null) _bgAuthToken = freshToken;
+
+    if (position.latitude == 0.0 || position.longitude == 0.0) {
+      _log("Получена 0,0 позиция — пропуск");
+      return;
+    }
+
+    int batteryLevel;
+    try {
+      batteryLevel = await Battery().batteryLevel;
+    } catch (_) {
+      batteryLevel = 0;
+    }
+
+    final geoDataJson = jsonEncode({
+      'lat': position.latitude,
+      'lon': position.longitude,
+      'speed': position.speed,
+      'accuracy': position.accuracy,
+      'battery': batteryLevel,
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'event': 'tracking',
+      'shift_id': _activeShiftId,
+    });
+
+    final key = 'geo_buffer_$_activeShiftId';
+    List<String> currentBuffer = prefs.getStringList(key) ?? [];
+    currentBuffer.add(geoDataJson);
+
+    try {
+      await _sendGeoDataBatch(currentBuffer, _activeShiftId!);
+      await prefs.remove(key);
+      _lastSendTime = DateTime.now();
+      _log("✅ Отправлено ${currentBuffer.length} точек (включая буфер)");
+    } catch (e) {
+      _log("❌ Ошибка отправки: $e, буферизуем (${currentBuffer.length} точек)");
+      if (currentBuffer.length > 1000) {
+        currentBuffer.removeRange(0, currentBuffer.length - 1000);
+      }
+      await prefs.setStringList(key, currentBuffer);
+    }
+  } catch (e) {
+    _log("Критическая ошибка: $e");
+  } finally {
+    _isSending = false;
+  }
+}
+
+/// Запускает или перезапускает position stream с автовосстановлением.
+/// На iOS: stream — это ЕДИНСТВЕННЫЙ надёжный механизм, он сам отправляет данные.
+/// На Android: stream кэширует позицию, а таймер отправляет.
+void _startPositionStream() {
+  _positionStreamSubscription?.cancel();
+  _positionStreamSubscription = null;
+
+  LocationSettings settings;
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    settings = AppleSettings(
+      accuracy: LocationAccuracy.best,
+      distanceFilter: 5, // На iOS: каждые 5 метров = новая позиция (экономит батарею)
+      allowBackgroundLocationUpdates: true,
+      showBackgroundLocationIndicator: true,
+      pauseLocationUpdatesAutomatically: false,
+      activityType: ActivityType.otherNavigation,
+    );
+  } else {
+    settings = AndroidSettings(
+      accuracy: LocationAccuracy.best,
+      distanceFilter: 0,
+      intervalDuration: const Duration(seconds: 10),
+    );
+  }
+
+  _log("Запуск Position Stream...");
+  _positionStreamSubscription = Geolocator.getPositionStream(
+    locationSettings: settings,
+  ).listen(
+    (position) {
+      _latestPosition = position;
+      _consecutiveStreamErrors = 0;
+
+      // === На iOS: отправляем данные ПРЯМО ИЗ STREAM ===
+      // iOS убивает Dart-таймер в фоне, но position stream работает,
+      // потому что он привязан к нативному Core Location.
+      // Throttle: отправляем не чаще раза в 15 секунд.
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        final now = DateTime.now();
+        if (_lastSendTime == null ||
+            now.difference(_lastSendTime!).inSeconds >= 15) {
+          _collectAndSend(position);
+        }
+      }
+    },
+    onError: (error) {
+      _log("❌ Position Stream ошибка: $error");
+      _consecutiveStreamErrors++;
+      final delay = Duration(seconds: (_consecutiveStreamErrors * 5).clamp(5, 60));
+      _log("Перезапуск stream через ${delay.inSeconds} сек...");
+      Future.delayed(delay, () {
+        if (_serviceIsActuallyRunning) {
+          _startPositionStream();
+        }
+      });
+    },
+    onDone: () {
+      _log("⚠️ Position Stream завершился. Перезапуск через 5 сек...");
+      Future.delayed(const Duration(seconds: 5), () {
+        if (_serviceIsActuallyRunning) {
+          _startPositionStream();
+        }
+      });
+    },
+    cancelOnError: false,
+  );
+}
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
@@ -48,6 +185,8 @@ Future<void> onStart(ServiceInstance service) async {
   }
 
   _serviceIsActuallyRunning = true;
+  _consecutiveStreamErrors = 0;
+  _lastSendTime = null;
   final prefs = await SharedPreferences.getInstance();
   final shiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
 
@@ -79,42 +218,40 @@ Future<void> onStart(ServiceInstance service) async {
     _positionStreamSubscription?.cancel();
     _positionStreamSubscription = null;
     _activeShiftId = null;
+    _latestPosition = null;
+    _lastSendTime = null;
     _serviceIsActuallyRunning = false;
     service.stopSelf();
   });
 
-  LocationSettings settings;
-  if (defaultTargetPlatform == TargetPlatform.iOS) {
-    settings = AppleSettings(
-      accuracy: LocationAccuracy.best,
-      distanceFilter: 0,
-      allowBackgroundLocationUpdates: true,
-      showBackgroundLocationIndicator: true,
-      pauseLocationUpdatesAutomatically: false,
-      activityType: ActivityType.otherNavigation,
-    );
-  } else {
-    settings = const LocationSettings(
-      accuracy: LocationAccuracy.best,
-      distanceFilter: 0,
-    );
-  }
+  // Запускаем Position Stream с автовосстановлением
+  _startPositionStream();
 
-  _log("Инициализация Location Stream...");
-  _positionStreamSubscription = Geolocator.getPositionStream(
-    locationSettings: settings,
-  ).listen((position) {
-    _latestPosition = position;
-  });
-
-  // Запускаем таймер сбора данных
+  // Таймер — основной механизм на Android.
+  // На iOS таймер работает как запасной вариант (пока приложение в foreground).
+  // Когда iOS убьёт таймер в фоне, stream продолжит отправлять сам.
   _backgroundTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
-    await _collectAndAttemptToSendGeoData(timer);
+    final pos = _latestPosition;
+    if (pos == null) {
+      _log("Таймер: нет позиции, пропуск.");
+      return;
+    }
+
+    // Проверяем, не отправил ли уже stream за последние 10 сек (на iOS)
+    if (_lastSendTime != null &&
+        DateTime.now().difference(_lastSendTime!).inSeconds < 10) {
+      _log("Таймер: stream уже отправил недавно, пропуск.");
+      return;
+    }
+
+    await _collectAndSend(pos);
+
     if (service is AndroidServiceInstance) {
+      final now = DateTime.now();
       service.setForegroundNotificationInfo(
         title: "Микромобильность",
         content:
-            "Геопозиция обновлена: ${DateTime.now().hour}:${DateTime.now().minute}:${DateTime.now().second}",
+            "Обновлено: ${now.hour}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}",
       );
     }
   });
@@ -130,22 +267,32 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 
   try {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.reload(); // Обязательно синхронизируем данные с диска
+    await prefs.reload();
     
     final shiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
     final token = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
 
     if (shiftId == null || token == null) {
-      _log("iOS BG: Нет shiftId или токена, пропускаем отправку.");
+      _log("iOS BG: Нет shiftId или токена, пропускаем.");
       return true;
     }
 
     _bgAuthToken = token;
     _activeShiftId = shiftId;
 
-    final position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.best,
-    );
+    Position? position;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.best),
+      ).timeout(const Duration(seconds: 10));
+    } catch (_) {
+      position = await Geolocator.getLastKnownPosition();
+    }
+
+    if (position == null) {
+      _log("iOS BG: Позиция недоступна.");
+      return true;
+    }
     
     int batteryLevel;
     try {
@@ -172,9 +319,9 @@ Future<bool> onIosBackground(ServiceInstance service) async {
     try {
       await _sendGeoDataBatch(currentBuffer, shiftId);
       await prefs.remove(key);
-      _log("iOS BG: Успешно отправлено ${currentBuffer.length} точек");
+      _log("iOS BG: Отправлено ${currentBuffer.length} точек");
     } catch (networkError) {
-      _log("iOS BG: Ошибка сети, сохраняем в буфер (${currentBuffer.length} точек)");
+      _log("iOS BG: Ошибка сети, буферизуем (${currentBuffer.length} точек)");
       if (currentBuffer.length > 1000) {
         currentBuffer.removeRange(0, currentBuffer.length - 1000);
       }
@@ -187,95 +334,10 @@ Future<bool> onIosBackground(ServiceInstance service) async {
   }
 }
 
-Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
-  _log("Сбор геоданных...");
-
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.reload(); // Обязательно синхронизируем данные с диска (UI мог обновить токен)
-    
-    final currentActiveShiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
-
-    if (currentActiveShiftId == null) {
-      _log("ShiftID отсутствует — пропускаем тик (таймер не останавливаем).");
-      _activeShiftId = null;
-      return;
-    }
-
-    // Всегда синхронизируем локальный ID с актуальным из SharedPreferences
-    _activeShiftId = currentActiveShiftId;
-
-    // Обновляем токен из хранилища на случай, если он поменялся (refresh)
-    final freshToken = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
-    if (freshToken != null) _bgAuthToken = freshToken;
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      _log("Нет разрешения — прерываем.");
-      return;
-    }
-
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      _log("GPS выключен.");
-      return;
-    }
-
-    Position? position = _latestPosition;
-    int batteryLevel;
-
-    if (position == null) {
-      _log("Stream еще не дал позицию. Пробуем получить последнюю известную...");
-      position = await Geolocator.getLastKnownPosition();
-      if (position == null) return;
-    }
-
-    try {
-      batteryLevel = await Battery().batteryLevel;
-    } catch (e) {
-      batteryLevel = 0;
-    }
-
-    if (position.latitude == 0.0 || position.longitude == 0.0) {
-      _log("Получена 0,0 позиция — пропуск");
-      return;
-    }
-
-    final geoDataJson = jsonEncode({
-      'lat': position.latitude,
-      'lon': position.longitude,
-      'speed': position.speed,
-      'accuracy': position.accuracy,
-      'battery': batteryLevel,
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-      'event': 'tracking',
-      'shift_id': _activeShiftId,
-    });
-
-    final key = 'geo_buffer_$_activeShiftId';
-    List<String> currentBuffer = prefs.getStringList(key) ?? [];
-    currentBuffer.add(geoDataJson);
-
-    try {
-      await _sendGeoDataBatch(currentBuffer, _activeShiftId!);
-      await prefs.remove(key);
-      _log("✅ Успешно отправлено ${currentBuffer.length} точек (включая офлайн буфер)");
-    } catch (e) {
-      _log("❌ Ошибка отправки: $e, сохраняем в буфер (${currentBuffer.length} точек)...");
-      if (currentBuffer.length > 1000) {
-        currentBuffer.removeRange(0, currentBuffer.length - 1000);
-      }
-      await prefs.setStringList(key, currentBuffer);
-    }
-  } catch (e) {
-    _log("Критическая ошибка в сборе данных: $e");
-  }
-}
-
 Future<void> _sendGeoDataBatch(List<String> geoDataJsonList, int shiftId) async {
   final token = _bgAuthToken;
   if (token == null) {
-    _log("Ошибка: Токен отсутствует в фоновом режиме.");
+    _log("Ошибка: Токен отсутствует.");
     throw Exception('JWT missing in background');
   }
 
@@ -290,7 +352,7 @@ Future<void> _sendGeoDataBatch(List<String> geoDataJsonList, int shiftId) async 
     body: jsonEncode({
       'data': dataList
     }),
-  );
+  ).timeout(const Duration(seconds: 15));
 
   if (res.statusCode != 200) {
     if (res.statusCode == 401) {
@@ -304,12 +366,11 @@ Future<void> _sendGeoDataBatch(List<String> geoDataJsonList, int shiftId) async 
 Future<bool> startBackgroundTracking({required int shiftId}) async {
   _log("startBackgroundTracking($shiftId)");
 
-  // 1. Проверяем и запрашиваем геопозицию через Geolocator (он работает надежнее на iOS)
+  // 1. Проверяем и запрашиваем геопозицию
   try {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       _log("Location services are disabled.");
-      // Мы не прерываем, чтобы кнопка включилась, а сервис попытается потом.
     } else {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -325,14 +386,13 @@ Future<bool> startBackgroundTracking({required int shiftId}) async {
       }
     }
 
-    // Попытка запросить Always доступ, если это возможно, но не критично для запуска
+    // Попытка запросить Always доступ — критично для iOS фонового трекинга
     var alwaysStatus = await Permission.locationAlways.status;
     if (alwaysStatus.isDenied) {
       await Permission.locationAlways.request();
     }
   } catch (e) {
-    _log("Ошибка при запросе разрешений геолокации: $e");
-    // Не прерываем запуск, позволим Geolocator внутри фонового процесса разобраться самому
+    _log("Ошибка при запросе разрешений: $e");
   }
 
   // 2. Для Android запрашиваем отключение ограничений батареи
@@ -344,7 +404,7 @@ Future<bool> startBackgroundTracking({required int shiftId}) async {
         await Permission.ignoreBatteryOptimizations.request();
       }
     } catch (e) {
-      _log("Ошибка при запросе ignoreBatteryOptimizations: $e");
+      _log("Ошибка ignoreBatteryOptimizations: $e");
     }
   }
 
@@ -360,7 +420,6 @@ Future<bool> startBackgroundTracking({required int shiftId}) async {
   final service = FlutterBackgroundService();
   final token = await _storage.read(key: 'jwt_token');
 
-  // Сохраняем shiftId, токен и помечаем, что трекинг включён
   await prefs.setInt(_SHARED_PREFS_SHIFT_ID_KEY, shiftId);
   await prefs.setBool(_SHARED_PREFS_BG_RUNNING_KEY, true);
   if (token != null) {
@@ -384,7 +443,7 @@ Future<bool> startBackgroundTracking({required int shiftId}) async {
       );
     }
   } catch (e) {
-    _log("Ошибка при конфигурации сервиса: $e");
+    _log("Ошибка конфигурации сервиса: $e");
   }
 
   await service.startService();
@@ -400,7 +459,11 @@ Future<void> stopBackgroundTracking() async {
 
   _backgroundTimer?.cancel();
   _backgroundTimer = null;
+  _positionStreamSubscription?.cancel();
+  _positionStreamSubscription = null;
   _activeShiftId = null;
+  _latestPosition = null;
+  _lastSendTime = null;
   _serviceIsActuallyRunning = false;
 
   await prefs.remove(_SHARED_PREFS_SHIFT_ID_KEY);
@@ -416,8 +479,7 @@ Future<bool> isBackgroundTrackingRunning() async {
   final hasRunningFlag = prefs.getBool(_SHARED_PREFS_BG_RUNNING_KEY) ?? false;
   if (!hasRunningFlag) return false;
 
-  // На iOS возвращаем статус на основе сохраненного флага предпочтений, так как 
-  // фоновые процессы iOS сильно ограничены и вызов .isRunning() часто возвращает false.
+  // На iOS возвращаем флаг из SharedPrefs, т.к. .isRunning() ненадежен
   if (defaultTargetPlatform == TargetPlatform.iOS) {
     return true;
   }
@@ -426,7 +488,7 @@ Future<bool> isBackgroundTrackingRunning() async {
     final isServiceRunning = await FlutterBackgroundService().isRunning();
     return isServiceRunning;
   } catch (e) {
-    _log("Ошибка при проверке реального статуса сервиса: $e");
+    _log("Ошибка проверки статуса сервиса: $e");
     return false;
   }
 }
