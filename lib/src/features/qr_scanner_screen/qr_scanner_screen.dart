@@ -510,10 +510,19 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       return;
     }
 
+    try {
+      await cameraController.stop();
+    } catch (_) {}
+
     final String? photoPath = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const CustomCameraScreen()),
     );
+
+    try {
+      await cameraController.start();
+    } catch (_) {}
+
     if (photoPath == null) return;
 
     if (mounted) setState(() => _isProcessing = true);

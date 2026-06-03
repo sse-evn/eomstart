@@ -2,9 +2,11 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
@@ -34,12 +36,15 @@ final FlutterSecureStorage _storage = const FlutterSecureStorage();
 bool _serviceIsActuallyRunning = false;
 
 @pragma('vm:entry-point')
-FutureOr<bool> onStart(ServiceInstance service) async {
+Future<void> onStart(ServiceInstance service) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+
   _log("onStart вызван");
 
   if (_serviceIsActuallyRunning) {
     _log("Сервис уже поднят — игнорируем.");
-    return true;
+    return;
   }
 
   _serviceIsActuallyRunning = true;
@@ -50,7 +55,7 @@ FutureOr<bool> onStart(ServiceInstance service) async {
     _log("Нет active_shift_id — останавливаем.");
     service.stopSelf();
     _serviceIsActuallyRunning = false;
-    return false;
+    return;
   }
 
   _activeShiftId = shiftId;
@@ -116,8 +121,70 @@ FutureOr<bool> onStart(ServiceInstance service) async {
 
   await prefs.setBool(_SHARED_PREFS_BG_RUNNING_KEY, true);
   _log("Сервис запущен для смены $_activeShiftId");
+}
 
-  return true;
+@pragma('vm:entry-point')
+Future<bool> onIosBackground(ServiceInstance service) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload(); // Обязательно синхронизируем данные с диска
+    
+    final shiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
+    final token = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
+
+    if (shiftId == null || token == null) {
+      _log("iOS BG: Нет shiftId или токена, пропускаем отправку.");
+      return true;
+    }
+
+    _bgAuthToken = token;
+    _activeShiftId = shiftId;
+
+    final position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.best,
+    );
+    
+    int batteryLevel;
+    try {
+      batteryLevel = await Battery().batteryLevel;
+    } catch (_) {
+      batteryLevel = 0;
+    }
+
+    final geoDataJson = jsonEncode({
+      'lat': position.latitude,
+      'lon': position.longitude,
+      'speed': position.speed,
+      'accuracy': position.accuracy,
+      'battery': batteryLevel,
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'event': 'ios_background',
+      'shift_id': shiftId,
+    });
+
+    final key = 'geo_buffer_$shiftId';
+    List<String> currentBuffer = prefs.getStringList(key) ?? [];
+    currentBuffer.add(geoDataJson);
+
+    try {
+      await _sendGeoDataBatch(currentBuffer, shiftId);
+      await prefs.remove(key);
+      _log("iOS BG: Успешно отправлено ${currentBuffer.length} точек");
+    } catch (networkError) {
+      _log("iOS BG: Ошибка сети, сохраняем в буфер (${currentBuffer.length} точек)");
+      if (currentBuffer.length > 1000) {
+        currentBuffer.removeRange(0, currentBuffer.length - 1000);
+      }
+      await prefs.setStringList(key, currentBuffer);
+    }
+    return true;
+  } catch (e) {
+    _log("iOS BG fetch error: $e");
+    return true;
+  }
 }
 
 Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
@@ -125,11 +192,12 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
 
   try {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload(); // Обязательно синхронизируем данные с диска (UI мог обновить токен)
+    
     final currentActiveShiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
 
     if (currentActiveShiftId == null) {
-      _log("ShiftID отсутствует — останавливаем таймер.");
-      timer.cancel();
+      _log("ShiftID отсутствует — пропускаем тик (таймер не останавливаем).");
       _activeShiftId = null;
       return;
     }
@@ -184,67 +252,34 @@ Future<void> _collectAndAttemptToSendGeoData(Timer timer) async {
       'shift_id': _activeShiftId,
     });
 
-    _log("Отправляем: $geoDataJson");
+    final key = 'geo_buffer_$_activeShiftId';
+    List<String> currentBuffer = prefs.getStringList(key) ?? [];
+    currentBuffer.add(geoDataJson);
 
     try {
-      await _sendSingleGeoDataToServer(geoDataJson);
+      await _sendGeoDataBatch(currentBuffer, _activeShiftId!);
+      await prefs.remove(key);
+      _log("✅ Успешно отправлено ${currentBuffer.length} точек (включая офлайн буфер)");
     } catch (e) {
-      _log("❌ Ошибка отправки: $e, сохраняем в буфер...");
-      await _bufferFailedData(geoDataJson, _activeShiftId);
+      _log("❌ Ошибка отправки: $e, сохраняем в буфер (${currentBuffer.length} точек)...");
+      if (currentBuffer.length > 1000) {
+        currentBuffer.removeRange(0, currentBuffer.length - 1000);
+      }
+      await prefs.setStringList(key, currentBuffer);
     }
   } catch (e) {
     _log("Критическая ошибка в сборе данных: $e");
   }
 }
 
-Future<void> _handleSinglePositionReceived(Position position) async {
-  _log("Получена позиция из iOS Stream: ${position.latitude}, ${position.longitude}");
-  if (position.latitude == 0.0 || position.longitude == 0.0) return;
-
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final currentActiveShiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
-    if (currentActiveShiftId == null) return;
-
-    final freshToken = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
-    if (freshToken != null) _bgAuthToken = freshToken;
-
-    int batteryLevel;
-    try {
-      batteryLevel = await Battery().batteryLevel;
-    } catch (_) {
-      batteryLevel = 0;
-    }
-
-    final geoDataJson = jsonEncode({
-      'lat': position.latitude,
-      'lon': position.longitude,
-      'speed': position.speed,
-      'accuracy': position.accuracy,
-      'battery': batteryLevel,
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-      'event': 'tracking',
-      'shift_id': currentActiveShiftId,
-    });
-
-    _log("iOS Stream Отправляем: $geoDataJson");
-    try {
-      await _sendSingleGeoDataToServer(geoDataJson);
-    } catch (e) {
-      _log("❌ iOS Stream Ошибка отправки: $e, сохраняем в буфер...");
-      await _bufferFailedData(geoDataJson, currentActiveShiftId);
-    }
-  } catch (e) {
-    _log("Критическая ошибка в iOS Stream сборе: $e");
-  }
-}
-
-Future<void> _sendSingleGeoDataToServer(String geoDataJson) async {
+Future<void> _sendGeoDataBatch(List<String> geoDataJsonList, int shiftId) async {
   final token = _bgAuthToken;
   if (token == null) {
     _log("Ошибка: Токен отсутствует в фоновом режиме.");
     throw Exception('JWT missing in background');
   }
+
+  final dataList = geoDataJsonList.map((s) => jsonDecode(s)).toList();
 
   final res = await http.post(
     Uri.parse(AppConfig.geoTrackUrl),
@@ -253,7 +288,7 @@ Future<void> _sendSingleGeoDataToServer(String geoDataJson) async {
       'Content-Type': 'application/json',
     },
     body: jsonEncode({
-      'data': [jsonDecode(geoDataJson)]
+      'data': dataList
     }),
   );
 
@@ -264,18 +299,6 @@ Future<void> _sendSingleGeoDataToServer(String geoDataJson) async {
     }
     throw Exception("HTTP ${res.statusCode}");
   }
-}
-
-Future<void> _bufferFailedData(String geoDataJson, int? shiftId) async {
-  if (shiftId == null) return;
-  final prefs = await SharedPreferences.getInstance();
-  final key = 'geo_buffer_$shiftId';
-  final current = prefs.getStringList(key) ?? [];
-  current.add(geoDataJson);
-  if (current.length > 1000) {
-    current.removeRange(0, current.length - 1000);
-  }
-  await prefs.setStringList(key, current);
 }
 
 Future<bool> startBackgroundTracking({required int shiftId}) async {
@@ -356,7 +379,7 @@ Future<bool> startBackgroundTracking({required int shiftId}) async {
         ),
         iosConfiguration: IosConfiguration(
           onForeground: onStart,
-          onBackground: onStart,
+          onBackground: onIosBackground,
         ),
       );
     }

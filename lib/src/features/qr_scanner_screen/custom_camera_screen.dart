@@ -25,6 +25,8 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
     with WidgetsBindingObserver {
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
+  List<CameraDescription> _backCameras = [];
+  int _currentBackCameraIndex = 0;
   bool _isCameraInitialized = false;
   FlashMode _flashMode = FlashMode.off;
   double _minZoomLevel = 1.0;
@@ -55,6 +57,10 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
       _cameras = await availableCameras();
       if (_cameras.isEmpty || _isDisposed) return;
 
+      _backCameras = _cameras
+          .where((c) => c.lensDirection == CameraLensDirection.back)
+          .toList();
+
       CameraDescription? selectedCamera;
       if (widget.overlayType == CameraOverlayType.helmetSelfie) {
         selectedCamera = _cameras.firstWhere(
@@ -62,11 +68,11 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
           orElse: () => _cameras.first,
         );
       } else {
-        final backCameras = _cameras
-            .where((c) => c.lensDirection == CameraLensDirection.back)
-            .toList();
-        if (backCameras.isNotEmpty) {
-          selectedCamera = backCameras[0];
+        if (_backCameras.isNotEmpty) {
+          if (_currentBackCameraIndex >= _backCameras.length) {
+            _currentBackCameraIndex = 0;
+          }
+          selectedCamera = _backCameras[_currentBackCameraIndex];
         } else {
           selectedCamera = _cameras.first;
         }
@@ -429,6 +435,40 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
                 ),
               ),
             ),
+            // Кнопка переключения физических камер (если есть ширик/телевик)
+            if (widget.overlayType == CameraOverlayType.landscape && _backCameras.length > 1)
+              Positioned(
+                bottom: 130,
+                right: 20,
+                child: GestureDetector(
+                  onTap: () async {
+                    if (_isCameraInitialized) {
+                      _currentBackCameraIndex = (_currentBackCameraIndex + 1) % _backCameras.length;
+                      setState(() => _isCameraInitialized = false);
+                      final oldController = _controller;
+                      _controller = null;
+                      await oldController?.dispose();
+                      await _initCamera();
+                    }
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white24, width: 1.5),
+                    ),
+                    child: Text(
+                      'Объектив ${_currentBackCameraIndex + 1}',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             // Кнопка съемки
             Positioned(
               bottom: 30,

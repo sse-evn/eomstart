@@ -143,7 +143,23 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
           }
         }
       } else {
-        await stopBackgroundTracking();
+        final activeShift = await context.read<ShiftProvider>().getActiveShift();
+        if (activeShift != null && activeShift.id > 0) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(tr(context, 'Невозможно отключить геотрекинг во время активной смены', 'Белсенді ауысым кезінде геотрекингті өшіру мүмкін емес')),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            setState(() {
+              _isGeoTrackingEnabled = true;
+            });
+          }
+        } else {
+          await stopBackgroundTracking();
+        }
       }
     } catch (e) {
       debugPrint(tr(context, 'Ошибка переключения геотрекинга: $e', 'Геотрекингті ауыстыру қатесі: $e'));
@@ -171,6 +187,68 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
   Future<void> _refresh() async {
     final provider = context.read<ShiftProvider>();
     await provider.loadProfile(force: true);
+  }
+
+  Future<void> _restartGeoTracking() async {
+    if (_isLoadingGeoStatus) return;
+    
+    if (mounted) {
+      setState(() {
+        _isLoadingGeoStatus = true;
+      });
+    }
+
+    try {
+      final activeShift = await context.read<ShiftProvider>().getActiveShift();
+      int? activeShiftId = activeShift?.id;
+      
+      await stopBackgroundTracking();
+      
+      if (activeShiftId != null && activeShiftId > 0) {
+        await Future.delayed(const Duration(milliseconds: 500)); // give it time to fully stop
+        final success = await startBackgroundTracking(shiftId: activeShiftId);
+        
+        if (mounted) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(tr(context, 'Геотрекинг успешно перезапущен', 'Геотрекинг сәтті қайта іске қосылды')),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          } else {
+             ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(tr(context, 'Ошибка при перезапуске геотрекинга', 'Геотрекингті қайта іске қосу қатесі')),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(tr(context, 'Нет активной смены для перезапуска', 'Қайта іске қосу үшін белсенді ауысым жоқ')),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Restart geo error: $e');
+    } finally {
+      final isRunning = await isBackgroundTrackingRunning();
+      if (mounted) {
+        setState(() {
+          _isGeoTrackingEnabled = isRunning;
+          _isLoadingGeoStatus = false;
+        });
+      }
+    }
   }
 
   Future<void> _logout() async {
@@ -597,6 +675,12 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                                             ),
                                           ),
                                         ),
+                                        if (_isGeoTrackingEnabled)
+                                          IconButton(
+                                            icon: Icon(Icons.refresh, color: Colors.blue[700]),
+                                            tooltip: tr(context, 'Перезапустить геотрекинг', 'Геотрекингті қайта қосу'),
+                                            onPressed: _restartGeoTracking,
+                                          ),
                                         Switch(
                                           value: _isGeoTrackingEnabled,
                                           onChanged: (val) =>
