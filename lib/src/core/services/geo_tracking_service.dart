@@ -115,7 +115,7 @@ void _startPositionStream() {
   if (defaultTargetPlatform == TargetPlatform.iOS) {
     settings = AppleSettings(
       accuracy: LocationAccuracy.best,
-      distanceFilter: 5, // На iOS: каждые 5 метров = новая позиция (экономит батарею)
+      distanceFilter: 0, // 0 = всегда обновлять, даже стоя на месте
       allowBackgroundLocationUpdates: true,
       showBackgroundLocationIndicator: true,
       pauseLocationUpdatesAutomatically: false,
