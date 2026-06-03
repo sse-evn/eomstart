@@ -243,36 +243,116 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
     });
   }
 
-  Future<void> _toggleZoom() async {
-    if (_controller == null || !_controller!.value.isInitialized) return;
+  Future<void> _setZoomOrCamera(double targetZoom) async {
+    if (_controller == null || !_isCameraInitialized) return;
 
     try {
-      double targetZoom = 1.0;
-      
-      if ((_currentZoomLevel - 1.0).abs() < 0.1) {
-        // Current is ~1.0x -> Go to 2.0x
-        targetZoom = _maxZoomLevel >= 2.0 ? 2.0 : _maxZoomLevel;
-      } else if (_currentZoomLevel > 1.1) {
-        // Current is ~2.0x -> Go to 0.5x (if supported), else 1.0x
+      if (targetZoom == 0.5) {
         if (_minZoomLevel < 1.0) {
-          targetZoom = _minZoomLevel; 
-        } else {
-          targetZoom = 1.0;
+          await _controller!.setZoomLevel(_minZoomLevel);
+          if (mounted) setState(() => _currentZoomLevel = _minZoomLevel);
+        } else if (_backCameras.length > 1 && _currentBackCameraIndex != 1) {
+          _currentBackCameraIndex = 1;
+          setState(() => _isCameraInitialized = false);
+          final oldController = _controller;
+          _controller = null;
+          await oldController?.dispose();
+          await _initCamera();
         }
-      } else {
-        // Current is < 1.0x (e.g. 0.5x) -> Go to 1.0x
-        targetZoom = 1.0;
-      }
-
-      await _controller!.setZoomLevel(targetZoom);
-      if (mounted) {
-        setState(() {
-          _currentZoomLevel = targetZoom;
-        });
+      } else if (targetZoom == 1.0) {
+        if (_currentBackCameraIndex != 0) {
+          _currentBackCameraIndex = 0;
+          setState(() => _isCameraInitialized = false);
+          final oldController = _controller;
+          _controller = null;
+          await oldController?.dispose();
+          await _initCamera();
+        } else {
+          await _controller!.setZoomLevel(1.0);
+          if (mounted) setState(() => _currentZoomLevel = 1.0);
+        }
+      } else if (targetZoom == 2.0) {
+        if (_currentBackCameraIndex != 0) {
+          _currentBackCameraIndex = 0;
+          setState(() => _isCameraInitialized = false);
+          final oldController = _controller;
+          _controller = null;
+          await oldController?.dispose();
+          await _initCamera();
+          if (_controller != null) {
+            double newZoom = _maxZoomLevel >= 2.0 ? 2.0 : _maxZoomLevel;
+            await _controller!.setZoomLevel(newZoom);
+            if (mounted) setState(() => _currentZoomLevel = newZoom);
+          }
+        } else {
+          double newZoom = _maxZoomLevel >= 2.0 ? 2.0 : _maxZoomLevel;
+          await _controller!.setZoomLevel(newZoom);
+          if (mounted) setState(() => _currentZoomLevel = newZoom);
+        }
       }
     } catch (e) {
-      debugPrint('Error toggling zoom: $e');
+      debugPrint('Error setting zoom/camera: $e');
     }
+  }
+
+  Widget _buildZoomControls() {
+    bool hasUltrawide = _minZoomLevel < 1.0 || _backCameras.length > 1;
+    bool hasTelephoto = _maxZoomLevel >= 2.0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hasUltrawide) _zoomButton(0.5, '0.5'),
+          if (hasUltrawide) const SizedBox(width: 12),
+          _zoomButton(1.0, '1'),
+          if (hasTelephoto) const SizedBox(width: 12),
+          _zoomButton(2.0, '2'),
+        ],
+      ),
+    );
+  }
+
+  Widget _zoomButton(double zoomValue, String label) {
+    bool isActive = false;
+    if (zoomValue == 1.0) {
+      isActive = (_currentZoomLevel - 1.0).abs() < 0.1 && _currentBackCameraIndex == 0;
+    } else if (zoomValue == 2.0) {
+      isActive = (_currentZoomLevel - 2.0).abs() < 0.1;
+    } else if (zoomValue == 0.5) {
+      if (_minZoomLevel < 1.0) {
+        isActive = (_currentZoomLevel - _minZoomLevel).abs() < 0.1;
+      } else {
+        isActive = _currentBackCameraIndex == 1; 
+      }
+    }
+
+    return GestureDetector(
+      onTap: () => _setZoomOrCamera(zoomValue),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isActive ? Colors.white : Colors.black45,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isActive ? Colors.black : Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _takePicture() async {
@@ -405,34 +485,13 @@ class _CustomCameraScreenState extends State<CustomCameraScreen>
                 onPressed: _toggleFlash,
               ),
             ),
-            // Кнопка переключения зума (1.0x / 2.0x)
+            // Кнопки переключения зума (0.5x / 1.0x / 2.0x)
             Positioned(
               bottom: 130,
               left: 0,
               right: 0,
               child: Center(
-                child: GestureDetector(
-                  onTap: _toggleZoom,
-                  child: Container(
-                    padding:
-                        EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white24, width: 1.5),
-                    ),
-                    child: Text(
-                      _currentZoomLevel == 1.0
-                          ? '1.0x'
-                          : '${_currentZoomLevel.toStringAsFixed(1)}x',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ),
+                child: _buildZoomControls(),
               ),
             ),
             // Кнопка переключения физических камер (если есть ширик/телевик)
