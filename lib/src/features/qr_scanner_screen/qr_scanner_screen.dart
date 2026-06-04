@@ -520,7 +520,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     );
 
     try {
-      await cameraController.start();
+      if (_isQrScannerOpen) {
+        await cameraController.start();
+      }
     } catch (_) {}
 
     if (photoPath == null) return;
@@ -837,6 +839,11 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       });
     }
 
+    _isQrScannerOpen = true;
+    try {
+      cameraController.start();
+    } catch (_) {}
+
     showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -911,6 +918,10 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                         ])))
               ]));
         }).then((_) {
+      _isQrScannerOpen = false;
+      try {
+        cameraController.stop();
+      } catch (_) {}
       setState(() {});
     });
   }
