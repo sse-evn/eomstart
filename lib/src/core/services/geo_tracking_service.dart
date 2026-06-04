@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:battery_plus/battery_plus.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -222,6 +223,16 @@ Future<void> onStart(ServiceInstance service) async {
     _lastSendTime = null;
     _serviceIsActuallyRunning = false;
     service.stopSelf();
+  });
+
+  // Слушаем появление интернета, чтобы сразу отправить накопленный буфер
+  Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) async {
+    if (!results.contains(ConnectivityResult.none)) {
+      _log("🌐 Сеть восстановлена, пробуем отправить буфер...");
+      if (_latestPosition != null) {
+        await _collectAndSend(_latestPosition!);
+      }
+    }
   });
 
   // Запускаем Position Stream с автовосстановлением

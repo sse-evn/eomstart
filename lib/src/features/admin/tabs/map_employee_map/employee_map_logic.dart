@@ -307,7 +307,9 @@ class EmployeeMapLogic {
             final id = item['user_id']?.toString() ?? 'unknown';
             final lat = (item['lat'] as num?)?.toDouble();
             final lon = (item['lon'] as num?)?.toDouble();
-            if (lat == null || lon == null) return null;
+            
+            // Если координаты 0,0 (Null Island), значит бэкенд не нашел GPS точек
+            if (lat == null || lon == null || (lat == 0.0 && lon == 0.0)) return null;
 
             String? name = item['name']?.toString();
             if (name == null || name.isEmpty || name.contains('Сотрудник')) {
