@@ -56,8 +56,17 @@ Future<void> _collectAndSend(Position position) async {
 
     _activeShiftId = currentActiveShiftId;
 
-    final freshToken = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
-    if (freshToken != null) _bgAuthToken = freshToken;
+    try {
+      final freshToken = await _storage.read(key: 'jwt_token');
+      if (freshToken != null) {
+        _bgAuthToken = freshToken;
+      }
+    } catch (_) {}
+
+    if (_bgAuthToken == null) {
+      final cachedToken = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
+      if (cachedToken != null) _bgAuthToken = cachedToken;
+    }
 
     if (position.latitude == 0.0 || position.longitude == 0.0) {
       _log("Получена 0,0 позиция — пропуск");
@@ -248,6 +257,12 @@ Future<void> onStart(ServiceInstance service) async {
       return;
     }
 
+    // Восстановление потока, если GPS завис после выхода из авиарежима
+    if (DateTime.now().difference(pos.timestamp).inSeconds > 60) {
+      _log("Таймер: позиция устарела (>60с). Перезапускаем поток...");
+      _startPositionStream();
+    }
+
     // Проверяем, не отправил ли уже stream за последние 10 сек (на iOS)
     if (_lastSendTime != null &&
         DateTime.now().difference(_lastSendTime!).inSeconds < 10) {
@@ -366,10 +381,6 @@ Future<void> _sendGeoDataBatch(List<String> geoDataJsonList, int shiftId) async 
   ).timeout(const Duration(seconds: 15));
 
   if (res.statusCode != 200) {
-    if (res.statusCode == 401) {
-      await _storage.delete(key: 'jwt_token');
-      await _storage.delete(key: 'refresh_token');
-    }
     throw Exception("HTTP ${res.statusCode}");
   }
 }
