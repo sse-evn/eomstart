@@ -1,14 +1,16 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter_bloc/flutter_bloc.dart';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 import '../../../core/services/api_service.dart';
 import '../../../core/services/geo_tracking_service.dart';
 import '../../../core/utils/time_utils.dart';
+import '../../app/models/active_shift.dart';
 import 'shift_event.dart';
 import 'shift_state.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../app/models/active_shift.dart';
 
 class ShiftBloc extends Bloc<ShiftEvent, ShiftState> {
   final ApiService apiService;
@@ -36,14 +38,16 @@ class ShiftBloc extends Bloc<ShiftEvent, ShiftState> {
     });
   }
 
-  Future<void> _onCheckExpiry(CheckShiftExpiry event, Emitter<ShiftState> emit) async {
+  Future<void> _onCheckExpiry(
+      CheckShiftExpiry event, Emitter<ShiftState> emit) async {
     final currentState = state;
     if (currentState is ShiftActive) {
       if (BreakTimeUtils.isSlotExpired(
         currentState.shift.slotTimeRange,
         shiftStartTime: currentState.shift.startTime,
       )) {
-        debugPrint('ShiftBloc: Обнаружено истечение времени слота. Автозавершение.');
+        debugPrint(
+            'ShiftBloc: Обнаружено истечение времени слота. Автозавершение.');
         add(EndShiftRequested());
       }
     }
@@ -65,10 +69,11 @@ class ShiftBloc extends Bloc<ShiftEvent, ShiftState> {
           activeShift.slotTimeRange,
           shiftStartTime: activeShift.startTime,
         )) {
-          debugPrint('ShiftBloc: Найдена активная смена, но время слота истекло.');
+          debugPrint(
+              'ShiftBloc: Найдена активная смена, но время слота истекло.');
           emit(ShiftInactive());
           await stopBackgroundTracking();
-          unawaited(apiService.endSlot(token)); 
+          unawaited(apiService.endSlot(token));
         } else {
           emit(ShiftActive(activeShift));
           _startExpiryTimer(activeShift);
