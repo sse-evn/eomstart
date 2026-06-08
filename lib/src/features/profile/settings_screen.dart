@@ -1,11 +1,58 @@
 // lib/screens/settings_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/src/core/providers/language_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:micro_mobility_app/src/core/providers/settings_provider.dart';
+import 'package:path_provider/path_provider.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  Future<void> _clearCache(BuildContext context, Color primaryColor) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      if (tempDir.existsSync()) {
+        final files = tempDir.listSync();
+        for (var file in files) {
+          try {
+            file.deleteSync(recursive: true);
+          } catch (e) {
+            // Игнорируем ошибки удаления отдельных файлов
+          }
+        }
+      }
+      
+      // На Android часто много мусора скапливается в кэше приложения (Documents не трогаем, там могут быть важные данные)
+    } catch (e) {
+      debugPrint("Error clearing cache: $e");
+    }
+
+    if (context.mounted) {
+      Navigator.pop(context); // Закрываем диалог загрузки
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: primaryColor,
+          content: Text(
+            tr(context, 'Кэш успешно очищен', 'Кэш сәтті тазартылды'),
+            style: const TextStyle(color: Colors.white),
+          ),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,53 +129,32 @@ class SettingsScreen extends StatelessWidget {
 
             SizedBox(height: 16),
 
-            // Переключатель уведомлений
-            // Card(
-            //   elevation: 1,
-            //   shape: RoundedRectangleBorder(
-            //     borderRadius: BorderRadius.circular(12),
-            //   ),
-            //   child: SwitchListTile(
-            //     activeColor: primaryColor,
-            //     contentPadding: EdgeInsets.symmetric(horizontal: 16),
-            //     title: Text(tr(context, 'Уведомления', 'Хабарламалар')),
-            //     subtitle: Text(
-            //       settingsProvider.notificationsEnabled
-            //           ? tr(context, 'Вы получаете уведомления', 'Сіз хабарламалар аласыз')
-            //           : tr(context, 'Уведомления отключены', 'Хабарламалар өшірілді'),
-            //       style: TextStyle(fontSize: 12),
-            //     ),
-            //     value: settingsProvider.notificationsEnabled,
-            //     onChanged: (value) {
-            //       settingsProvider.toggleNotifications(value);
-            //       ScaffoldMessenger.of(context).showSnackBar(
-            //         SnackBar(
-            //           backgroundColor: primaryColor,
-            //           content: Text(
-            //             value
-            //                 ? tr(context, 'Уведомления включены', 'Хабарламалар қосылды')
-            //                 : tr(context, 'Уведомления отключены', 'Хабарламалар өшірілді'),
-            //             style: TextStyle(color: Colors.white),
-            //           ),
-            //           duration: const Duration(seconds: 2),
-            //           behavior: SnackBarBehavior.floating,
-            //           shape: RoundedRectangleBorder(
-            //             borderRadius: BorderRadius.circular(8),
-            //           ),
-            //         ),
-            //       );
-            //     },
-            //     secondary: Icon(
-            //       settingsProvider.notificationsEnabled
-            //           ? Icons.notifications
-            //           : Icons.notifications_off,
-            //       color: primaryColor,
-            //     ),
-            //     shape: RoundedRectangleBorder(
-            //       borderRadius: BorderRadius.circular(12),
-            //     ),
-            //   ),
-            // ),
+            // Очистка кэша
+            Card(
+              elevation: 1,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListTile(
+                contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                title: Text(tr(context, 'Очистить кэш приложения', 'Қолданба кэшін тазарту')),
+                subtitle: Text(
+                  tr(context, 'Освобождает место (фото, временные файлы)', 'Орын босатады (фотосуреттер, уақытша файлдар)'),
+                  style: TextStyle(fontSize: 12),
+                ),
+                leading: Icon(
+                  Icons.delete_outline,
+                  color: Colors.redAccent,
+                ),
+                onTap: () => _clearCache(context, primaryColor),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+
+            // SizedBox(height: 16),
+            // Переключатель уведомлений (закомментирован как в оригинале)
           ],
         ),
       ),
