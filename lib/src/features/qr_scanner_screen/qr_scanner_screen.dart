@@ -594,8 +594,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           .floor();
 
       final mapUrls = [
-        'https://static-maps.yandex.ru/1.x/?ll=$lng,$lat&z=$z&l=map&size=300,300&pt=$lng,$lat,pm2rdm',
-        'https://static-maps.yandex.com/1.x/?ll=$lng,$lat&z=$z&l=map&size=300,300&pt=$lng,$lat,pm2rdm',
+        'https://static-maps.yandex.ru/1.x/?ll=$lng,$lat&z=$z&l=map&size=450,450&pt=$lng,$lat,pm2rdm',
+        'https://static-maps.yandex.com/1.x/?ll=$lng,$lat&z=$z&l=map&size=450,450&pt=$lng,$lat,pm2rdm',
         'https://tile1.maps.2gis.com/tiles?x=$x&y=$y&z=$z&v=1',
         'https://a.tile.openstreetmap.org/$z/$x/$y.png',
       ];
@@ -638,8 +638,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
     if (mapBytes != null) {
       try {
-        final mapImg = img.decodeImage(mapBytes);
+        var mapImg = img.decodeImage(mapBytes);
         if (mapImg != null) {
+          mapImg = img.copyResize(mapImg, width: 450);
           final mapW = mapImg.width;
           final mapH = mapImg.height;
           img.drawRect(resized,
