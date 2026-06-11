@@ -471,111 +471,157 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
     showDialog(
       context: context,
       builder: (context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          backgroundColor: Theme.of(context).brightness == Brightness.dark 
-              ? const Color(0xFF1A1A1A) 
-              : Colors.white,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    'Настройки / Баптаулар',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 24),
-                  ListTile(
-                    leading: const Icon(Icons.language, color: Colors.purpleAccent),
-                    title: const Text('Язык / Тіл', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                    trailing: Consumer<LanguageProvider>(
-                      builder: (context, languageProvider, child) {
-                        return DropdownButton<String>(
-                          value: languageProvider.locale,
-                          underline: const SizedBox(),
-                          icon: const Icon(Icons.arrow_drop_down),
-                          items: const [
-                            DropdownMenuItem(value: 'ru', child: Text('Русский')),
-                            DropdownMenuItem(value: 'kk', child: Text('Қазақша')),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              languageProvider.setLocale(val);
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(tr(context, 'Язык изменен', tr(context, 'Тіл ауыстырылды', 'Тіл ауыстырылды'))),
-                                  backgroundColor: Colors.blue,
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
-                          },
-                        );
-                      },
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Dialog.fullscreen(
+          backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[50],
+          child: Scaffold(
+            backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[50],
+            appBar: AppBar(
+              title: const Text(
+                'Настройки / Баптаулар',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
+              elevation: 0,
+              backgroundColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+            ),
+            body: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16, bottom: 8),
+                      child: Text(
+                        tr(context, 'Основные настройки', 'Негізгі баптаулар'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
                     ),
-                  ),
-                  ListTile(
-                    leading: Icon(_isCheckingForUpdates ? Icons.downloading : Icons.system_update_alt_rounded, color: Colors.blueAccent),
-                    title: Text(
-                      _isCheckingForUpdates ? tr(context, 'Проверка обновлений...', 'Жаңартуларды тексеру...') : tr(context, 'Проверить обновления / Жаңартуларды тексеру', 'Жаңартуларды тексеру'),
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _checkForUpdates();
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                    title: Text(tr(context, 'Очистить кэш приложения', 'Қолданба кэшін тазарту'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      showDialog(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (context) => const Center(child: CircularProgressIndicator()),
-                      );
-                      try {
-                        final tempDir = await getTemporaryDirectory();
-                        if (tempDir.existsSync()) {
-                          final files = tempDir.listSync();
-                          for (var file in files) {
-                            try {
-                              file.deleteSync(recursive: true);
-                            } catch (_) {}
-                          }
-                        }
-                      } catch (e) {
-                        debugPrint("Error clearing cache: $e");
-                      }
-                      if (context.mounted) {
-                        Navigator.pop(context); // Закрываем лоадер
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(tr(context, 'Кэш успешно очищен', 'Кэш сәтті тазартылды')),
-                            backgroundColor: Colors.green,
-                            behavior: SnackBarBehavior.floating,
+                    Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[300]!),
+                      ),
+                      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.language, color: Colors.purpleAccent),
+                            title: const Text('Язык / Тіл', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                            trailing: Consumer<LanguageProvider>(
+                              builder: (context, languageProvider, child) {
+                                return DropdownButton<String>(
+                                  value: languageProvider.locale,
+                                  underline: const SizedBox(),
+                                  icon: const Icon(Icons.arrow_drop_down),
+                                  items: const [
+                                    DropdownMenuItem(value: 'ru', child: Text('Русский')),
+                                    DropdownMenuItem(value: 'kk', child: Text('Қазақша')),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      languageProvider.setLocale(val);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(tr(context, 'Язык изменен', tr(context, 'Тіл ауыстырылды', 'Тіл ауыстырылды'))),
+                                          backgroundColor: Colors.blue,
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                );
+                              },
+                            ),
                           ),
-                        );
-                      }
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.info_outline_rounded, color: Colors.grey),
-                    title: Text(tr(context, 'О приложении / Қосымша туралы', 'Қосымша туралы'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.pushNamed(context, '/about');
-                    },
-                  ),
-                ],
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(_isCheckingForUpdates ? Icons.downloading : Icons.system_update_alt_rounded, color: Colors.blueAccent),
+                            title: Text(
+                              _isCheckingForUpdates ? tr(context, 'Проверка обновлений...', 'Жаңартуларды тексеру...') : tr(context, 'Проверить обновления / Жаңартуларды тексеру', 'Жаңартуларды тексеру'),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)
+                            ),
+                            onTap: () {
+                              _checkForUpdates();
+                            },
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                            title: Text(tr(context, 'Очистить кэш приложения', 'Қолданба кэшін тазарту'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                            onTap: () async {
+                              showDialog(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (context) => const Center(child: CircularProgressIndicator()),
+                              );
+                              try {
+                                final tempDir = await getTemporaryDirectory();
+                                if (tempDir.existsSync()) {
+                                  final files = tempDir.listSync();
+                                  for (var file in files) {
+                                    try {
+                                      file.deleteSync(recursive: true);
+                                    } catch (_) {}
+                                  }
+                                }
+                              } catch (e) {
+                                debugPrint("Error clearing cache: $e");
+                              }
+                              if (context.mounted) {
+                                Navigator.pop(context); // Закрываем лоадер
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(tr(context, 'Кэш успешно очищен', 'Кэш сәтті тазартылды')),
+                                    backgroundColor: Colors.green,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16, bottom: 8),
+                      child: Text(
+                        tr(context, 'Дополнительно', 'Қосымша'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ),
+                    Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[300]!),
+                      ),
+                      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                      child: ListTile(
+                        leading: const Icon(Icons.info_outline_rounded, color: Colors.grey),
+                        title: Text(tr(context, 'О приложении / Қосымша туралы', 'Қосымша туралы'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                        onTap: () {
+                          Navigator.pushNamed(context, '/about');
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
