@@ -841,9 +841,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     }
 
     _isQrScannerOpen = true;
-    try {
-      cameraController.start();
-    } catch (_) {}
 
     showModalBottomSheet(
         context: context,
@@ -1538,7 +1535,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     });
     try {
       if (nextState) {
-        await cameraController.start();
         if (_flashOn) {
           Future.delayed(const Duration(milliseconds: 500), () async {
             try {
