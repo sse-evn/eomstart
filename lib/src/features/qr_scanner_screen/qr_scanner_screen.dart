@@ -1345,7 +1345,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   ? Colors.green[700]
                   : Colors.grey[400],
               foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(vertical: 12),
+              minimumSize: const Size(0, 56),
+              padding: EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
@@ -1370,7 +1371,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               backgroundColor:
                   _reportType == 'after' ? Colors.green[700] : Colors.grey[400],
               foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(vertical: 12),
+              minimumSize: const Size(0, 56),
+              padding: EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
@@ -1792,7 +1794,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.blue[700],
                                 foregroundColor: Colors.white,
-                                padding: EdgeInsets.symmetric(vertical: 14),
+                                minimumSize: const Size.fromHeight(56),
+                                padding: EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14)),
                               ),
@@ -1820,23 +1823,24 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   onPressed: (_sending || _isProcessing) ? null : _sendReport,
                   icon: _sending
                       ? SizedBox(
-                          width: 20,
-                          height: 20,
+                          width: 24,
+                          height: 24,
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2))
-                      : Icon(Icons.send_rounded),
+                      : Icon(Icons.send_rounded, size: 24),
                   label: Text(
                     _sending
                         ? tr(context, 'Отправка...', 'Жіберілуде...')
                         : tr(context, 'Отправить отчёт', 'Есеп жіберу'),
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green[700],
                     foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 14),
+                    minimumSize: const Size.fromHeight(60),
+                    padding: EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(16)),
                     elevation: 2,
                   ),
                 ),
