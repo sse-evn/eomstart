@@ -19,6 +19,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
 
 // Импортируем функции трекинга (предполагается, что они экспортированы)
 import '../../core/services/geo_tracking_service.dart'
@@ -518,6 +519,40 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                 onTap: () {
                   Navigator.pop(context);
                   _checkForUpdates();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: Colors.redAccent),
+                title: Text(tr(context, 'Очистить кэш приложения', 'Қолданба кэшін тазарту')),
+                onTap: () async {
+                  Navigator.pop(context);
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const Center(child: CircularProgressIndicator()),
+                  );
+                  try {
+                    final tempDir = await getTemporaryDirectory();
+                    if (tempDir.existsSync()) {
+                      final files = tempDir.listSync();
+                      for (var file in files) {
+                        try {
+                          file.deleteSync(recursive: true);
+                        } catch (_) {}
+                      }
+                    }
+                  } catch (e) {
+                    debugPrint("Error clearing cache: $e");
+                  }
+                  if (context.mounted) {
+                    Navigator.pop(context); // Закрываем лоадер
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(tr(context, 'Кэш успешно очищен', 'Кэш сәтті тазартылды')),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
                 },
               ),
               ListTile(
