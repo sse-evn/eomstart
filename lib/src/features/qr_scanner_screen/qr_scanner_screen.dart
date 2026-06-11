@@ -1452,11 +1452,18 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                                       Positioned(
                                           top: 40,
                                           right: 20,
-                                          child: IconButton(
-                                            icon: Icon(Icons.close,
-                                                color: Colors.white, size: 30),
-                                            onPressed: () =>
-                                                Navigator.pop(context),
+                                          child: Container(
+                                            decoration: const BoxDecoration(
+                                                color: Colors.black54,
+                                                shape: BoxShape.circle),
+                                            child: IconButton(
+                                              padding: const EdgeInsets.all(12),
+                                              iconSize: 32,
+                                              icon: const Icon(Icons.close,
+                                                  color: Colors.white),
+                                              onPressed: () =>
+                                                  Navigator.pop(context),
+                                            ),
                                           ))
                                     ])));
                           },
@@ -1469,8 +1476,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                           ),
                         ),
                         Positioned(
-                            top: -6,
-                            right: -6,
+                            top: -10,
+                            right: -10,
                             child: GestureDetector(
                                 onTap: () {
                                   setState(() {
@@ -1479,12 +1486,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                                   _saveBackup();
                                 },
                                 child: Container(
-                                  padding: EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                      color: Colors.red,
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: const BoxDecoration(
+                                      color: Colors.redAccent,
                                       shape: BoxShape.circle),
-                                  child: Icon(Icons.close,
-                                      color: Colors.white, size: 12),
+                                  child: const Icon(Icons.close,
+                                      color: Colors.white, size: 16),
                                 )))
                       ]);
                     }))
