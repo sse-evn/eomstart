@@ -545,17 +545,6 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                           ),
                           const Divider(height: 1),
                           ListTile(
-                            leading: Icon(_isCheckingForUpdates ? Icons.downloading : Icons.system_update_alt_rounded, color: Colors.blueAccent),
-                            title: Text(
-                              _isCheckingForUpdates ? tr(context, 'Проверка обновлений...', 'Жаңартуларды тексеру...') : tr(context, 'Проверить обновления / Жаңартуларды тексеру', 'Жаңартуларды тексеру'),
-                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)
-                            ),
-                            onTap: () {
-                              _checkForUpdates();
-                            },
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
                             leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
                             title: Text(tr(context, 'Очистить кэш приложения', 'Қолданба кэшін тазарту'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                             onTap: () async {
