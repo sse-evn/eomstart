@@ -913,7 +913,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     bool canManage = ['admin', 'superadmin', 'coordinator', 'supervisor'].contains(_currentUserRole);
-    bool canDelete = _currentUserRole == 'superadmin';
+    bool canDelete = _currentUserRole == 'superadmin' || 
+        ((_currentUserRole == 'coordinator' || _currentUserRole == 'supervisor') && role == 'scout');
     final roleColor = _roleColors[role] ?? Colors.grey;
 
     showModalBottomSheet(
