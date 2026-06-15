@@ -9,6 +9,7 @@ class EmployeeLocation {
   final double? battery;
   final DateTime timestamp;
   final String? avatarUrl;
+  final double? speed;
 
   EmployeeLocation({
     required this.userId,
@@ -17,5 +18,6 @@ class EmployeeLocation {
     this.battery,
     required this.timestamp,
     this.avatarUrl,
+    this.speed,
   });
 }

@@ -27,6 +27,9 @@ class _ScooterReportsScreenState extends State<ScooterReportsScreen> {
   
   // 'shift' (за всю смену), '1h' (за последний час), '3h' (за последние 3 часа)
   String _timeFilter = 'shift';
+  String? _selectedUsername;
+  List<String> _allUsernames = [];
+  DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
@@ -43,8 +46,20 @@ class _ScooterReportsScreenState extends State<ScooterReportsScreen> {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) throw Exception('Не авторизован');
       
-      final activeShifts = await _apiService.getActiveShifts(token);
-      final reports = await _apiService.getScooterReports(token);
+      final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      final now = DateTime.now();
+      final isToday = _selectedDate.year == now.year && _selectedDate.month == now.month && _selectedDate.day == now.day;
+      
+      List<dynamic> activeShifts = [];
+      if (isToday) {
+        try {
+          activeShifts = await _apiService.getActiveShifts(token);
+        } catch (e) {
+          debugPrint('Ошибка загрузки активных смен: $e');
+        }
+      }
+      
+      final reports = await _apiService.getScooterReports(token, date: dateStr);
       
       Map<String, Map<String, List<dynamic>>> grouped = {};
       Map<String, String> names = {};
@@ -86,6 +101,7 @@ class _ScooterReportsScreenState extends State<ScooterReportsScreen> {
       setState(() {
         _groupedReports = grouped;
         _userNames = names;
+        _allUsernames = names.keys.toList()..sort();
       });
     } catch (e) {
       if (!mounted) return;
@@ -207,39 +223,97 @@ class _ScooterReportsScreenState extends State<ScooterReportsScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
             children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _timeFilter,
-                  decoration: const InputDecoration(
-                    labelText: 'Фильтр по времени',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDate,
+                          firstDate: DateTime(2024),
+                          lastDate: DateTime.now(), // No future dates!
+                        );
+                        if (picked != null && picked != _selectedDate) {
+                          setState(() {
+                            _selectedDate = picked;
+                            _selectedUsername = null; // сбросить фильтр юзера
+                          });
+                          _loadReports();
+                        }
+                      },
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      label: Text(
+                        DateFormat('dd.MM.yyyy').format(_selectedDate),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 'shift', child: Text('За всю смену')),
-                    DropdownMenuItem(value: '1h', child: Text('За последний час')),
-                    DropdownMenuItem(value: '3h', child: Text('За последние 3 часа')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        _timeFilter = val;
-                      });
-                    }
-                  },
-                ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: _exportToCSV,
+                    icon: const Icon(Icons.download),
+                    label: const Text('Excel'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 16),
-              ElevatedButton.icon(
-                onPressed: _exportToCSV,
-                icon: const Icon(Icons.download),
-                label: const Text('Excel'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _timeFilter,
+                      decoration: const InputDecoration(
+                        labelText: 'Фильтр по времени',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'shift', child: Text('За всю смену')),
+                        DropdownMenuItem(value: '1h', child: Text('За последний час')),
+                        DropdownMenuItem(value: '3h', child: Text('За последние 3 часа')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _timeFilter = val;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String?>(
+                value: _selectedUsername,
+                decoration: const InputDecoration(
+                  labelText: 'Фильтр по скауту',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
+                isExpanded: true,
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Все скауты')),
+                  ..._allUsernames.map((u) {
+                    final name = _userNames[u] ?? u;
+                    return DropdownMenuItem(value: u, child: Text('$name (@$u)'));
+                  }),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedUsername = val;
+                  });
+                },
               ),
             ],
           ),
@@ -253,7 +327,13 @@ class _ScooterReportsScreenState extends State<ScooterReportsScreen> {
               itemBuilder: (context, index) {
                 final shiftRange = shiftRanges[index];
                 final usersMap = _groupedReports[shiftRange]!;
-                final usernames = usersMap.keys.toList();
+                var usernames = usersMap.keys.toList();
+                
+                if (_selectedUsername != null) {
+                  usernames = usernames.where((u) => u == _selectedUsername).toList();
+                }
+
+                if (usernames.isEmpty) return const SizedBox.shrink();
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

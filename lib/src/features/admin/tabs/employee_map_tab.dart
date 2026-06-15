@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'dart:convert';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart' as share_plus;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart' as flutter_secure_storage;
 import 'package:micro_mobility_app/src/core/services/api_service.dart';
@@ -23,6 +27,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   late final EmployeeMapLogic _logic;
   bool _disposed = false;
   late final DraggableScrollableController _sheetController;
+  EmployeeLocation? _selectedHistoryPoint;
 
   @override
   bool get wantKeepAlive => true;
@@ -219,6 +224,27 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
               ),
+              onTap: (tapPosition, point) {
+                if (_logic.isHistoryMode && _logic.selectedHistoryPoints.isNotEmpty) {
+                  EmployeeLocation? closestPoint;
+                  double minDistance = double.infinity;
+                  const distanceParams = Distance();
+
+                  for (var p in _logic.selectedHistoryPoints) {
+                    final dist = distanceParams.as(LengthUnit.Meter, point, p.position);
+                    if (dist < minDistance) {
+                      minDistance = dist;
+                      closestPoint = p;
+                    }
+                  }
+
+                  if (closestPoint != null && minDistance < 1500) { // В пределах 1.5 км от места нажатия
+                    setState(() {
+                      _selectedHistoryPoint = closestPoint;
+                    });
+                  }
+                }
+              },
             ),
             children: [
               TileLayer(
@@ -280,34 +306,64 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
               if (_logic.selectedEmployeeHistory.isNotEmpty)
                 MarkerLayer(
                   markers: [
+                    if (_selectedHistoryPoint != null)
+                      Marker(
+                        point: _selectedHistoryPoint!.position,
+                        width: 24,
+                        height: 24,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.orange,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                          ),
+                        ),
+                      ),
                     // Старт (Зеленый)
                     Marker(
                       point: _logic.selectedEmployeeHistory.first,
-                      width: 25,
-                      height: 25,
+                      width: 100,
+                      height: 40,
+                      alignment: Alignment.topCenter,
                       child: Container(
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                             color: Colors.green,
-                            shape: BoxShape.circle,
-                            border: Border.fromBorderSide(
-                                BorderSide(color: Colors.white, width: 2))),
-                        child: const Icon(Icons.play_arrow,
-                            color: Colors.white, size: 15),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3))],
+                            border: Border.all(color: Colors.white, width: 2)),
+                        alignment: Alignment.center,
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.flag, color: Colors.white, size: 16),
+                            SizedBox(width: 4),
+                            Text('СТАРТ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ],
+                        ),
                       ),
                     ),
                     // Финиш (Красный)
                     Marker(
                       point: _logic.selectedEmployeeHistory.last,
-                      width: 25,
-                      height: 25,
+                      width: 100,
+                      height: 40,
+                      alignment: Alignment.topCenter,
                       child: Container(
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                             color: Colors.red,
-                            shape: BoxShape.circle,
-                            border: Border.fromBorderSide(
-                                BorderSide(color: Colors.white, width: 2))),
-                        child: const Icon(Icons.stop,
-                            color: Colors.white, size: 15),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3))],
+                            border: Border.all(color: Colors.white, width: 2)),
+                        alignment: Alignment.center,
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.sports_score, color: Colors.white, size: 16),
+                            SizedBox(width: 4),
+                            Text('ФИНИШ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -456,6 +512,57 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       ),
     );
   }
+
+  Future<void> _exportGeoJson() async {
+    if (_logic.selectedHistoryPoints.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Нет данных для экспорта')),
+      );
+      return;
+    }
+
+    final features = _logic.selectedHistoryPoints.map((point) {
+      return {
+        "type": "Feature",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [point.position.longitude, point.position.latitude]
+        },
+        "properties": {
+          "speed": point.speed ?? 0.0,
+          "battery": point.battery ?? 0,
+          "time": point.timestamp.toIso8601String(),
+        }
+      };
+    }).toList();
+
+    features.add({
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": _logic.selectedHistoryPoints.map((p) => [p.position.longitude, p.position.latitude]).toList()
+      },
+      "properties": {
+        "name": "Route",
+        "stroke": "#FF0000",
+        "stroke-width": 3
+      }
+    });
+
+    final geoJson = {
+      "type": "FeatureCollection",
+      "features": features,
+    };
+
+    final directory = await getTemporaryDirectory();
+    final filename = 'route_${_logic.selectedShift?.username ?? "export"}.geojson';
+    final file = File('${directory.path}/$filename');
+    await file.writeAsString(jsonEncode(geoJson));
+
+    await share_plus.Share.shareXFiles([share_plus.XFile(file.path)], text: 'Экспорт маршрута в GeoJSON');
+  }
+
+
 
   Widget _buildLiveBadge() {
     return Container(
@@ -785,63 +892,172 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
 
   Widget _buildShiftDetailPanel(bool isDarkMode) {
     final shift = _logic.selectedShift!;
+    
+    double totalDistanceMeters = 0;
+    if (_logic.selectedHistoryPoints.length > 1) {
+      const distanceCalc = Distance();
+      for (int i = 0; i < _logic.selectedHistoryPoints.length - 1; i++) {
+        totalDistanceMeters += distanceCalc.as(
+          LengthUnit.Meter,
+          _logic.selectedHistoryPoints[i].position,
+          _logic.selectedHistoryPoints[i+1].position
+        );
+      }
+    }
+    
+    final distanceText = totalDistanceMeters > 1000 
+        ? '${(totalDistanceMeters / 1000).toStringAsFixed(2)} км'
+        : '${totalDistanceMeters.toStringAsFixed(0)} м';
+
     return Positioned(
-      bottom: 20, // Опускаем вниз, так как BottomSheet скрыт
-      left: 20,
-      right: 20,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(color: Colors.black26, blurRadius: 15, spreadRadius: 2)
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: () => _showFullImage(shift.selfie),
-                  child: Hero(
-                    tag: 'selfie_${shift.id}',
-                    child: _buildShiftSelfieMini(shift.selfie, size: 80),
+      bottom: 20,
+      left: 16,
+      right: 16,
+      child: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: const [
+              BoxShadow(color: Colors.black26, blurRadius: 15, spreadRadius: 2)
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // User info row
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: () => _showFullImage(shift.selfie),
+                    child: Hero(
+                      tag: 'selfie_${shift.id}',
+                      child: _buildShiftSelfieMini(shift.selfie, size: 50),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(shift.username,
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 2),
+                        Text('${shift.position} • ${shift.zone}',
+                            style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${DateFormat('HH:mm').format((shift.startTime ?? DateTime.now()).toLocal())} - ${shift.endTime != null ? DateFormat('HH:mm').format(shift.endTime!.toLocal()) : "В процессе"}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        if (_logic.selectedHistoryPoints.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              const Icon(Icons.route, size: 12, color: Colors.blueAccent),
+                              const SizedBox(width: 4),
+                              Text('Пройдено: $distanceText', 
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Row(
                     children: [
-                      Text(shift.username,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w900, fontSize: 18)),
-                      const SizedBox(height: 4),
-                      Text('${shift.position} • ${shift.zone}',
-                          style:
-                              TextStyle(color: Colors.grey[400], fontSize: 13)),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Смена: ${DateFormat('HH:mm').format((shift.startTime ?? DateTime.now()).toLocal())} - ${shift.endTime != null ? DateFormat('HH:mm').format(shift.endTime!.toLocal()) : "В процессе"}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 13),
+                      if (_logic.selectedHistoryPoints.isNotEmpty)
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.file_download_outlined, color: Colors.blueAccent, size: 24),
+                          onPressed: _exportGeoJson,
+                        ),
+                      const SizedBox(width: 12),
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.close, size: 24),
+                        onPressed: () {
+                          _logic.selectedShift = null;
+                          _logic.selectedEmployeeHistory = [];
+                          _selectedHistoryPoint = null;
+                          setState(() {});
+                        },
                       ),
                     ],
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () {
-                    _logic.selectedShift = null;
-                    _logic.selectedEmployeeHistory = [];
-                    setState(() {});
-                  },
+                ],
+              ),
+              
+              // Timeline and point info
+              if (_logic.selectedHistoryPoints.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                if (_selectedHistoryPoint != null) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.access_time, size: 14, color: Colors.blueAccent),
+                          const SizedBox(width: 4),
+                          Text(DateFormat('HH:mm:ss').format(_selectedHistoryPoint!.timestamp.toLocal()),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          const Icon(Icons.speed, size: 14, color: Colors.orange),
+                          const SizedBox(width: 4),
+                          Text('${((_selectedHistoryPoint!.speed ?? 0.0) * 3.6).toStringAsFixed(1)} км/ч',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ],
+                      ),
+                      if (_selectedHistoryPoint!.battery != null)
+                        Row(
+                          children: [
+                            Icon(_selectedHistoryPoint!.battery! > 20 ? Icons.battery_full : Icons.battery_alert,
+                                size: 14, color: _selectedHistoryPoint!.battery! > 20 ? Colors.green : Colors.red),
+                            const SizedBox(width: 4),
+                            Text('${_selectedHistoryPoint!.battery!.toInt()}%',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                    ],
+                  ),
+                ],
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 4,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                    activeTrackColor: Colors.blueAccent,
+                    inactiveTrackColor: Colors.grey.withOpacity(0.3),
+                    thumbColor: Colors.blueAccent,
+                  ),
+                  child: Slider(
+                    value: _selectedHistoryPoint == null 
+                      ? 0.0 
+                      : _logic.selectedHistoryPoints.indexOf(_selectedHistoryPoint!).toDouble().clamp(0.0, _logic.selectedHistoryPoints.length.toDouble() - 1),
+                    min: 0,
+                    max: (_logic.selectedHistoryPoints.length - 1).toDouble(),
+                    onChanged: (val) {
+                      final idx = val.toInt();
+                      if (idx >= 0 && idx < _logic.selectedHistoryPoints.length) {
+                        setState(() {
+                          _selectedHistoryPoint = _logic.selectedHistoryPoints[idx];
+                        });
+                      }
+                    },
+                  ),
                 ),
               ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

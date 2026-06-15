@@ -34,6 +34,7 @@ class EmployeeMapLogic {
   // История
   final Map<String, List<EmployeeLocation>> _cachedHistories = {};
   List<LatLng> selectedEmployeeHistory = [];
+  List<EmployeeLocation> selectedHistoryPoints = [];
   String? selectedEmployeeId;
   String? selectedEmployeeName;
   DateTimeRange? selectedHistoryRange;
@@ -326,6 +327,7 @@ class EmployeeMapLogic {
               timestamp: DateTime.tryParse(item['ts']?.toString() ?? '') ??
                   DateTime.now(),
               avatarUrl: item['avatarUrl']?.toString(),
+              speed: item['speed'] is num ? (item['speed'] as num).toDouble() : null,
             );
           })
           .whereType<EmployeeLocation>()
@@ -535,6 +537,7 @@ class EmployeeMapLogic {
 
     if (_cachedHistories.containsKey(cacheKey)) {
       final cached = _cachedHistories[cacheKey]!;
+      selectedHistoryPoints = cached;
       selectedEmployeeHistory = cached.map((e) => e.position).toList();
       _notify();
       return;
@@ -573,11 +576,13 @@ class EmployeeMapLogic {
                     DateTime.tryParse(map['timestamp']?.toString() ?? '') ??
                         DateTime.now(),
                 avatarUrl: map['avatarUrl']?.toString(),
+                speed: map['speed'] is num ? (map['speed'] as num).toDouble() : null,
               );
             })
             .whereType<EmployeeLocation>()
             .toList();
 
+        selectedHistoryPoints = _cachedHistories[cacheKey]!;
         selectedEmployeeHistory = _smoothPolyline(gpsPoints);
       }
     } catch (e) {
@@ -611,6 +616,7 @@ class EmployeeMapLogic {
 
   void clearHistory() {
     selectedEmployeeHistory = [];
+    selectedHistoryPoints = [];
     selectedEmployeeId = null;
     selectedEmployeeName = null;
     selectedHistoryRange = null;

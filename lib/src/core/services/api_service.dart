@@ -1313,11 +1313,14 @@ class ApiService {
     return [];
   }
 
-  Future<List<dynamic>> getScooterReports(String token) async {
+  Future<List<dynamic>> getScooterReports(String token, {String? date}) async {
     try {
+      final url = date != null 
+          ? '${AppConfig.apiBaseUrl}/admin/scooter-reports?date=$date'
+          : '${AppConfig.apiBaseUrl}/admin/scooter-reports';
       final response = await _authorizedRequest(
         (t) => http.get(
-          Uri.parse('${AppConfig.apiBaseUrl}/admin/scooter-reports'),
+          Uri.parse(url),
           headers: {'Authorization': 'Bearer $t', 'Content-Type': 'application/json'},
         ),
         token,
