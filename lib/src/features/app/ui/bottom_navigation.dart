@@ -10,6 +10,7 @@ import 'package:micro_mobility_app/src/features/home/bloc/shift_state.dart';
 import 'package:micro_mobility_app/src/features/map_screen/map_screens.dart';
 import 'package:micro_mobility_app/src/features/qr_scanner_screen/qr_scanner_screen.dart';
 import 'package:micro_mobility_app/src/features/profile/profile_screen.dart';
+import 'package:micro_mobility_app/src/core/services/api_service.dart';
 import 'package:micro_mobility_app/src/core/utils/app_icons.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -21,14 +22,36 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
+  bool _isQrEnabled = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _fetchSettings();
+  }
 
-  final List<Widget> _screens = [
-    const DashboardHome(),
-    const MapScreen(),
-    const QrScannerScreen(),
-    const ProfileScreen(),
-  ];
+  Future<void> _fetchSettings() async {
+    try {
+      final settings = await ApiService().getSettings();
+      if (mounted) {
+        setState(() {
+          _isQrEnabled = settings['is_qr_enabled'] == 'true';
+          if (!_isQrEnabled && _currentIndex == 2) {
+             _currentIndex = 0; // reset if stuck on disabled tab
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load settings: $e');
+    }
+  }
+
+  Widget _getScreen(int index) {
+    if (index == 0) return const DashboardHome();
+    if (index == 1) return const MapScreen();
+    if (_isQrEnabled && index == 2) return const QrScannerScreen();
+    return const ProfileScreen();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +60,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final hasActiveShift = shiftState is ShiftActive;
 
         return Scaffold(
-          body: _screens[_currentIndex],
+          body: _getScreen(_currentIndex),
           bottomNavigationBar: Theme(
             data: Theme.of(context).copyWith(
               splashFactory: NoSplash.splashFactory,
@@ -50,9 +73,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               selectedFontSize: 13,
               unselectedItemColor: Colors.grey[600],
               onTap: (index) {
-                // Разрешаем переход на вкладку tr(context, "Главная", tr(context, "Басты бет", "Басты бет")) (0) и tr(context, "Профиль", "Профиль") (3) всегда
-                // Для вкладок tr(context, "Карта", "Карта") (1) и tr(context, "QR", "QR") (2) проверяем наличие активной смены
-                if (index != 0 && index != 3 && !hasActiveShift) {
+                final targetIsProfile = index == (_isQrEnabled ? 3 : 2);
+                if (index != 0 && !targetIsProfile && !hasActiveShift) {
                   final provider =
                       Provider.of<ShiftProvider>(context, listen: false);
                   final role =
@@ -89,15 +111,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   label: tr(context, 'Карта', 'Карта'),
                 ),
-                BottomNavigationBarItem(
-                  icon: Opacity(
-                    opacity: hasActiveShift ? 1.0 : 0.5,
-                    child: _buildIcon(AppIcons.qr, AppIcons.qr2, 2),
+                if (_isQrEnabled)
+                  BottomNavigationBarItem(
+                    icon: Opacity(
+                      opacity: hasActiveShift ? 1.0 : 0.5,
+                      child: _buildIcon(AppIcons.qr, AppIcons.qr2, 2),
+                    ),
+                    label: tr(context, 'QR', 'QR'),
                   ),
-                  label: tr(context, 'QR', 'QR'),
-                ),
                 BottomNavigationBarItem(
-                  icon: _buildIcon(AppIcons.profile, AppIcons.profile2, 3),
+                  icon: _buildIcon(AppIcons.profile, AppIcons.profile2, _isQrEnabled ? 3 : 2),
                   label: tr(context, 'Профиль', 'Профиль'),
                 ),
               ],

@@ -109,6 +109,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             },
           ),
         ),
+        const SizedBox(height: 8),
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: const _SettingsQrToggle(),
+        ),
       ],
     );
   }
@@ -357,6 +362,75 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SettingsQrToggle extends StatefulWidget {
+  const _SettingsQrToggle();
+  @override
+  State<_SettingsQrToggle> createState() => _SettingsQrToggleState();
+}
+
+class _SettingsQrToggleState extends State<_SettingsQrToggle> {
+  bool _isQrEnabled = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadState();
+  }
+
+  Future<void> _loadState() async {
+    try {
+      final settings = await ApiService().getSettings();
+      if (mounted) {
+        setState(() {
+          _isQrEnabled = settings['is_qr_enabled'] == 'true';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _toggle(bool val) async {
+    setState(() => _isLoading = true);
+    try {
+      await ApiService().updateSetting('is_qr_enabled', val ? 'true' : 'false');
+      setState(() {
+        _isQrEnabled = val;
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Настройки обновлены. Требуется перезапуск приложения у курьеров.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const ListTile(
+        leading: CircularProgressIndicator(),
+        title: Text('Загрузка настроек...'),
+      );
+    }
+    return SwitchListTile(
+      secondary: const Icon(Icons.qr_code_scanner, color: Colors.blueGrey),
+      title: const Text('Вкладка QR у курьеров', style: TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(_isQrEnabled ? 'Включена' : 'Отключена', style: TextStyle(color: _isQrEnabled ? Colors.green : Colors.red)),
+      value: _isQrEnabled,
+      onChanged: _toggle,
     );
   }
 }

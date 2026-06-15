@@ -142,6 +142,41 @@ class ApiService {
     return response;
   }
 
+  Future<Map<String, dynamic>> getSettings() async {
+    final token = await _storage.read(key: 'jwt_token');
+    if (token == null) throw Exception('No token');
+    final response = await _authorizedRequest(
+      (t) => http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/settings'),
+        headers: {'Authorization': 'Bearer $t'},
+      ),
+      token,
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return {};
+  }
+
+  Future<void> updateSetting(String key, String value) async {
+    final token = await _storage.read(key: 'jwt_token');
+    if (token == null) throw Exception('No token');
+    final response = await _authorizedRequest(
+      (t) => http.post(
+        Uri.parse('${AppConfig.apiBaseUrl}/admin/settings'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $t',
+        },
+        body: jsonEncode({'key': key, 'value': value}),
+      ),
+      token,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update setting');
+    }
+  }
+
   Future<Map<String, dynamic>> login(String username, String password) async {
     final response = await http.post(
       Uri.parse(AppConfig.loginUrl),
