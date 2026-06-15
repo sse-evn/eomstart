@@ -440,6 +440,21 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getUserStats(String token, int userId) async {
+    final response = await _authorizedRequest((token) async {
+      return await http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/admin/users/$userId/stats'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    }, token);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to load user stats');
+    }
+  }
+
   Future<List<shift_data.ShiftData>> getShifts(String token) async {
     try {
       final response = await _authorizedRequest((token) async {

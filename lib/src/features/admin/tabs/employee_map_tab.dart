@@ -129,6 +129,16 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
       Colors.indigo,
       Colors.amber,
       Colors.cyan,
+      Colors.black,
+      Colors.brown,
+      Colors.deepOrange,
+      Colors.lime,
+      Colors.blueGrey,
+      Colors.deepPurple,
+      const Color(0xFFE91E63), // Magenta
+      const Color(0xFF004D40), // Dark Teal
+      const Color(0xFF3E2723), // Dark Brown
+      const Color(0xFFF50057), // Neon Pink
     ];
     return colors[hash.abs() % colors.length];
   }
@@ -243,6 +253,10 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                       _selectedHistoryPoint = closestPoint;
                     });
                   }
+                } else if (!_logic.isHistoryMode && _logic.selectedLiveEmployee != null) {
+                  setState(() {
+                    _logic.selectedLiveEmployee = null;
+                  });
                 }
               },
             ),
@@ -278,17 +292,22 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                   }).toList(),
                 ),
 
-              // Треки перемещений всех активных сотрудников за сегодня (как в 2GIS)
-              if (!_logic.isHistoryMode && _logic.showRoutes)
+              // Треки перемещений активных сотрудников
+              if (!_logic.isHistoryMode)
                 PolylineLayer(
-                  polylines: _logic.activeEmployeesPaths.entries.map((entry) {
+                  polylines: _logic.activeEmployeesPaths.entries.where((entry) {
+                    if (_logic.showRoutes) return true;
+                    if (_logic.selectedLiveEmployee?.userId == entry.key) return true;
+                    return false;
+                  }).map((entry) {
                     final userId = entry.key;
                     final points = entry.value;
+                    final isSelected = _logic.selectedLiveEmployee?.userId == userId;
                     final color = _getColorForUser(userId);
                     return Polyline(
                       points: points,
-                      color: color.withOpacity(0.6),
-                      strokeWidth: 4.0,
+                      color: isSelected ? color.withOpacity(0.8) : color.withOpacity(0.4),
+                      strokeWidth: isSelected ? 5.0 : 3.0,
                     );
                   }).toList(),
                 ),

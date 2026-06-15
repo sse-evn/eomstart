@@ -62,7 +62,7 @@ class EmployeeMapLogic {
   bool showParkingZones = true;
   bool showSpeedLimitZones = true;
   bool showMarkers = true; // Для общих маркеров из GeoJSON
-  bool showRoutes = true; // Для треков сотрудников
+  bool showRoutes = false; // Для треков сотрудников (по умолчанию выкл для чистого real-life)
 
   Map<String, String> _userNameCache = {};
 

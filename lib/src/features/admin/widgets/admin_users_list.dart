@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/api_service.dart';
+import '../user_profile_screen.dart';
 
 class AdminUsersList extends StatefulWidget {
   const AdminUsersList({super.key});
@@ -1007,33 +1008,82 @@ class _AdminUsersListState extends State<AdminUsersList> {
             ],
             const SizedBox(height: 24),
             if (canManage) ...[
-              if (status != 'active')
-                _buildActionButton('Активировать', Icons.check_circle_outline, Colors.green, () {
-                  Navigator.pop(ctx);
-                  _updateUserStatus(userId, username, 'active');
-                }),
-              if (status == 'active')
-                _buildActionButton('Деактивировать', Icons.block_flipped, Colors.orange, () {
-                  Navigator.pop(ctx);
-                  _updateUserStatus(userId, username, 'pending');
-                }),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)));
+                  },
+                  icon: const Icon(Icons.account_circle, color: Colors.white),
+                  label: const Text('Открыть профиль сотрудника', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildActionCard(
+                      'Номер', 
+                      Icons.phone_android_rounded, 
+                      Colors.blue, 
+                      () {
+                        Navigator.pop(ctx);
+                        _changeUserPhone(userId, username, phone);
+                      }
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildActionCard(
+                      'Роль', 
+                      Icons.manage_accounts_rounded, 
+                      isDarkMode ? Colors.white : Colors.black87, 
+                      () {
+                        Navigator.pop(ctx);
+                        _changeUserRole(userId, username, role);
+                      }
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
-              _buildActionButton('Изменить номер', Icons.phone_android_outlined, Colors.blue, () {
-                Navigator.pop(ctx);
-                _changeUserPhone(userId, username, phone);
-              }),
-              const SizedBox(height: 12),
-              _buildActionButton('Изменить роль', Icons.manage_accounts_outlined, isDarkMode ? Colors.white : Colors.black87, () {
-                Navigator.pop(ctx);
-                _changeUserRole(userId, username, role);
-              }),
-            ],
-            if (canDelete) ...[
-              const SizedBox(height: 12),
-              _buildActionButton('Удалить пользователя', Icons.delete_outline_rounded, Colors.red, () {
-                Navigator.pop(ctx);
-                _deleteUser(userId, username);
-              }),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildActionCard(
+                      status == 'active' ? 'Деактивировать' : 'Активировать', 
+                      status == 'active' ? Icons.block_flipped : Icons.check_circle_outline, 
+                      status == 'active' ? Colors.orange : Colors.green, 
+                      () {
+                        Navigator.pop(ctx);
+                        _updateUserStatus(userId, username, status == 'active' ? 'pending' : 'active');
+                      }
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  if (canDelete)
+                    Expanded(
+                      child: _buildActionCard(
+                        'Удалить', 
+                        Icons.delete_outline_rounded, 
+                        Colors.red, 
+                        () {
+                          Navigator.pop(ctx);
+                          _deleteUser(userId, username);
+                        }
+                      ),
+                    )
+                  else
+                    const Expanded(child: SizedBox.shrink()),
+                ],
+              ),
             ],
             const SizedBox(height: 24),
           ],
@@ -1042,17 +1092,33 @@ class _AdminUsersListState extends State<AdminUsersList> {
     );
   }
 
-  Widget _buildActionButton(String label, IconData icon, Color color, VoidCallback onTap) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 20, color: color),
-        label: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          side: BorderSide(color: color.withOpacity(0.2)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  Widget _buildActionCard(String label, IconData icon, Color color, VoidCallback onTap) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withOpacity(0.2)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ),
     );
