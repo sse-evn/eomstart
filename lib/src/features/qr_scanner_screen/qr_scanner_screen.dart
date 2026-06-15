@@ -834,22 +834,17 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
   void _showAddScootersSheet() {
     FocusScope.of(context).unfocus();
-    if (_flashOn) {
-      Future.delayed(const Duration(milliseconds: 500), () async {
-        try {
-          await cameraController.toggleTorch();
-        } catch (_) {}
-      });
-    }
 
-    _isQrScannerOpen = true;
-
-    // Запускаем контроллер камеры перед открытием
     try {
-      cameraController.start();
-    } catch (e) {
-      debugPrint('Error starting camera: $e');
-    }
+      cameraController.dispose();
+    } catch (_) {}
+
+    cameraController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      torchEnabled: false,
+    );
+    _flashOn = false;
 
     showModalBottomSheet(
         context: context,
@@ -925,7 +920,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                         ])))
               ]));
         }).then((_) {
-      _isQrScannerOpen = false;
       try {
         cameraController.stop();
       } catch (_) {}
@@ -1025,18 +1019,26 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                       _clearCompetitorCounts();
                       setSheetState(() {});
                     },
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.delete_sweep_rounded,
-                            size: 16, color: Colors.redAccent),
-                        SizedBox(width: 4),
-                        Text(tr(context, 'Сбросить', 'Бастапқыға қайтару'),
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.redAccent,
-                                fontWeight: FontWeight.bold)),
-                      ],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.delete_sweep_rounded,
+                              size: 18, color: Colors.redAccent),
+                          const SizedBox(width: 6),
+                          Text(tr(context, 'Сбросить', 'Бастапқыға қайтару'),
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.redAccent,
+                                  fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                     ),
                   ),
               ],
@@ -1079,56 +1081,73 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       String key, bool isDark, void Function(void Function()) setSheetState) {
     final count = _competitorCounts[key] ?? 0;
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      padding: EdgeInsets.symmetric(vertical: 10, horizontal: 6),
       decoration: BoxDecoration(
         color: isDark ? Colors.grey[850] : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border:
-            Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: count > 0
+                ? Colors.green.withOpacity(0.5)
+                : (isDark ? Colors.grey[800]! : Colors.grey[300]!)),
       ),
       child: Column(
         children: [
           Text(key,
               style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 14,
+                  fontSize: 15,
                   color: isDark ? Colors.white : Colors.black87)),
-          SizedBox(height: 10),
+          SizedBox(height: 12),
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              GestureDetector(
-                onTap: () {
-                  _removeLastScooterForBrand(key);
-                  setSheetState(() {});
-                },
-                child: Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                      color: isDark ? Colors.grey[800] : Colors.red[50],
-                      borderRadius: BorderRadius.circular(8)),
-                  child: Icon(Icons.remove, size: 16, color: Colors.red[700]),
+              Expanded(
+                flex: 2,
+                child: GestureDetector(
+                  onTap: count > 0
+                      ? () {
+                          _removeLastScooterForBrand(key);
+                          setSheetState(() {});
+                        }
+                      : null,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                        color: count > 0
+                            ? (isDark ? Colors.grey[800] : Colors.red[50])
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Icon(Icons.remove,
+                        size: 22,
+                        color: count > 0 ? Colors.red[700] : Colors.grey),
+                  ),
                 ),
               ),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14),
-                child: Text('$count',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87)),
+              Expanded(
+                flex: 3,
+                child: Center(
+                  child: Text('$count',
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: count > 0
+                              ? Colors.green[600]
+                              : (isDark ? Colors.white : Colors.black87))),
+                ),
               ),
-              GestureDetector(
-                onTap: () {
-                  _incrementBrandWithQuickLabel(key);
-                  setSheetState(() {});
-                },
-                child: Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                      color: isDark ? Colors.grey[800] : Colors.green[50],
-                      borderRadius: BorderRadius.circular(8)),
-                  child: Icon(Icons.add, size: 16, color: Colors.green[700]),
+              Expanded(
+                flex: 2,
+                child: GestureDetector(
+                  onTap: () {
+                    _incrementBrandWithQuickLabel(key);
+                    setSheetState(() {});
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[800] : Colors.green[50],
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Icon(Icons.add, size: 22, color: Colors.green[700]),
+                  ),
                 ),
               ),
             ],
@@ -1529,6 +1548,10 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           TextField(
             controller: _commentController,
             maxLines: 2,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              FocusScope.of(context).unfocus();
+            },
             style: TextStyle(
                 fontSize: 14, color: isDark ? Colors.white : Colors.black87),
             decoration: InputDecoration(
@@ -1548,25 +1571,26 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
   Future<void> _toggleQrScanner() async {
     final nextState = !_isQrScannerOpen;
+    
+    if (nextState) {
+      try {
+        cameraController.dispose();
+      } catch (_) {}
+      cameraController = MobileScannerController(
+        detectionSpeed: DetectionSpeed.normal,
+        facing: CameraFacing.back,
+        torchEnabled: false,
+      );
+      _flashOn = false;
+    } else {
+      try {
+        await cameraController.stop();
+      } catch (_) {}
+    }
+
     setState(() {
       _isQrScannerOpen = nextState;
     });
-    try {
-      if (nextState) {
-        await cameraController.start();
-        if (_flashOn) {
-          Future.delayed(const Duration(milliseconds: 500), () async {
-            try {
-              await cameraController.toggleTorch();
-            } catch (_) {}
-          });
-        }
-      } else {
-        try {
-          await cameraController.stop();
-        } catch (_) {}
-      }
-    } catch (_) {}
   }
 
   Widget _actionRowWidget() {
