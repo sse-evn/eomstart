@@ -17,6 +17,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:micro_mobility_app/src/core/services/geo_tracking_service.dart';
+
 import 'custom_camera_screen.dart';
 
 class QrScannerScreen extends StatefulWidget {
@@ -842,6 +844,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
     _isQrScannerOpen = true;
 
+    // Запускаем контроллер камеры перед открытием
+    try {
+      cameraController.start();
+    } catch (e) {
+      debugPrint('Error starting camera: $e');
+    }
+
     showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -1544,6 +1553,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     });
     try {
       if (nextState) {
+        await cameraController.start();
         if (_flashOn) {
           Future.delayed(const Duration(milliseconds: 500), () async {
             try {
@@ -1775,6 +1785,41 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            Consumer<ShiftProvider>(
+              builder: (context, provider, child) {
+                final hasActiveShift = provider.activeShift != null;
+                if (!hasActiveShift) return const SizedBox.shrink();
+
+                return FutureBuilder<bool>(
+                  future: isBackgroundTrackingRunning(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const SizedBox.shrink();
+                    }
+                    final isRunning = snapshot.data ?? false;
+                    if (isRunning) return const SizedBox.shrink();
+
+                    return Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      color: Colors.red[600],
+                      child: Row(
+                        children: [
+                          Icon(Icons.location_off, color: Colors.white),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              tr(context, 'Внимание! Передача геоданных остановлена.', 'Назар аударыңыз! Геодеректерді беру тоқтатылды.'),
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.all(12),
