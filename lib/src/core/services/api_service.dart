@@ -1527,7 +1527,7 @@ class ApiService {
     final token = await _storage.read(key: 'jwt_token');
     if (token == null) throw Exception('No token');
     final response = await http.get(
-      Uri.parse('${AppConfig.baseUrl}/api/admin/app/min-version'),
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/app/min-version'),
       headers: {'Authorization': 'Bearer $token'},
     );
     if (response.statusCode == 200) {
@@ -1541,7 +1541,7 @@ class ApiService {
     final token = await _storage.read(key: 'jwt_token');
     if (token == null) throw Exception('No token');
     final response = await http.post(
-      Uri.parse('${AppConfig.baseUrl}/api/admin/app/min-version'),
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/app/min-version'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
