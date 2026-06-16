@@ -81,7 +81,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       provider.profile?['role']?.toString().toLowerCase();
                   final isAllowedRole = role == 'superadmin' ||
                       role == 'supervisor' ||
-                      role == 'coordinator';
+                      role == 'coordinator' ||
+                      role == 'evn';
 
                   if (!isAllowedRole) {
                     ScaffoldMessenger.of(context).showSnackBar(

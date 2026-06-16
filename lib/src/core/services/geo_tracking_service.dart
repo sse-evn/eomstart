@@ -37,7 +37,8 @@ final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
 bool _serviceIsActuallyRunning = false;
 int _consecutiveStreamErrors = 0;
-bool _isSending = false; // Предотвращаем одновременную отправку из stream и timer
+bool _isSending =
+    false; // Предотвращаем одновременную отправку из stream и timer
 
 /// Собирает и отправляет геоданные — общая логика для timer и stream
 Future<void> _collectAndSend(Position position) async {
@@ -125,7 +126,8 @@ void _startPositionStream() {
   if (defaultTargetPlatform == TargetPlatform.iOS) {
     settings = AppleSettings(
       accuracy: LocationAccuracy.best,
-      distanceFilter: 0, // 0 = всегда обновлять, даже стоя на месте
+      distanceFilter:
+          5, // 5 метров, чтобы не спамить когда скаут стоит на месте
       allowBackgroundLocationUpdates: true,
       showBackgroundLocationIndicator: true,
       pauseLocationUpdatesAutomatically: false,
@@ -134,8 +136,8 @@ void _startPositionStream() {
   } else {
     settings = AndroidSettings(
       accuracy: LocationAccuracy.best,
-      distanceFilter: 0,
-      intervalDuration: const Duration(seconds: 10),
+      distanceFilter: 5,
+      intervalDuration: const Duration(seconds: 16),
     );
   }
 
@@ -162,7 +164,8 @@ void _startPositionStream() {
     onError: (error) {
       _log("❌ Position Stream ошибка: $error");
       _consecutiveStreamErrors++;
-      final delay = Duration(seconds: (_consecutiveStreamErrors * 5).clamp(5, 60));
+      final delay =
+          Duration(seconds: (_consecutiveStreamErrors * 5).clamp(5, 60));
       _log("Перезапуск stream через ${delay.inSeconds} сек...");
       Future.delayed(delay, () {
         if (_serviceIsActuallyRunning) {
@@ -235,7 +238,9 @@ Future<void> onStart(ServiceInstance service) async {
   });
 
   // Слушаем появление интернета, чтобы сразу отправить накопленный буфер
-  Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) async {
+  Connectivity()
+      .onConnectivityChanged
+      .listen((List<ConnectivityResult> results) async {
     if (!results.contains(ConnectivityResult.none)) {
       _log("🌐 Сеть восстановлена, пробуем отправить буфер...");
       if (_latestPosition != null) {
@@ -294,7 +299,7 @@ Future<bool> onIosBackground(ServiceInstance service) async {
   try {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
-    
+
     final shiftId = prefs.getInt(_SHARED_PREFS_SHIFT_ID_KEY);
     final token = prefs.getString(_SHARED_PREFS_TOKEN_KEY);
 
@@ -309,7 +314,8 @@ Future<bool> onIosBackground(ServiceInstance service) async {
     Position? position;
     try {
       position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.best),
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.best),
       ).timeout(const Duration(seconds: 10));
     } catch (_) {
       position = await Geolocator.getLastKnownPosition();
@@ -319,7 +325,12 @@ Future<bool> onIosBackground(ServiceInstance service) async {
       _log("iOS BG: Позиция недоступна.");
       return true;
     }
-    
+
+    if (position.latitude == 0.0 || position.longitude == 0.0) {
+      _log("iOS BG: Получена 0,0 позиция — пропуск");
+      return true;
+    }
+
     int batteryLevel;
     try {
       batteryLevel = await Battery().batteryLevel;
@@ -360,7 +371,8 @@ Future<bool> onIosBackground(ServiceInstance service) async {
   }
 }
 
-Future<void> _sendGeoDataBatch(List<String> geoDataJsonList, int shiftId) async {
+Future<void> _sendGeoDataBatch(
+    List<String> geoDataJsonList, int shiftId) async {
   final token = _bgAuthToken;
   if (token == null) {
     _log("Ошибка: Токен отсутствует.");
@@ -369,16 +381,16 @@ Future<void> _sendGeoDataBatch(List<String> geoDataJsonList, int shiftId) async 
 
   final dataList = geoDataJsonList.map((s) => jsonDecode(s)).toList();
 
-  final res = await http.post(
-    Uri.parse(AppConfig.geoTrackUrl),
-    headers: {
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-    },
-    body: jsonEncode({
-      'data': dataList
-    }),
-  ).timeout(const Duration(seconds: 15));
+  final res = await http
+      .post(
+        Uri.parse(AppConfig.geoTrackUrl),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'data': dataList}),
+      )
+      .timeout(const Duration(seconds: 15));
 
   if (res.statusCode != 200) {
     throw Exception("HTTP ${res.statusCode}");
@@ -402,7 +414,7 @@ Future<bool> startBackgroundTracking({required int shiftId}) async {
           _log("Location denied after request.");
         }
       }
-      
+
       if (permission == LocationPermission.deniedForever) {
         _log("Location permanently denied.");
       }

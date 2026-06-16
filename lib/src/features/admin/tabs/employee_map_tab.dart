@@ -147,7 +147,6 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
     return Stack(
       alignment: Alignment.center,
       children: [
-        if (isOnline) const _PulseMarker(),
         Container(
           width: 44,
           height: 44,
@@ -737,7 +736,12 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                 firstDate: DateTime(2024),
                 lastDate: DateTime.now(),
               );
-              if (date != null) _logic.setDate(date);
+              if (date != null) {
+                setState(() {
+                  _selectedHistoryPoint = null;
+                });
+                _logic.setDate(date);
+              }
             },
             child: Text(
               isToday
@@ -753,7 +757,12 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
             const SizedBox(width: 4),
             IconButton(
               icon: const Icon(Icons.close, size: 16),
-              onPressed: () => _logic.setDate(DateTime.now()),
+              onPressed: () {
+                setState(() {
+                  _selectedHistoryPoint = null;
+                });
+                _logic.setDate(DateTime.now());
+              },
               constraints: const BoxConstraints(),
               padding: EdgeInsets.zero,
             ),
@@ -1132,6 +1141,23 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                             const SizedBox(width: 4),
                             Text('${emp.battery!.toInt()}%',
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            if (emp.speed != null) ...[
+                              const SizedBox(width: 12),
+                              const Icon(Icons.speed, size: 14, color: Colors.blueAccent),
+                              const SizedBox(width: 4),
+                              Text('${(emp.speed! * 3.6).toStringAsFixed(1)} км/ч',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ],
+                        ),
+                      ] else if (emp.speed != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.speed, size: 14, color: Colors.blueAccent),
+                            const SizedBox(width: 4),
+                            Text('${(emp.speed! * 3.6).toStringAsFixed(1)} км/ч',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                           ],
                         ),
                       ],
@@ -1369,46 +1395,3 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   }
 }
 
-class _PulseMarker extends StatefulWidget {
-  const _PulseMarker();
-
-  @override
-  State<_PulseMarker> createState() => _PulseMarkerState();
-}
-
-class _PulseMarkerState extends State<_PulseMarker>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Container(
-          width: 44 + (24 * _controller.value),
-          height: 44 + (24 * _controller.value),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.green.withOpacity(1.0 - _controller.value),
-          ),
-        );
-      },
-    );
-  }
-}

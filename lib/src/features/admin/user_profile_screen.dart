@@ -21,7 +21,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   
   bool _isLoading = true;
   List<ActiveShift> _userShifts = [];
+  List<ActiveShift> _filteredShifts = [];
   Map<String, dynamic> _stats = {};
+  String? _currentUserRole;
+  DateTimeRange? _selectedDateRange;
   
   @override
   void initState() {
@@ -33,6 +36,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     try {
       final token = await _storage.read(key: 'jwt_token');
       if (token == null) return;
+
+      final currentProfile = await _apiService.getUserProfile(token);
+      final currentUserRole = currentProfile['role'] as String?;
       
       final allShifts = await _apiService.getEndedShifts(token);
       final username = widget.user['username'] ?? '';
@@ -40,6 +46,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       // Фильтруем только смены этого пользователя
       final userShifts = allShifts.where((s) => s.username == username).toList();
       userShifts.sort((a, b) => (b.endTimeString ?? '').compareTo(a.endTimeString ?? ''));
+      
+      _applyFilter(userShifts);
       
       // Считаем статистику
       int totalShifts = userShifts.length;
@@ -68,12 +76,70 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
              'late_shifts': statsResponse['late_shifts'] ?? 0,
              'late_percentage': statsResponse['late_percentage'] ?? 0.0,
            };
+           _currentUserRole = currentUserRole;
            _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _applyFilter(List<ActiveShift> allUserShifts) {
+    if (_selectedDateRange == null) {
+      _filteredShifts = List.from(allUserShifts);
+    } else {
+      _filteredShifts = allUserShifts.where((shift) {
+        if (shift.startTimeString == null) return false;
+        final date = DateTime.parse(shift.startTimeString!).toLocal();
+        final start = _selectedDateRange!.start;
+        final end = _selectedDateRange!.end.add(const Duration(days: 1)); // Включаем конец дня
+        return date.isAfter(start) && date.isBefore(end);
+      }).toList();
+    }
+  }
+
+  Future<void> _selectDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+      initialDateRange: _selectedDateRange,
+      builder: (context, child) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: Colors.green,
+                    onPrimary: Colors.white,
+                    surface: Color(0xFF1E1E1E),
+                    onSurface: Colors.white,
+                  )
+                : const ColorScheme.light(
+                    primary: Colors.green,
+                    onPrimary: Colors.white,
+                    surface: Colors.white,
+                    onSurface: Colors.black,
+                  ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _selectedDateRange = picked;
+        _applyFilter(_userShifts);
+      });
+    }
+  }
+
+  void _clearFilter() {
+    setState(() {
+      _selectedDateRange = null;
+      _applyFilter(_userShifts);
+    });
   }
 
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
@@ -171,6 +237,81 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 Center(child: Text('@$username • Роль: $role', style: TextStyle(fontSize: 16, color: Colors.grey[600], fontWeight: FontWeight.w500))),
                 const SizedBox(height: 4),
                 Center(child: Text(phone, style: TextStyle(fontSize: 16, color: Colors.grey[600]))),
+                if (widget.user['app_version'] != null && widget.user['app_version'].toString().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.system_update_rounded, size: 16, color: Colors.blueAccent),
+                      const SizedBox(width: 6),
+                      Text('Версия: ${widget.user['app_version']}',
+                          style: const TextStyle(color: Colors.blueAccent, fontSize: 14, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ],
+                if (_currentUserRole == 'evn') ...[
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurpleAccent.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.deepPurpleAccent.withOpacity(0.2)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.admin_panel_settings, size: 20, color: Colors.redAccent),
+                            SizedBox(width: 8),
+                            Text('Скрытая Телеметрия', style: TextStyle(color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.analytics_rounded, size: 16, color: Colors.deepPurpleAccent),
+                            const SizedBox(width: 6),
+                            Text('Открытий приложения: ${widget.user['app_opens'] ?? 0}',
+                                style: const TextStyle(color: Colors.deepPurpleAccent, fontSize: 14, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        if (widget.user['device_model'] != null && widget.user['device_model'].toString().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text('Устройство: ${widget.user['device_model']}',
+                                style: TextStyle(color: Colors.grey[700], fontSize: 13), textAlign: TextAlign.center),
+                          ),
+                        if (widget.user['os_version'] != null && widget.user['os_version'].toString().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text('Версия ОС: ${widget.user['os_version']}',
+                                style: TextStyle(color: Colors.grey[700], fontSize: 13), textAlign: TextAlign.center),
+                          ),
+                        if (widget.user['last_ip'] != null && widget.user['last_ip'].toString().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text('Последний IP: ${widget.user['last_ip']}',
+                                style: TextStyle(color: Colors.grey[700], fontSize: 13), textAlign: TextAlign.center),
+                          ),
+                        if (widget.user['system_language'] != null && widget.user['system_language'].toString().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text('Язык системы: ${widget.user['system_language']}',
+                                style: TextStyle(color: Colors.grey[700], fontSize: 13), textAlign: TextAlign.center),
+                          ),
+                        if (widget.user['timezone'] != null && widget.user['timezone'].toString().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text('Часовой пояс: ${widget.user['timezone']}',
+                                style: TextStyle(color: Colors.grey[700], fontSize: 13), textAlign: TextAlign.center),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 32),
                 
                 // Stats
@@ -206,18 +347,33 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('История смен', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text('Всего: ${_userShifts.length}', style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold, fontSize: 13)),
+                    Row(
+                      children: [
+                        if (_selectedDateRange != null)
+                          IconButton(
+                            icon: const Icon(Icons.clear, color: Colors.redAccent),
+                            onPressed: _clearFilter,
+                            tooltip: 'Сбросить фильтр',
+                          ),
+                        IconButton(
+                          icon: Icon(Icons.date_range, color: _selectedDateRange == null ? Colors.grey : Colors.green),
+                          onPressed: _selectDateRange,
+                          tooltip: 'Фильтр по дате',
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text('Всего: ${_filteredShifts.length}', style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                      ],
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                if (_userShifts.isEmpty)
+                if (_filteredShifts.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(32),
                     alignment: Alignment.center,
@@ -234,7 +390,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ),
                   )
                 else
-                  ..._userShifts.map((shift) => Container(
+                  ..._filteredShifts.map((shift) => Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
                       color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white,

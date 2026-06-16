@@ -678,7 +678,7 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
                             padding: EdgeInsets.all(10),
                             child: Column(
                               children: [
-                                if (['superadmin', 'coordinator', 'supervisor']
+                                if (['superadmin', 'coordinator', 'supervisor', 'evn']
                                     .contains(userRole)) ...[
                                   _SettingsItem(
                                     icon: Icons.admin_panel_settings,
@@ -928,7 +928,8 @@ class _ProfileHeader extends StatelessWidget {
           'scout': tr(context, 'Скаут', 'Скаут'),
           'supervisor': tr(context, 'Супервайзер', 'Супервайзер'),
           'coordinator': tr(context, 'Координатор', 'Координатор'),
-          'superadmin': tr(context, 'Суперадмин', 'Суперадмин')
+          'superadmin': tr(context, 'Суперадмин', 'Суперадмин'),
+          'evn': tr(context, 'Владелец', 'Владелец')
         }[role] ??
         role.toUpperCase();
   }

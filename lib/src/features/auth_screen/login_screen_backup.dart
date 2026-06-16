@@ -51,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
         debugPrint("Access token is valid. Status: $status, Role: $role");
 
         if (mounted) {
-          if (status == 'pending' && role != 'superadmin') {
+          if (status == 'pending' && role != 'superadmin' && role != 'evn') {
             Navigator.pushNamedAndRemoveUntil(
                 context, '/pending', (route) => false);
           } else {
@@ -77,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
               "Profile fetched with new token. Status: $status, Role: $role");
 
           if (mounted) {
-            if (status == 'pending' && role != 'superadmin') {
+            if (status == 'pending' && role != 'superadmin' && role != 'evn') {
               Navigator.pushNamedAndRemoveUntil(
                   context, '/pending', (route) => false);
             } else {
@@ -188,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (token == null) {
         final status = responseData?['status']?.toString() ?? 'pending';
         final role = responseData?['role']?.toString().toLowerCase() ?? 'user';
-        if (status == 'pending' && role != 'superadmin') {
+        if (status == 'pending' && role != 'superadmin' && role != 'evn') {
           if (mounted) {
             Navigator.pushNamedAndRemoveUntil(
                 context, '/pending', (route) => false);
@@ -213,7 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final status = profile['status']?.toString() ?? 'pending';
       final role = profile['role']?.toString().toLowerCase() ?? 'user';
 
-      if (status == 'pending' && role != 'superadmin') {
+      if (status == 'pending' && role != 'superadmin' && role != 'evn') {
         if (mounted) {
           Navigator.pushNamedAndRemoveUntil(
               context, '/pending', (route) => false);
@@ -254,7 +254,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final status = profile['status']?.toString() ?? 'pending';
       final role = profile['role']?.toString().toLowerCase() ?? 'user';
 
-      if (status == 'pending' && role != 'superadmin') {
+      if (status == 'pending' && role != 'superadmin' && role != 'evn') {
         if (mounted) {
           Navigator.pushNamedAndRemoveUntil(
               context, '/pending', (route) => false);

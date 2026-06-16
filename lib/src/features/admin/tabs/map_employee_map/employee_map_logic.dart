@@ -412,15 +412,18 @@ class EmployeeMapLogic {
 
   Future<void> setDate(DateTime date) async {
     selectedDate = date;
+    
+    // Always clear selections when changing dates
+    selectedShift = null;
+    selectedLiveEmployee = null;
+    selectedEmployeeHistory = [];
+    
     if (isHistoryMode) {
       stopLiveTracking();
       employeeLocations = []; // Скрываем живых в режиме истории
       await fetchShiftsForDate(date);
     } else {
       historyShifts = [];
-      selectedShift = null;
-      selectedLiveEmployee = null;
-      selectedEmployeeHistory = [];
       startLiveTracking();
       await fetchEmployeeLocations();
     }

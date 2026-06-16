@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:micro_mobility_app/src/features/app/models/active_shift.dart' as active_shift;
+import 'package:http/http.dart' as http;
+import 'package:micro_mobility_app/src/features/app/models/active_shift.dart'
+    as active_shift;
+import 'package:package_info_plus/package_info_plus.dart';
+
 import '../../features/app/models/shift_data.dart' as shift_data;
 import '../config/app_config.dart';
-import 'dart:async';
-import 'package:package_info_plus/package_info_plus.dart';
 
 class ApiService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -26,11 +30,13 @@ class ApiService {
       debugPrint('🔄 Attempting to refresh token...');
 
       // Добавим таймаут для запроса обновления
-      final response = await http.post(
-        Uri.parse(AppConfig.refreshTokenUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh_token': refreshToken}),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .post(
+            Uri.parse(AppConfig.refreshTokenUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'refresh_token': refreshToken}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       debugPrint('🔄 Refresh token response status: ${response.statusCode}');
 
@@ -54,10 +60,12 @@ class ApiService {
         await _storage.delete(key: 'refresh_token');
       } else {
         // 500 или другие ошибки — не удаляем токены, просто возвращаем null для ретрая позже
-        debugPrint('⚠️ Refresh failed with status ${response.statusCode}. Keeping tokens.');
+        debugPrint(
+            '⚠️ Refresh failed with status ${response.statusCode}. Keeping tokens.');
       }
     } catch (e) {
-      debugPrint('⚠️ Exception during token refresh: $e. Access token not cleared.');
+      debugPrint(
+          '⚠️ Exception during token refresh: $e. Access token not cleared.');
     }
     return null;
   }
@@ -104,7 +112,8 @@ class ApiService {
           await _storage.delete(key: 'refresh_token');
         }
       } else {
-        debugPrint('❌ Failed to refresh token. User needs to log in again. Clearing tokens.');
+        debugPrint(
+            '❌ Failed to refresh token. User needs to log in again. Clearing tokens.');
         await _storage.delete(key: 'jwt_token');
         await _storage.delete(key: 'refresh_token');
       }
@@ -121,7 +130,8 @@ class ApiService {
     var response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode == 401) {
-      debugPrint('🔐 Multipart request: Access token expired (401). Attempting to refresh...');
+      debugPrint(
+          '🔐 Multipart request: Access token expired (401). Attempting to refresh...');
       final newToken = await refreshToken();
       if (newToken != null) {
         debugPrint('✅ Token refreshed. Retrying multipart request...');
@@ -129,7 +139,8 @@ class ApiService {
         final retryStreamedResponse = await retryRequest.send();
         response = await http.Response.fromStream(retryStreamedResponse);
         if (response.statusCode == 401) {
-          debugPrint('❌ Multipart retry with new token also failed (401). Clearing tokens.');
+          debugPrint(
+              '❌ Multipart retry with new token also failed (401). Clearing tokens.');
           await _storage.delete(key: 'jwt_token');
           await _storage.delete(key: 'refresh_token');
         }
@@ -281,6 +292,8 @@ class ApiService {
       final packageInfo = await PackageInfo.fromPlatform();
       appVersion = '${packageInfo.version}+${packageInfo.buildNumber}';
     } catch (_) {}
+
+    _sendTelemetry(token, appVersion);
 
     final response = await _authorizedRequest((token) async {
       return await http.get(
@@ -1208,10 +1221,13 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> getShiftRecommendations(String token, DateTime date) async {
-    final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    final url = '${AppConfig.apiBaseUrl}/admin/shift-recommendations?date=$dateStr';
-    
+  Future<Map<String, dynamic>> getShiftRecommendations(
+      String token, DateTime date) async {
+    final dateStr =
+        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final url =
+        '${AppConfig.apiBaseUrl}/admin/shift-recommendations?date=$dateStr';
+
     final response = await _authorizedRequest((token) async {
       return await http.get(
         Uri.parse(url),
@@ -1223,7 +1239,8 @@ class ApiService {
     }, token);
 
     if (response.statusCode == 200) {
-      return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      return jsonDecode(utf8.decode(response.bodyBytes))
+          as Map<String, dynamic>;
     } else {
       throw Exception('Не удалось загрузить рекомендации ИИ');
     }
@@ -1320,7 +1337,7 @@ class ApiService {
         (t) => http.get(
           Uri.parse(AppConfig.lastLocationsUrl),
           headers: {
-            'Authorization': 'Bearer $t', 
+            'Authorization': 'Bearer $t',
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache, no-store, must-revalidate'
           },
@@ -1337,14 +1354,16 @@ class ApiService {
     return [];
   }
 
-  Future<List<dynamic>> getLocationHistory(String token, String userId, String from, String to) async {
+  Future<List<dynamic>> getLocationHistory(
+      String token, String userId, String from, String to) async {
     try {
-      final url = '${AppConfig.locationHistoryUrl}?user_id=$userId&from=${Uri.encodeComponent(from)}&to=${Uri.encodeComponent(to)}';
+      final url =
+          '${AppConfig.locationHistoryUrl}?user_id=$userId&from=${Uri.encodeComponent(from)}&to=${Uri.encodeComponent(to)}';
       final response = await _authorizedRequest(
         (t) => http.get(
           Uri.parse(url),
           headers: {
-            'Authorization': 'Bearer $t', 
+            'Authorization': 'Bearer $t',
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache, no-store, must-revalidate'
           },
@@ -1365,18 +1384,22 @@ class ApiService {
 
   Future<List<dynamic>> getScooterReports(String token, {String? date}) async {
     try {
-      final url = date != null 
+      final url = date != null
           ? '${AppConfig.apiBaseUrl}/admin/scooter-reports?date=$date'
           : '${AppConfig.apiBaseUrl}/admin/scooter-reports';
       final response = await _authorizedRequest(
         (t) => http.get(
           Uri.parse(url),
-          headers: {'Authorization': 'Bearer $t', 'Content-Type': 'application/json'},
+          headers: {
+            'Authorization': 'Bearer $t',
+            'Content-Type': 'application/json'
+          },
         ),
         token,
       );
       if (response.statusCode == 200) {
-        final body = jsonDecode(utf8.decode(response.bodyBytes, allowMalformed: true));
+        final body =
+            jsonDecode(utf8.decode(response.bodyBytes, allowMalformed: true));
         return body is List ? body : [];
       } else {
         throw Exception('Failed to load scooter reports');
@@ -1436,7 +1459,8 @@ class ApiService {
     }
   }
 
-  Future<void> sendAdminNotification(String token, String message, {int? userId}) async {
+  Future<void> sendAdminNotification(String token, String message,
+      {int? userId}) async {
     final response = await http.post(
       Uri.parse('${AppConfig.apiBaseUrl}/admin/notify'),
       headers: {
@@ -1450,6 +1474,82 @@ class ApiService {
     );
     if (response.statusCode != 200) {
       throw Exception('Failed to send notification');
+    }
+  }
+
+  Future<void> _sendTelemetry(String token, String appVersion) async {
+    try {
+      String platform = Platform.isIOS ? 'ios' : 'android';
+      String currentVersion = appVersion.split('+').first;
+      int buildNumber = 0;
+      if (appVersion.contains('+')) {
+        buildNumber = int.tryParse(appVersion.split('+').last) ?? 0;
+      }
+
+      String deviceModel = 'Unknown';
+      String osVersion = Platform.operatingSystemVersion;
+      final deviceInfoPlugin = DeviceInfoPlugin();
+
+      if (Platform.isIOS) {
+        final iosInfo = await deviceInfoPlugin.iosInfo;
+        deviceModel = iosInfo.utsname.machine;
+      } else if (Platform.isAndroid) {
+        final androidInfo = await deviceInfoPlugin.androidInfo;
+        deviceModel = '${androidInfo.brand} ${androidInfo.model}';
+      }
+
+      final body = {
+        'platform': platform,
+        'current_version': currentVersion,
+        'build_number': buildNumber,
+        'device_model': deviceModel,
+        'os_version': osVersion,
+        'system_language': Platform.localeName,
+        'timezone': DateTime.now().timeZoneName,
+      };
+
+      await http
+          .post(
+            Uri.parse('${AppConfig.apiBaseUrl}/app/version/check'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('Telemetry failed: $e');
+    }
+  }
+
+  Future<int> getMinAppVersion() async {
+    final token = await _storage.read(key: 'jwt_token');
+    if (token == null) throw Exception('No token');
+    final response = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/api/admin/app/min-version'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['min_patch_version'] as int;
+    }
+    throw Exception('Failed to get min app version');
+  }
+
+  Future<void> updateMinAppVersion(int patchVersion) async {
+    final token = await _storage.read(key: 'jwt_token');
+    if (token == null) throw Exception('No token');
+    final response = await http.post(
+      Uri.parse('${AppConfig.baseUrl}/api/admin/app/min-version'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'patch_version': patchVersion}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update min app version: ${response.statusCode}');
     }
   }
 }

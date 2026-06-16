@@ -450,6 +450,28 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
                     tr(context, 'Действует до конца смены', 'Ауысым соңына дейін жарамды'),
                     style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
                   ),
+                  if (_isShiftActive == true) ...[
+                    SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _hasClaimedToday[brand] = false;
+                          });
+                          _claimPromo(brand);
+                        },
+                        icon: Icon(Icons.add_circle_outline, size: 18),
+                        label: Text(tr(context, 'ПОЛУЧИТЬ 2-Й ПРОМОКОД', '2-ШІ ПРОМОКОДТЫ АЛУ')),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: brandColor,
+                          side: BorderSide(color: brandColor.withOpacity(0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

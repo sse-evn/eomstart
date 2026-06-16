@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:micro_mobility_app/src/core/services/api_service.dart';
 import 'package:micro_mobility_app/src/core/config/app_config.dart';
+import 'package:micro_mobility_app/src/core/services/api_service.dart';
+import 'package:micro_mobility_app/src/features/admin/admin_map_screens.dart';
+import 'package:micro_mobility_app/src/features/admin/generator_shifts.dart';
 import 'package:micro_mobility_app/src/features/admin/promo_codes_admin_screen.dart';
+import 'package:micro_mobility_app/src/features/admin/scooter_reports_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/shift_history_screen.dart';
 import 'package:micro_mobility_app/src/features/admin/shift_monitoring_screen.dart';
-import 'package:micro_mobility_app/src/features/admin/admin_map_screens.dart';
-import 'package:micro_mobility_app/src/features/admin/scooter_reports_screen.dart';
-import 'package:micro_mobility_app/src/features/admin/generator_shifts.dart';
-import 'package:micro_mobility_app/src/features/admin/widgets/admin_users_list.dart';
-import 'package:micro_mobility_app/src/features/admin/tabs/slot_management_tab.dart';
 import 'package:micro_mobility_app/src/features/admin/tabs/daily_reports_tab.dart';
+import 'package:micro_mobility_app/src/features/admin/tabs/slot_management_tab.dart';
+import 'package:micro_mobility_app/src/features/admin/widgets/admin_users_list.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -23,11 +23,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   int _currentIndex = 0;
 
   List<String> get _titles => [
-    'Пользователи',
-    'Карта',
-    'Смены',
-    'Управление',
-  ];
+        'Пользователи',
+        'Карта',
+        'Смены',
+        'Управление',
+      ];
 
   Widget? _subScreen;
   String? _subTitle;
@@ -47,10 +47,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: ListTile(
-            leading: const Icon(Icons.calendar_today_outlined, color: Colors.blue),
-            title: const Text('Генератор смен', style: TextStyle(fontWeight: FontWeight.bold)),
+            leading:
+                const Icon(Icons.calendar_today_outlined, color: Colors.blue),
+            title: const Text('Генератор смен',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => setState(() {
               _subScreen = const GeneratorShiftScreen();
@@ -60,10 +63,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ),
         const SizedBox(height: 8),
         Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: ListTile(
-            leading: const Icon(Icons.local_offer_outlined, color: Colors.orange),
-            title: const Text('Промокоды', style: TextStyle(fontWeight: FontWeight.bold)),
+            leading:
+                const Icon(Icons.local_offer_outlined, color: Colors.orange),
+            title: const Text('Промокоды',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => setState(() {
               _subScreen = const AdminPromoScreen();
@@ -73,10 +79,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ),
         const SizedBox(height: 8),
         Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: ListTile(
             leading: const Icon(Icons.av_timer_outlined, color: Colors.green),
-            title: const Text('Слоты времени', style: TextStyle(fontWeight: FontWeight.bold)),
+            title: const Text('Слоты времени',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => setState(() {
               _subScreen = const SlotManagementTab();
@@ -86,10 +94,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ),
         const SizedBox(height: 8),
         Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: ListTile(
             leading: const Icon(Icons.analytics_outlined, color: Colors.purple),
-            title: const Text('Отчеты по сменам', style: TextStyle(fontWeight: FontWeight.bold)),
+            title: const Text('Отчеты по сменам',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => setState(() {
               _subScreen = const DailyReportsTab();
@@ -99,10 +109,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ),
         const SizedBox(height: 8),
         Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: ListTile(
-            leading: const Icon(Icons.campaign_outlined, color: Colors.redAccent),
-            title: const Text('Массовая рассылка', style: TextStyle(fontWeight: FontWeight.bold)),
+            leading:
+                const Icon(Icons.campaign_outlined, color: Colors.redAccent),
+            title: const Text('Массовая рассылка',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               _showMassNotificationDialog(context);
@@ -111,8 +124,15 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ),
         const SizedBox(height: 8),
         Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: const _SettingsQrToggle(),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: const _MinAppVersionSetting(),
         ),
       ],
     );
@@ -126,74 +146,88 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Row(
-                children: [
-                  Icon(Icons.campaign, color: Colors.redAccent),
-                  SizedBox(width: 8),
-                  Text('Рассылка курьерам', style: TextStyle(fontSize: 18)),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Сообщение получат все курьеры, находящиеся сейчас на смене (через Telegram-бота).',
-                    style: TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: msgController,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: 'Начался дождь, будьте аккуратнее...',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isSending ? null : () => Navigator.pop(ctx),
-                  child: const Text('Отмена'),
+        return StatefulBuilder(builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.campaign, color: Colors.redAccent),
+                SizedBox(width: 8),
+                Text('Рассылка скаутам', style: TextStyle(fontSize: 18)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Сообщение получат все скауты, находящиеся сейчас на смене (через Telegram-бота).',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
                 ),
-                ElevatedButton(
-                  onPressed: isSending ? null : () async {
-                    final msg = msgController.text.trim();
-                    if (msg.isEmpty) return;
-
-                    setDialogState(() => isSending = true);
-                    try {
-                      final token = await const FlutterSecureStorage().read(key: 'jwt_token');
-                      if (token != null) {
-                        await ApiService().sendAdminNotification(token, msg);
-                        if (mounted) {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(this.context).showSnackBar(
-                            const SnackBar(content: Text('Уведомления успешно отправлены!'), backgroundColor: Colors.green),
-                          );
-                        }
-                      }
-                    } catch (e) {
-                      setDialogState(() => isSending = false);
-                      if (mounted) {
-                        ScaffoldMessenger.of(this.context).showSnackBar(
-                          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
-                        );
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-                  child: isSending 
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('Отправить всем'),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: msgController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Начался дождь, будьте аккуратнее...',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ],
-            );
-          }
-        );
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSending ? null : () => Navigator.pop(ctx),
+                child: const Text('Отмена'),
+              ),
+              ElevatedButton(
+                onPressed: isSending
+                    ? null
+                    : () async {
+                        final msg = msgController.text.trim();
+                        if (msg.isEmpty) return;
+
+                        setDialogState(() => isSending = true);
+                        try {
+                          final token = await const FlutterSecureStorage()
+                              .read(key: 'jwt_token');
+                          if (token != null) {
+                            await ApiService()
+                                .sendAdminNotification(token, msg);
+                            if (mounted) {
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(this.context).showSnackBar(
+                                const SnackBar(
+                                    content:
+                                        Text('Уведомления успешно отправлены!'),
+                                    backgroundColor: Colors.green),
+                              );
+                            }
+                          }
+                        } catch (e) {
+                          setDialogState(() => isSending = false);
+                          if (mounted) {
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(
+                                  content: Text('Ошибка: $e'),
+                                  backgroundColor: Colors.red),
+                            );
+                          }
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    foregroundColor: Colors.white),
+                child: isSending
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Text('Отправить всем'),
+              ),
+            ],
+          );
+        });
       },
     );
   }
@@ -224,9 +258,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   color: primaryColor,
                   child: const TabBar(
                     tabs: [
-                      Tab(text: 'Активные', icon: Icon(Icons.play_arrow, size: 18)),
+                      Tab(
+                          text: 'Активные',
+                          icon: Icon(Icons.play_arrow, size: 18)),
                       Tab(text: 'История', icon: Icon(Icons.history, size: 18)),
-                      Tab(text: 'Надзор', icon: Icon(Icons.report_problem_outlined, size: 18)),
+                      Tab(
+                          text: 'Надзор',
+                          icon: Icon(Icons.report_problem_outlined, size: 18)),
                     ],
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white70,
@@ -278,14 +316,18 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               : null,
           title: Text(
             _subTitle ?? _titles[_currentIndex],
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: -0.5),
+            style: const TextStyle(
+                fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: -0.5),
           ),
           actions: [
             PopupMenuButton(
               icon: Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.grey.withOpacity(0.1), shape: BoxShape.circle),
-                child: const Icon(Icons.info_outline, size: 18, color: Colors.grey),
+                decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.1),
+                    shape: BoxShape.circle),
+                child: const Icon(Icons.info_outline,
+                    size: 18, color: Colors.grey),
               ),
               tooltip: 'Информация о среде',
               onSelected: (value) {
@@ -296,7 +338,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 }
               },
               itemBuilder: (ctx) => [
-                const PopupMenuItem(value: 'env', child: Text('Показать среду')),
+                const PopupMenuItem(
+                    value: 'env', child: Text('Показать среду')),
               ],
             ),
             const SizedBox(width: 8),
@@ -336,7 +379,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             elevation: 0,
             selectedFontSize: 13,
             selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+            unselectedLabelStyle:
+                const TextStyle(fontWeight: FontWeight.normal),
             items: const [
               BottomNavigationBarItem(
                 icon: Icon(Icons.people_outline),
@@ -407,12 +451,15 @@ class _SettingsQrToggleState extends State<_SettingsQrToggle> {
         _isLoading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Настройки обновлены. Требуется перезапуск приложения у курьеров.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Настройки обновлены. Требуется перезапуск приложения у скаутов.')));
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     }
   }
@@ -427,10 +474,100 @@ class _SettingsQrToggleState extends State<_SettingsQrToggle> {
     }
     return SwitchListTile(
       secondary: const Icon(Icons.qr_code_scanner, color: Colors.blueGrey),
-      title: const Text('Вкладка QR у курьеров', style: TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(_isQrEnabled ? 'Включена' : 'Отключена', style: TextStyle(color: _isQrEnabled ? Colors.green : Colors.red)),
+      title: const Text('Вкладка QR у скаутов',
+          style: TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(_isQrEnabled ? 'Включена' : 'Отключена',
+          style: TextStyle(color: _isQrEnabled ? Colors.green : Colors.red)),
       value: _isQrEnabled,
       onChanged: _toggle,
+    );
+  }
+}
+
+class _MinAppVersionSetting extends StatefulWidget {
+  const _MinAppVersionSetting();
+  @override
+  State<_MinAppVersionSetting> createState() => _MinAppVersionSettingState();
+}
+
+class _MinAppVersionSettingState extends State<_MinAppVersionSetting> {
+  int _patchVersion = 22;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadState();
+  }
+
+  Future<void> _loadState() async {
+    try {
+      final version = await ApiService().getMinAppVersion();
+      if (mounted) {
+        setState(() {
+          _patchVersion = version;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _updateVersion(int newVersion) async {
+    setState(() => _isLoading = true);
+    try {
+      await ApiService().updateMinAppVersion(newVersion);
+      setState(() {
+        _patchVersion = newVersion;
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Минимальная версия обновлена на $newVersion. Старые приложения будут заблокированы.'),
+            backgroundColor: Colors.green));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const ListTile(
+        leading: CircularProgressIndicator(),
+        title: Text('Загрузка версии...'),
+      );
+    }
+    return ListTile(
+      leading: const Icon(Icons.system_update, color: Colors.blueAccent),
+      title: const Text('Блокировка старых версий',
+          style: TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text('Минимальный патч: $_patchVersion (например, 1.0.$_patchVersion)'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+            onPressed: () {
+              if (_patchVersion > 0) _updateVersion(_patchVersion - 1);
+            },
+          ),
+          Text('$_patchVersion', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+            onPressed: () => _updateVersion(_patchVersion + 1),
+          ),
+        ],
+      ),
     );
   }
 }

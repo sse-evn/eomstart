@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../core/services/api_service.dart';
 import '../user_profile_screen.dart';
 
@@ -28,6 +29,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
     'coordinator': 'Координатор',
     // 'admin': 'Админ',
     'superadmin': 'Суперадмин',
+    'evn': 'Владелец',
   };
 
   final Map<String, Color> _roleColors = {
@@ -37,6 +39,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
     'coordinator': Colors.purple,
     // 'admin': Colors.red,
     'superadmin': Colors.red,
+    'evn': Colors.deepPurple,
   };
 
   final Map<String, Color> _statusColors = {
@@ -246,9 +249,11 @@ class _AdminUsersListState extends State<AdminUsersList> {
           width: double.maxFinite,
           child: ListView.builder(
             shrinkWrap: true,
-            itemCount: _roleLabels.length,
+            itemCount: _roleLabels.entries.where((e) => e.key != 'evn').length,
             itemBuilder: (context, index) {
-              final entry = _roleLabels.entries.elementAt(index);
+              final entry = _roleLabels.entries
+                  .where((e) => e.key != 'evn')
+                  .elementAt(index);
               return RadioListTile<String>(
                 title: Text(entry.value),
                 value: entry.key,
@@ -306,7 +311,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
     }
   }
 
-  Future<void> _changeUserPhone(int userId, String username, String currentPhone) async {
+  Future<void> _changeUserPhone(
+      int userId, String username, String currentPhone) async {
     final controller = TextEditingController(text: currentPhone);
     final newPhone = await showDialog<String>(
       context: context,
@@ -540,7 +546,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    bool canManage = ['admin', 'superadmin', 'coordinator', 'supervisor']
+    bool canManage = ['admin', 'superadmin', 'coordinator', 'supervisor', 'evn']
         .contains(_currentUserRole);
 
     return Scaffold(
@@ -561,8 +567,10 @@ class _AdminUsersListState extends State<AdminUsersList> {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      if (snapshot.hasError) return _buildErrorState(snapshot.error.toString());
-                      if (!snapshot.hasData || snapshot.data!.isEmpty) return _buildEmptyState();
+                      if (snapshot.hasError)
+                        return _buildErrorState(snapshot.error.toString());
+                      if (!snapshot.hasData || snapshot.data!.isEmpty)
+                        return _buildEmptyState();
 
                       final filteredUsers = _applyFilters(snapshot.data!);
                       if (filteredUsers.isEmpty) return _buildNoResultsState();
@@ -571,7 +579,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
                         padding: const EdgeInsets.only(top: 8, bottom: 80),
                         physics: const BouncingScrollPhysics(),
                         itemCount: filteredUsers.length,
-                        itemBuilder: (context, index) => _buildUserCard(filteredUsers[index], isDarkMode),
+                        itemBuilder: (context, index) =>
+                            _buildUserCard(filteredUsers[index], isDarkMode),
                       );
                     },
                   ),
@@ -604,9 +613,14 @@ class _AdminUsersListState extends State<AdminUsersList> {
           // Search Field
           Container(
             decoration: BoxDecoration(
-              color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+              color: isDarkMode
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.grey[100],
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey[300]!),
+              border: Border.all(
+                  color: isDarkMode
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.grey[300]!),
             ),
             child: TextField(
               controller: _searchController,
@@ -614,7 +628,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
               decoration: InputDecoration(
                 hintText: 'Поиск по логину или имени',
                 hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                prefixIcon: Icon(Icons.search, color: Colors.green.withOpacity(0.7)),
+                prefixIcon:
+                    Icon(Icons.search, color: Colors.green.withOpacity(0.7)),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
@@ -624,7 +639,9 @@ class _AdminUsersListState extends State<AdminUsersList> {
           // Filter Row
           Row(
             children: [
-              Expanded(child: _buildFilterDropdown('Роль', _filterRole, _roleLabels, _changeRoleFilter, isDarkMode)),
+              Expanded(
+                  child: _buildFilterDropdown('Роль', _filterRole, _roleLabels,
+                      _changeRoleFilter, isDarkMode)),
               const SizedBox(width: 12),
               Expanded(child: _buildFilterStatusDropdown(isDarkMode)),
             ],
@@ -634,23 +651,32 @@ class _AdminUsersListState extends State<AdminUsersList> {
     );
   }
 
-  Widget _buildFilterDropdown(String label, String value, Map<String, String> items, Function(String?) onChanged, bool isDarkMode) {
+  Widget _buildFilterDropdown(String label, String value,
+      Map<String, String> items, Function(String?) onChanged, bool isDarkMode) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: isDarkMode ? Colors.white.withOpacity(0.03) : Colors.grey[50],
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.08) : Colors.grey[200]!),
+        border: Border.all(
+            color: isDarkMode
+                ? Colors.white.withOpacity(0.08)
+                : Colors.grey[200]!),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
           icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-          style: TextStyle(fontSize: 13, color: isDarkMode ? Colors.white : Colors.black, fontWeight: FontWeight.w500),
+          style: TextStyle(
+              fontSize: 13,
+              color: isDarkMode ? Colors.white : Colors.black,
+              fontWeight: FontWeight.w500),
           items: [
-            DropdownMenuItem(value: 'all', child: Text('Все ${label.toLowerCase()}и')),
-            ...items.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))),
+            DropdownMenuItem(
+                value: 'all', child: Text('Все ${label.toLowerCase()}и')),
+            ...items.entries.map(
+                (e) => DropdownMenuItem(value: e.key, child: Text(e.value))),
           ],
           onChanged: onChanged,
         ),
@@ -664,14 +690,20 @@ class _AdminUsersListState extends State<AdminUsersList> {
       decoration: BoxDecoration(
         color: isDarkMode ? Colors.white.withOpacity(0.03) : Colors.grey[50],
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.08) : Colors.grey[200]!),
+        border: Border.all(
+            color: isDarkMode
+                ? Colors.white.withOpacity(0.08)
+                : Colors.grey[200]!),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _filterStatus,
           isExpanded: true,
           icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-          style: TextStyle(fontSize: 13, color: isDarkMode ? Colors.white : Colors.black, fontWeight: FontWeight.w500),
+          style: TextStyle(
+              fontSize: 13,
+              color: isDarkMode ? Colors.white : Colors.black,
+              fontWeight: FontWeight.w500),
           items: const [
             DropdownMenuItem(value: 'all', child: Text('Все статусы')),
             DropdownMenuItem(value: 'active', child: Text('Активные')),
@@ -697,10 +729,16 @@ class _AdminUsersListState extends State<AdminUsersList> {
       decoration: BoxDecoration(
         color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey[100]!),
+        border: Border.all(
+            color: isDarkMode
+                ? Colors.white.withOpacity(0.05)
+                : Colors.grey[100]!),
         boxShadow: [
           if (!isDarkMode)
-            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))
+            BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4))
         ],
       ),
       child: Material(
@@ -734,14 +772,21 @@ class _AdminUsersListState extends State<AdminUsersList> {
                                 width: 52,
                                 height: 52,
                                 fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => Text(
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Text(
                                   username.substring(0, 1).toUpperCase(),
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 20),
                                 ),
                               )
                             : Text(
                                 username.substring(0, 1).toUpperCase(),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 20),
                               ),
                       ),
                     ),
@@ -752,9 +797,14 @@ class _AdminUsersListState extends State<AdminUsersList> {
                         width: 14,
                         height: 14,
                         decoration: BoxDecoration(
-                          color: status == 'active' ? Colors.green : Colors.orange,
+                          color:
+                              status == 'active' ? Colors.green : Colors.orange,
                           shape: BoxShape.circle,
-                          border: Border.all(color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white, width: 2),
+                          border: Border.all(
+                              color: isDarkMode
+                                  ? const Color(0xFF1E1E1E)
+                                  : Colors.white,
+                              width: 2),
                         ),
                       ),
                     ),
@@ -766,44 +816,61 @@ class _AdminUsersListState extends State<AdminUsersList> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(firstName ?? username, 
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: -0.2)),
+                      Text(firstName ?? username,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              letterSpacing: -0.2)),
                       const SizedBox(height: 2),
                       Row(
                         children: [
                           Flexible(
                             child: Text(
                               '@$username',
-                              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                              style: TextStyle(
+                                  color: Colors.grey[500], fontSize: 12),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: roleColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
+                          if (role != 'evn') ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: roleColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(_roleLabels[role] ?? role,
+                                  style: TextStyle(
+                                      color: roleColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold)),
                             ),
-                            child: Text(_roleLabels[role] ?? role, 
-                              style: TextStyle(color: roleColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                          ),
+                          ],
                         ],
                       ),
                       if (phone.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text(phone, style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                        Text(phone,
+                            style: TextStyle(
+                                color: Colors.grey[400], fontSize: 11)),
                       ],
-                      if (user['app_version'] != null && user['app_version'].toString().isNotEmpty) ...[
+                      if (user['app_version'] != null &&
+                          user['app_version'].toString().isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(Icons.system_update_rounded, size: 12, color: Colors.blueAccent),
+                            Icon(Icons.system_update_rounded,
+                                size: 12, color: Colors.blueAccent),
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
                                 'v${user['app_version']}',
-                                style: const TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                    color: Colors.blueAccent,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -815,9 +882,11 @@ class _AdminUsersListState extends State<AdminUsersList> {
                 ),
                 // Status Badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: (status == 'active' ? Colors.green : Colors.orange).withOpacity(0.08),
+                    color: (status == 'active' ? Colors.green : Colors.orange)
+                        .withOpacity(0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -857,50 +926,62 @@ class _AdminUsersListState extends State<AdminUsersList> {
           backgroundColor: Colors.green,
           foregroundColor: Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           icon: const Icon(Icons.person_add_rounded, size: 20),
-          label: const Text('Пользователь', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.2)),
+          label: const Text('Пользователь',
+              style:
+                  TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.2)),
         ),
       ),
     );
   }
 
   Widget _buildErrorState(String error) => Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.error_outline_rounded, size: 64, color: Colors.red),
-        const SizedBox(height: 16),
-        Text('Ошибка загрузки', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[400])),
-        const SizedBox(height: 8),
-        Text(error, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-        const SizedBox(height: 24),
-        ElevatedButton(onPressed: _refreshData, child: const Text('Повторить')),
-      ],
-    ),
-  );
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded,
+                size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            Text('Ошибка загрузки',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, color: Colors.grey[400])),
+            const SizedBox(height: 8),
+            Text(error,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+            const SizedBox(height: 24),
+            ElevatedButton(
+                onPressed: _refreshData, child: const Text('Повторить')),
+          ],
+        ),
+      );
 
   Widget _buildEmptyState() => Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.people_outline_rounded, size: 64, color: Colors.grey[800]),
-        const SizedBox(height: 16),
-        const Text('Пользователи не найдены', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-      ],
-    ),
-  );
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.people_outline_rounded,
+                size: 64, color: Colors.grey[800]),
+            const SizedBox(height: 16),
+            const Text('Пользователи не найдены',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+      );
 
   Widget _buildNoResultsState() => Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.search_off_rounded, size: 64, color: Colors.grey[800]),
-        const SizedBox(height: 16),
-        const Text('Никого не нашли по фильтрам', style: TextStyle(color: Colors.grey, fontSize: 15)),
-      ],
-    ),
-  );
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off_rounded, size: 64, color: Colors.grey[800]),
+            const SizedBox(height: 16),
+            const Text('Никого не нашли по фильтрам',
+                style: TextStyle(color: Colors.grey, fontSize: 15)),
+          ],
+        ),
+      );
 
   void _showUserActions(Map<String, dynamic> user) {
     final username = user['username'] as String? ?? 'Неизвестно';
@@ -913,9 +994,16 @@ class _AdminUsersListState extends State<AdminUsersList> {
     if (userId == null) return;
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    bool canManage = ['admin', 'superadmin', 'coordinator', 'supervisor'].contains(_currentUserRole);
-    bool canDelete = _currentUserRole == 'superadmin' || 
-        ((_currentUserRole == 'coordinator' || _currentUserRole == 'supervisor') && role == 'scout');
+    bool isTargetEvn = role == 'evn';
+    bool canManage = ['admin', 'superadmin', 'coordinator', 'supervisor', 'evn']
+            .contains(_currentUserRole) &&
+        !isTargetEvn;
+    bool canDelete = (_currentUserRole == 'superadmin' ||
+            _currentUserRole == 'evn' ||
+            ((_currentUserRole == 'coordinator' ||
+                    _currentUserRole == 'supervisor') &&
+                role == 'scout')) &&
+        !isTargetEvn;
     final roleColor = _roleColors[role] ?? Colors.grey;
 
     showModalBottomSheet(
@@ -931,9 +1019,14 @@ class _AdminUsersListState extends State<AdminUsersList> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(2))),
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 24),
-            
+
             // Avatar
             ClipRRect(
               borderRadius: BorderRadius.circular(24),
@@ -956,34 +1049,51 @@ class _AdminUsersListState extends State<AdminUsersList> {
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) => Text(
                           username.substring(0, 1).toUpperCase(),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 32),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 32),
                         ),
                       )
                     : Text(
                         username.substring(0, 1).toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 32),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 32),
                       ),
               ),
             ),
             const SizedBox(height: 16),
-            
-            Text(firstName ?? username, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+
+            Text(firstName ?? username,
+                style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5)),
             const SizedBox(height: 4),
             if (firstName != null) ...[
-              Text('@$username', style: TextStyle(color: Colors.grey[500], fontSize: 14)),
+              Text('@$username',
+                  style: TextStyle(color: Colors.grey[500], fontSize: 14)),
               const SizedBox(height: 4),
             ],
-            
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: roleColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+
+            if (role != 'evn')
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: roleColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                    '${_roleLabels[role] ?? role} • ${status == 'active' ? 'Активен' : 'Ожидание'}',
+                    style: TextStyle(
+                        color: roleColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13)),
               ),
-              child: Text('${_roleLabels[role] ?? role} • ${status == 'active' ? 'Активен' : 'Ожидание'}', 
-                style: TextStyle(color: roleColor, fontWeight: FontWeight.w600, fontSize: 13)),
-            ),
-            
+
             if (phone.isNotEmpty) ...[
               const SizedBox(height: 12),
               Row(
@@ -991,21 +1101,15 @@ class _AdminUsersListState extends State<AdminUsersList> {
                 children: [
                   Icon(Icons.phone_android, size: 16, color: Colors.grey[400]),
                   const SizedBox(width: 6),
-                  Text(phone, style: TextStyle(color: Colors.grey[500], fontSize: 15, fontWeight: FontWeight.bold)),
+                  Text(phone,
+                      style: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
             ],
-            if (user['app_version'] != null && user['app_version'].toString().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.system_update_rounded, size: 16, color: Colors.blueAccent),
-                  const SizedBox(width: 6),
-                  Text('Версия: ${user['app_version']}', style: TextStyle(color: Colors.blueAccent, fontSize: 14, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ],
+
             const SizedBox(height: 24),
             if (canManage) ...[
               SizedBox(
@@ -1013,15 +1117,23 @@ class _AdminUsersListState extends State<AdminUsersList> {
                 child: ElevatedButton.icon(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)));
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(user: user)));
                   },
                   icon: const Icon(Icons.account_circle, color: Colors.white),
-                  label: const Text('Открыть профиль сотрудника', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  label: const Text('Открыть профиль сотрудника',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                   ),
                 ),
               ),
@@ -1030,26 +1142,20 @@ class _AdminUsersListState extends State<AdminUsersList> {
                 children: [
                   Expanded(
                     child: _buildActionCard(
-                      'Номер', 
-                      Icons.phone_android_rounded, 
-                      Colors.blue, 
-                      () {
-                        Navigator.pop(ctx);
-                        _changeUserPhone(userId, username, phone);
-                      }
-                    ),
+                        'Номер', Icons.phone_android_rounded, Colors.blue, () {
+                      Navigator.pop(ctx);
+                      _changeUserPhone(userId, username, phone);
+                    }),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildActionCard(
-                      'Роль', 
-                      Icons.manage_accounts_rounded, 
-                      isDarkMode ? Colors.white : Colors.black87, 
-                      () {
-                        Navigator.pop(ctx);
-                        _changeUserRole(userId, username, role);
-                      }
-                    ),
+                        'Роль',
+                        Icons.manage_accounts_rounded,
+                        isDarkMode ? Colors.white : Colors.black87, () {
+                      Navigator.pop(ctx);
+                      _changeUserRole(userId, username, role);
+                    }),
                   ),
                 ],
               ),
@@ -1058,27 +1164,25 @@ class _AdminUsersListState extends State<AdminUsersList> {
                 children: [
                   Expanded(
                     child: _buildActionCard(
-                      status == 'active' ? 'Деактивировать' : 'Активировать', 
-                      status == 'active' ? Icons.block_flipped : Icons.check_circle_outline, 
-                      status == 'active' ? Colors.orange : Colors.green, 
-                      () {
-                        Navigator.pop(ctx);
-                        _updateUserStatus(userId, username, status == 'active' ? 'pending' : 'active');
-                      }
-                    ),
+                        status == 'active' ? 'Деактивировать' : 'Активировать',
+                        status == 'active'
+                            ? Icons.block_flipped
+                            : Icons.check_circle_outline,
+                        status == 'active' ? Colors.orange : Colors.green, () {
+                      Navigator.pop(ctx);
+                      _updateUserStatus(userId, username,
+                          status == 'active' ? 'pending' : 'active');
+                    }),
                   ),
                   const SizedBox(width: 12),
                   if (canDelete)
                     Expanded(
                       child: _buildActionCard(
-                        'Удалить', 
-                        Icons.delete_outline_rounded, 
-                        Colors.red, 
-                        () {
-                          Navigator.pop(ctx);
-                          _deleteUser(userId, username);
-                        }
-                      ),
+                          'Удалить', Icons.delete_outline_rounded, Colors.red,
+                          () {
+                        Navigator.pop(ctx);
+                        _deleteUser(userId, username);
+                      }),
                     )
                   else
                     const Expanded(child: SizedBox.shrink()),
@@ -1092,7 +1196,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
     );
   }
 
-  Widget _buildActionCard(String label, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildActionCard(
+      String label, IconData icon, Color color, VoidCallback onTap) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1112,7 +1217,8 @@ class _AdminUsersListState extends State<AdminUsersList> {
               const SizedBox(height: 8),
               Text(
                 label,
-                style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13),
+                style: TextStyle(
+                    color: color, fontWeight: FontWeight.bold, fontSize: 13),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

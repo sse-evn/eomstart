@@ -138,6 +138,10 @@ class ShiftProvider with ChangeNotifier {
         _lastReportTime =
             DateTime.parse(data['lastReportTime'] as String).toLocal();
       }
+      
+      // Синхронизируем геотрекинг после загрузки из кэша (важно для офлайн-старта)
+      await syncGeoTrackingWithShiftState();
+      
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
@@ -299,6 +303,7 @@ class ShiftProvider with ChangeNotifier {
       _shiftHistory = shiftsData;
 
       await getActiveShift();
+      await syncGeoTrackingWithShiftState();
       await _saveToCache();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
