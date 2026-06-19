@@ -670,4 +670,19 @@ class PromoApiService {
     }
     return null;
   }
+
+  Future<void> triggerPromoSummary() async {
+    final token = await _getToken();
+    if (token == null) throw PromoApiServiceException('Не авторизован', statusCode: 401);
+
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/admin/trigger-promo-summary'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode != 200) {
+      final error = _tryParseJson(utf8.decode(response.bodyBytes))?['error'] ?? 'Ошибка отправки';
+      throw PromoApiServiceException(error, statusCode: response.statusCode);
+    }
+  }
 }

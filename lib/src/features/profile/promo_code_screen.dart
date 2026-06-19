@@ -291,8 +291,7 @@ class _PromoCodeScreenState extends State<PromoCodeScreen> {
               
               // Bolt — отдельная логика (аккаунты, не промокоды)
               if (brand == 'BOLT') {
-                final hasAccount = _boltAccount != null;
-                if (_activeBrand != 'BOLT' && !hasAccount) {
+                if (_activeBrand != 'BOLT') {
                   return SizedBox.shrink();
                 }
                 return _buildBoltAccountCard(isDark);
