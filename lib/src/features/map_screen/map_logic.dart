@@ -266,7 +266,7 @@ class MapLogic {
 
       // Исключаем себя из списка tr(context, "других", "басқа"), если хотим (но на бэкенде это обычно все активные)
       // Для простоты оставим всех, в UI отфильтруем или покажем как есть
-      otherScoutsLocations = locations;
+      otherScoutsLocations = locations.where((item) => item is Map && item['has_position'] != false).toList();
       _notify();
     } catch (e) {
       debugPrint(tr(context, 'Ошибка получения локаций команды: $e', 'Команда локациясын алу қатесі: $e'));

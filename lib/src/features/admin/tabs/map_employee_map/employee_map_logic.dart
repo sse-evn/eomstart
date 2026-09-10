@@ -22,6 +22,7 @@ class EmployeeMapLogic {
   LatLng? currentLocation;
   bool isLoading = true;
   bool _disposed = false;
+  bool _fetchingLocations = false;
   late MapController mapController;
   void Function()? onStateChanged;
 
@@ -74,7 +75,7 @@ class EmployeeMapLogic {
 
   void zoomToEmployee(EmployeeLocation emp) {
     selectedLiveEmployee = emp;
-    mapController.move(emp.position, 15.0);
+    if (emp.hasPosition) mapController.move(emp.position, 15.0);
     _notify();
   }
 
@@ -295,7 +296,8 @@ class EmployeeMapLogic {
   }
 
   Future<void> fetchEmployeeLocations() async {
-    if (_disposed) return;
+    if (_disposed || _fetchingLocations) return;
+    _fetchingLocations = true;
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) return;
@@ -310,7 +312,8 @@ class EmployeeMapLogic {
             final lon = (item['lon'] as num?)?.toDouble();
             
             // Если координаты 0,0 (Null Island), значит бэкенд не нашел GPS точек
-            if (lat == null || lon == null || (lat == 0.0 && lon == 0.0)) return null;
+            final hasPosition = item['has_position'] as bool? ??
+                (lat != null && lon != null && !(lat == 0 && lon == 0));
 
             String? name = item['name']?.toString();
             if (name == null || name.isEmpty || name.contains('Сотрудник')) {
@@ -320,12 +323,15 @@ class EmployeeMapLogic {
             return EmployeeLocation(
               userId: id,
               name: name,
-              position: LatLng(lat, lon),
+              position: LatLng(lat ?? 0, lon ?? 0),
+              hasPosition: hasPosition,
+              trackingStatus: item['tracking_status']?.toString() ?? 'ok',
+              statusConfirmed: item['status_confirmed'] == true,
               battery: item['battery'] is num
                   ? (item['battery'] as num).toDouble()
                   : null,
               timestamp: DateTime.tryParse(item['ts']?.toString() ?? '') ??
-                  DateTime.now(),
+                  DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
               avatarUrl: item['avatarUrl']?.toString(),
               speed: item['speed'] is num ? (item['speed'] as num).toDouble() : null,
             );
@@ -333,8 +339,12 @@ class EmployeeMapLogic {
           .whereType<EmployeeLocation>()
           .toList();
 
+      if (selectedLiveEmployee != null) {
+        final matches = employeeLocations.where((e) => e.userId == selectedLiveEmployee!.userId);
+        selectedLiveEmployee = matches.isEmpty ? null : matches.first;
+      }
       // Дорисовываем новые точки в локальные пути активных сотрудников
-      for (var emp in employeeLocations) {
+      for (var emp in employeeLocations.where((e) => e.hasPosition)) {
         final userId = emp.userId;
         final path = activeEmployeesPaths[userId] ?? [];
         if (path.isEmpty) {
@@ -352,9 +362,9 @@ class EmployeeMapLogic {
       _notify();
     } catch (e) {
       debugPrint('Ошибка загрузки позиций сотрудников: $e');
-      employeeLocations = [];
+      // Keep last known positions with their original timestamps during an outage.
       _notify();
-    }
+    } finally { _fetchingLocations = false; }
   }
 
   Future<void> fetchActiveEmployeesPaths() async {
@@ -367,7 +377,7 @@ class EmployeeMapLogic {
       final fromStr = _formatDateWithTimezone(range.start);
       final toStr = _formatDateWithTimezone(range.end);
 
-      for (var emp in employeeLocations) {
+      for (var emp in employeeLocations.where((e) => e.hasPosition)) {
         final userId = emp.userId;
         try {
           final points = await _apiService.getLocationHistory(

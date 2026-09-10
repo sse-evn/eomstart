@@ -1,3 +1,4 @@
+import '../../core/services/geo/geo_tracking_notice.dart';
 
 import 'package:flutter/material.dart';
 import 'package:micro_mobility_app/src/features/profile/promo_code_screen.dart';
@@ -25,6 +26,7 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Оператор микромобильности',
+      builder: (context, child) => GeoTrackingNotice(child: child ?? const SizedBox.shrink()),
       theme: Provider.of<ThemeProvider>(context).themeData,
       debugShowCheckedModeBanner: false,
       initialRoute: '/splash',

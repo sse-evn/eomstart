@@ -12,16 +12,14 @@ import 'package:micro_mobility_app/src/features/app/models/active_shift.dart'
     as model;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:http/http.dart' as http;
-import '../config/app_config.dart';
 import '../../features/app/models/shift_data.dart';
 import '../services/api_service.dart';
 import '../services/geo_tracking_service.dart'
     show
         startBackgroundTracking,
         stopBackgroundTracking,
-        isBackgroundTrackingRunning;
-import '../utils/time_utils.dart';
+        isBackgroundTrackingRunning,
+        flushBufferedGeoData;
 
 class ShiftProvider with ChangeNotifier {
   final ApiService _apiService;
@@ -46,6 +44,7 @@ class ShiftProvider with ChangeNotifier {
   static const String _shiftsCacheKey = 'shifts_cache';
   static const String _lastCacheTimeKey = 'shifts_cache_time';
   bool _isLoadingActiveShift = false;
+  bool _activeShiftConfirmedAbsent = false;
   DateTime? _lastActiveShiftFetchTime;
   bool _hasLoadedShifts = false;
   Map<String, dynamic>? _profile;
@@ -185,7 +184,8 @@ class ShiftProvider with ChangeNotifier {
 
   Future<void> setToken(String token) async {
     _token = token;
-    await _storage.write(key: 'jwt_token', value: token);
+    await _storage.write(key: 'jwt_token', value: token,
+        iOptions: const IOSOptions(accessibility: KeychainAccessibility.first_unlock));
     if (!_initCompleter.isCompleted) {
       _initCompleter.complete();
     }
@@ -218,19 +218,6 @@ class ShiftProvider with ChangeNotifier {
   Future<model.ActiveShift?> getActiveShift() async {
     if (_token == null || _isLoadingActiveShift) return _activeShift;
 
-    // Проверка на истечение времени слота (локальная)
-    if (_activeShift != null &&
-        BreakTimeUtils.isSlotExpired(
-          _activeShift!.slotTimeRange,
-          shiftStartTime: _activeShift!.startTime,
-        )) {
-      debugPrint(
-          'ShiftProvider: Локальное обнаружение истечения слота. Сбрасываем.');
-      _activeShift = null;
-      notifyListeners();
-      return null;
-    }
-
     if (_lastActiveShiftFetchTime != null) {
       final now = DateTime.now();
       final difference = now.difference(_lastActiveShiftFetchTime!);
@@ -243,21 +230,10 @@ class ShiftProvider with ChangeNotifier {
       _isLoadingActiveShift = true;
       final response = await _apiService.getActiveShift(_token!);
 
-      if (response == null) {
-        _activeShift = null;
-      } else {
-        // Проверка на сервере может быть запаздывающей, поэтому проверяем и здесь
-        if (BreakTimeUtils.isSlotExpired(
-          response.slotTimeRange,
-          shiftStartTime: response.startTime,
-        )) {
-          debugPrint(
-              'ShiftProvider: Получена смена с истекшим слотом. Игнорируем.');
-          _activeShift = null;
-        } else {
-          _activeShift = response;
-        }
-      }
+      // Only an explicit server response may end GPS tracking. A local clock
+      // estimate or a failed request cannot establish that the shift is closed.
+      _activeShift = response;
+      _activeShiftConfirmedAbsent = response == null;
 
       _lastActiveShiftFetchTime = DateTime.now();
       if (_activeShift != null) {
@@ -275,7 +251,7 @@ class ShiftProvider with ChangeNotifier {
         await logout();
         return null;
       }
-      _activeShift = null;
+      // A network failure does not prove that the shift has ended.
       return _activeShift;
     } finally {
       _isLoadingActiveShift = false;
@@ -318,11 +294,7 @@ class ShiftProvider with ChangeNotifier {
       }
       if (isFirstLoad && !_isOnline) {
         await loadFromCache();
-      } else {
-        _shiftHistory = [];
-        _activeShift = null;
-        _currentUsername = null;
-      }
+      } // Keep the last confirmed shift during temporary network failures.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
@@ -462,6 +434,14 @@ class ShiftProvider with ChangeNotifier {
     }
   }
 
+  Future<int?> getTrackingShiftId() async {
+    final active = await getActiveShift();
+    if (active != null) return active.id;
+    if (_activeShiftConfirmedAbsent || _token == null) return null;
+    await _prefs.reload();
+    return _prefs.getInt('active_shift_id_for_bg_service');
+  }
+
   Future<void> syncGeoTrackingWithShiftState() async {
     try {
       await getActiveShift();
@@ -476,7 +456,6 @@ class ShiftProvider with ChangeNotifier {
         if (!isTrackingRunning || bgShiftId != currentShiftId) {
           debugPrint(
               'SyncGeoTracking: Запуск/перезапуск трекинга для активной смены $currentShiftId (предыдущая в фоне: $bgShiftId)');
-          await _prefs.setInt('active_shift_id_for_bg_service', currentShiftId);
           await startBackgroundTracking(shiftId: currentShiftId);
         } else {
           debugPrint(
@@ -485,16 +464,8 @@ class ShiftProvider with ChangeNotifier {
 
         // Проактивно синхронизируем отложенный офлайн-буфер при наличии активной смены
         syncBufferedData();
-      } else {
-        if (isTrackingRunning) {
-          debugPrint(
-              'SyncGeoTracking: Остановка трекинга, так как нет активной смены.');
-          await stopBackgroundTracking();
-          await _prefs.remove('active_shift_id_for_bg_service');
-        } else {
-          debugPrint(
-              'SyncGeoTracking: Смена неактивна, трекинг выключен.');
-        }
+      } else if (_activeShiftConfirmedAbsent || _token == null) {
+        await stopBackgroundTracking();
       }
     } catch (e) {
       debugPrint('Ошибка синхронизации геотрекинга: $e');
@@ -503,6 +474,7 @@ class ShiftProvider with ChangeNotifier {
 
   Future<void> logout() async {
     _token = null;
+    _activeShiftConfirmedAbsent = true;
     _activeShift = null;
     _currentUsername = null;
     _botStatsData = null;
@@ -582,60 +554,7 @@ class ShiftProvider with ChangeNotifier {
   }
 
   Future<void> syncBufferedData() async {
-    if (_token == null || _activeShift == null) {
-      debugPrint('syncBufferedData: Нет активной смены или токена для отправки.');
-      return;
-    }
-
-    final int shiftId = _activeShift!.id;
-    final String bufferKey = 'geo_buffer_$shiftId';
-
-    try {
-      final List<String> bufferStrings = _prefs.getStringList(bufferKey) ?? [];
-      if (bufferStrings.isEmpty) {
-        debugPrint('syncBufferedData: Буфер геоданных пуст.');
-        return;
-      }
-
-      debugPrint('syncBufferedData: Синхронизируем ${bufferStrings.length} гео-точек из буфера...');
-
-      final List<dynamic> dataList = bufferStrings
-          .map((s) {
-            try {
-              return jsonDecode(s);
-            } catch (e) {
-              return null;
-            }
-          })
-          .where((item) => item != null)
-          .toList();
-
-      if (dataList.isEmpty) {
-        await _prefs.remove(bufferKey);
-        return;
-      }
-
-      // Отправляем все точки пачкой в одном запросе
-      final url = Uri.parse(AppConfig.geoTrackUrl);
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $_token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'data': dataList,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        debugPrint('✅ syncBufferedData: Успешно отправлено ${dataList.length} точек из офлайн-буфера!');
-        await _prefs.remove(bufferKey);
-      } else {
-        debugPrint('❌ syncBufferedData: Ошибка сервера ${response.statusCode}');
-      }
-    } catch (e) {
-      debugPrint('Ошибка syncBufferedData: $e');
-    }
+    if (_token == null) return;
+    await flushBufferedGeoData();
   }
 }

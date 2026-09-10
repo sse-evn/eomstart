@@ -54,6 +54,7 @@ class ShiftBloc extends Bloc<ShiftEvent, ShiftState> {
   }
 
   Future<void> _onLoadShift(LoadShift event, Emitter<ShiftState> emit) async {
+    final previous = state;
     emit(ShiftLoading());
     try {
       final token = await storage.read(key: 'jwt_token');
@@ -84,7 +85,8 @@ class ShiftBloc extends Bloc<ShiftEvent, ShiftState> {
         await stopBackgroundTracking();
       }
     } catch (e) {
-      emit(ShiftError(e.toString()));
+      // Retain the known active shift while a refresh is unavailable.
+      emit(previous is ShiftActive ? previous : ShiftError(e.toString()));
     }
   }
 
@@ -113,7 +115,7 @@ class ShiftBloc extends Bloc<ShiftEvent, ShiftState> {
       if (activeShift != null) {
         emit(ShiftActive(activeShift));
         _startExpiryTimer(activeShift);
-        await startBackgroundTracking(shiftId: activeShift.id);
+        await startBackgroundTracking(shiftId: activeShift.id, requestPermissions: true);
       } else {
         emit(ShiftInactive());
       }

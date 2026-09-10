@@ -389,8 +389,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
               if (_logic.showMarkers && _logic.geoJsonParser.markers.isNotEmpty)
                 MarkerLayer(markers: _logic.geoJsonParser.markers),
               MarkerLayer(
-                markers: _logic.employeeLocations.map((emp) {
-                  final isOnline = _logic.isEmployeeOnline(emp.timestamp);
+                markers: _logic.employeeLocations.where((e) => e.hasPosition).map((emp) {
+                  final isOnline = emp.geoHealthy;
                   return Marker(
                     point: emp.position,
                     width: 70,
@@ -629,7 +629,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
   }
 
   Widget _buildEmployeeListItem(EmployeeLocation emp, bool isDarkMode) {
-    final isOnline = _logic.isEmployeeOnline(emp.timestamp);
+    final isOnline = emp.geoHealthy;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: InkWell(
@@ -662,8 +662,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                         Icon(isOnline ? Icons.wifi : Icons.wifi_off, 
                           size: 14, color: isOnline ? Colors.green : Colors.grey),
                         const SizedBox(width: 4),
-                        Text(isOnline ? 'В сети' : 'Был(а): ${DateFormat('HH:mm').format(emp.timestamp.toLocal())}',
-                            style: TextStyle(color: isOnline ? Colors.green : Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
+                        Flexible(child: Text(emp.trackingLabel,
+                            style: TextStyle(color: isOnline ? Colors.green : Colors.grey, fontSize: 13, fontWeight: FontWeight.bold))),
                       ],
                     ),
                   ],
@@ -1093,7 +1093,7 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
 
   Widget _buildLiveEmployeePanel(bool isDarkMode) {
     final emp = _logic.selectedLiveEmployee!;
-    final isOnline = _logic.isEmployeeOnline(emp.timestamp);
+    final isOnline = emp.geoHealthy;
     
     return Positioned(
       bottom: 20, // Опускаем вниз, так как BottomSheet скрыт
@@ -1128,8 +1128,8 @@ class _EmployeeMapTabState extends State<EmployeeMapTab>
                           Icon(isOnline ? Icons.wifi : Icons.wifi_off, 
                             size: 14, color: isOnline ? Colors.green : Colors.grey),
                           const SizedBox(width: 4),
-                          Text(isOnline ? 'В сети' : 'Был(а): ${DateFormat('HH:mm').format(emp.timestamp.toLocal())}',
-                              style: TextStyle(color: isOnline ? Colors.green : Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
+                          Flexible(child: Text(emp.trackingLabel,
+                              style: TextStyle(color: isOnline ? Colors.green : Colors.grey, fontSize: 13, fontWeight: FontWeight.bold))),
                         ],
                       ),
                       if (emp.battery != null) ...[

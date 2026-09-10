@@ -23,7 +23,7 @@ def main():
     cur.execute("DELETE FROM promo_codes WHERE brand = 'WHOOSH' AND assigned_to_user_id IS NULL;")
     print(f"Deleted {cur.rowcount} old unassigned WHOOSH promo codes.")
     
-    df = pd.read_excel('SD-130242.xlsx')
+    df = pd.read_excel('/mnt/ssd256/documents/eom/EOM_Промо_Авг_10дней.xlsx')
     
     # Each column header is a date.
     inserted_count = 0
@@ -48,6 +48,7 @@ def main():
         # Ensure daily_promos exists for this date
         promo_id = f"WHOOSH_{dt.strftime('%Y%m%d')}"
         cur.execute("INSERT INTO daily_promos (id, date, title, created_by_admin_id) VALUES (%s, %s, %s, 1) ON CONFLICT (id) DO NOTHING;", (promo_id, dt, f"Whoosh promos for {dt}"))
+        conn.commit()
         
         codes = df[col].dropna().astype(str).tolist()
         
@@ -74,9 +75,9 @@ def main():
                 """, (promo_code_id, dt))
                 
                 inserted_count += 1
-            except psycopg2.IntegrityError:
+            except psycopg2.IntegrityError as e:
                 conn.rollback()
-                # print(f"Duplicate code {code}, skipping...")
+                print(f"IntegrityError code {code}: {e}")
             except Exception as e:
                 conn.rollback()
                 print(f"Error inserting code {code}: {e}")

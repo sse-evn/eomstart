@@ -14,10 +14,16 @@ import '../../features/app/models/shift_data.dart' as shift_data;
 import '../config/app_config.dart';
 
 class ApiService {
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final http.Client _sessionClient;
+  final bool clearRejectedSession;
+  ApiService({http.Client? sessionClient, this.clearRejectedSession = true})
+      : _sessionClient = sessionClient ?? http.Client();
+  void close() => _sessionClient.close();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+      iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock));
 
-  bool _isRefreshing = false;
-  Completer<String?>? _refreshCompleter;
+  static bool _isRefreshing = false;
+  static Completer<String?>? _refreshCompleter;
 
   Future<String?> _performTokenRefresh() async {
     try {
@@ -30,7 +36,7 @@ class ApiService {
       debugPrint('🔄 Attempting to refresh token...');
 
       // Добавим таймаут для запроса обновления
-      final response = await http
+      final response = await _sessionClient
           .post(
             Uri.parse(AppConfig.refreshTokenUrl),
             headers: {'Content-Type': 'application/json'},
@@ -46,6 +52,9 @@ class ApiService {
         final newRefreshToken = body?['refresh_token'] as String?;
 
         if (newAccessToken != null) {
+          if (await _storage.read(key: 'refresh_token') != refreshToken) {
+            return _storage.read(key: 'jwt_token');
+          }
           await _storage.write(key: 'jwt_token', value: newAccessToken);
           if (newRefreshToken != null) {
             await _storage.write(key: 'refresh_token', value: newRefreshToken);
@@ -54,6 +63,13 @@ class ApiService {
           return newAccessToken;
         }
       } else if (response.statusCode == 401 || response.statusCode == 403) {
+        // A UI isolate may have refreshed the same session while this background
+        // request was in flight. Background GPS must never erase a newer login.
+        final currentRefresh = await _storage.read(key: 'refresh_token');
+        if (currentRefresh != refreshToken) {
+          return _storage.read(key: 'jwt_token');
+        }
+        if (!clearRejectedSession) return null;
         // Только если сервер явно сказал, что токен невалиден
         debugPrint('❌ Refresh token invalid (401/403). Clearing tokens.');
         await _storage.delete(key: 'jwt_token');
@@ -105,18 +121,13 @@ class ApiService {
       if (newToken != null) {
         debugPrint('✅ Token refreshed successfully. Retrying request...');
         response = await requestFunction(newToken);
-        if (response.statusCode == 401) {
+        if (response.statusCode == 401 && clearRejectedSession) {
           debugPrint(
               '❌ Retry with new token also failed (401). Clearing tokens.');
           await _storage.delete(key: 'jwt_token');
           await _storage.delete(key: 'refresh_token');
         }
-      } else {
-        debugPrint(
-            '❌ Failed to refresh token. User needs to log in again. Clearing tokens.');
-        await _storage.delete(key: 'jwt_token');
-        await _storage.delete(key: 'refresh_token');
-      }
+      } // Only an explicit rejected refresh response may clear credentials.
     }
     return response;
   }
@@ -144,11 +155,7 @@ class ApiService {
           await _storage.delete(key: 'jwt_token');
           await _storage.delete(key: 'refresh_token');
         }
-      } else {
-        debugPrint('❌ Multipart: Failed to refresh token. Clearing tokens.');
-        await _storage.delete(key: 'jwt_token');
-        await _storage.delete(key: 'refresh_token');
-      }
+      } // Keep credentials when refresh failed because the network is unavailable.
     }
     return response;
   }
@@ -615,32 +622,42 @@ class ApiService {
 
   Future<active_shift.ActiveShift?> getActiveShift(String token) async {
     final response = await _authorizedRequest((token) async {
-      return await http.get(
+      return await _sessionClient.get(
         Uri.parse(AppConfig.activeShiftUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-      );
+      ).timeout(const Duration(seconds: 15));
     }, token);
     if (response.statusCode == 200) {
-      if (response.body == 'null' || response.body.trim().isEmpty) {
+      if (response.body.trim() == 'null') {
         return null;
+      }
+      if (response.body.trim().isEmpty) {
+        throw const FormatException('Empty active shift response');
       }
       try {
         final dynamic body = jsonDecode(response.body);
+        active_shift.ActiveShift parseShift(Map<String, dynamic> value) {
+          final shift = active_shift.ActiveShift.fromJson(value);
+          if (shift.id <= 0 || shift.userId <= 0 || shift.startTime == null) {
+            throw const FormatException('Incomplete active shift response');
+          }
+          return shift;
+        }
         if (body is Map<String, dynamic>) {
-          return active_shift.ActiveShift.fromJson(body);
+          return parseShift(body);
         } else if (body is List &&
             body.isNotEmpty &&
             body[0] is Map<String, dynamic>) {
-          return active_shift.ActiveShift.fromJson(body[0]);
+          return parseShift(body[0] as Map<String, dynamic>);
         } else if (body is List && body.isEmpty) {
           return null;
         }
-        return null;
+        throw const FormatException('Invalid active shift response');
       } catch (e) {
-        return null;
+        throw const FormatException('Invalid active shift response');
       }
     } else {
       String errorMessage = 'Failed to load active shift';
@@ -653,8 +670,7 @@ class ApiService {
       } catch (e) {
         debugPrint('⚠️ Ошибка парсинга тела ошибки getActiveShift: $e');
       }
-      debugPrint(errorMessage);
-      return null;
+      throw Exception(errorMessage);
     }
   }
 
@@ -1332,26 +1348,16 @@ class ApiService {
   }
 
   Future<List<dynamic>> getLastLocations(String token) async {
-    try {
-      final response = await _authorizedRequest(
-        (t) => http.get(
-          Uri.parse(AppConfig.lastLocationsUrl),
-          headers: {
-            'Authorization': 'Bearer $t',
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          },
-        ),
-        token,
-      );
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        return body is List ? body : [];
-      }
-    } catch (e) {
-      debugPrint('Ошибка getLastLocations: $e');
-    }
-    return [];
+    final response = await _authorizedRequest(
+      (t) => _sessionClient.get(
+        Uri.parse(AppConfig.lastLocationsUrl).replace(queryParameters: {'include_missing': 'true'}),
+        headers: {'Authorization': 'Bearer $t', 'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'},
+      ).timeout(const Duration(seconds: 15)), token);
+    if (response.statusCode != 200) throw Exception('Cannot load employee locations');
+    final body = jsonDecode(response.body);
+    if (body is! List) throw const FormatException('Invalid locations response');
+    return body;
   }
 
   Future<List<dynamic>> getLocationHistory(

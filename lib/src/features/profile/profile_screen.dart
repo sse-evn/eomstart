@@ -109,10 +109,9 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
 
     try {
       if (newValue) {
-        final activeShift = await context.read<ShiftProvider>().getActiveShift();
-        int? activeShiftId = activeShift?.id;
+        final activeShiftId = await context.read<ShiftProvider>().getTrackingShiftId();
         if (activeShiftId != null && activeShiftId > 0) {
-          final success = await startBackgroundTracking(shiftId: activeShiftId);
+          final success = await startBackgroundTracking(shiftId: activeShiftId, requestPermissions: true);
           if (!success) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -144,8 +143,8 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
           }
         }
       } else {
-        final activeShift = await context.read<ShiftProvider>().getActiveShift();
-        if (activeShift != null && activeShift.id > 0) {
+        final activeShiftId = await context.read<ShiftProvider>().getTrackingShiftId();
+        if (activeShiftId != null && activeShiftId > 0) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -200,14 +199,11 @@ class _ProfileScreenBodyState extends State<_ProfileScreenBody> {
     }
 
     try {
-      final activeShift = await context.read<ShiftProvider>().getActiveShift();
-      int? activeShiftId = activeShift?.id;
-      
-      await stopBackgroundTracking();
+      final activeShiftId = await context.read<ShiftProvider>().getTrackingShiftId();
       
       if (activeShiftId != null && activeShiftId > 0) {
-        await Future.delayed(const Duration(milliseconds: 500)); // give it time to fully stop
-        final success = await startBackgroundTracking(shiftId: activeShiftId);
+        await stopBackgroundTracking();
+        final success = await startBackgroundTracking(shiftId: activeShiftId, requestPermissions: true);
         
         if (mounted) {
           if (success) {
